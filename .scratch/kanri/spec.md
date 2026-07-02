@@ -1,7 +1,11 @@
 # Kanri — self-hosted, AI-driven issue tracker (Linear replacement)
 
 > Working codename **Kanri** (管理, "management"). Rename is a find/replace.
-> Status: **Aligning** → converging on objective + scope + done-when. Not yet Ready.
+> Status: **BUILT** (v1 implemented + verified this session). Decisions locked:
+> MCP mirrors Linear verbs · remote HTTP/SSE MCP on the Go server · argon2id
+> password + session cookie · Initiatives → Projects → Issues. Defaults taken
+> for the §11 open questions: env-driven domain (`KANRI_BASE_URL`), docker-compose,
+> start clean, kept the name Kanri.
 
 ## 1. Objective
 
