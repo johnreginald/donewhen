@@ -1,5 +1,5 @@
 // Package auth handles password hashing, session/API tokens, and HTTP auth
-// middleware for Kanri.
+// middleware for Raenil.
 package auth
 
 import (

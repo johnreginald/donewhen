@@ -6,8 +6,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"kanri/internal/auth"
-	"kanri/internal/models"
+	"raenil/internal/auth"
+	"raenil/internal/models"
 )
 
 func (d *deps) registerContent(s *server.MCPServer) {

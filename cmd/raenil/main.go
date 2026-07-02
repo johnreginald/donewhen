@@ -1,13 +1,13 @@
-// Command kanri is the single-binary server + tooling for the Kanri tracker.
+// Command raenil is the single-binary server + tooling for the Raenil tracker.
 //
 // Subcommands:
 //
-//	kanri serve                 run the HTTP API + SSE + Web Push + MCP endpoint
-//	kanri migrate               apply DB migrations and exit
-//	kanri mcp                   run the MCP server over stdio (local fallback)
-//	kanri token <name>          create an API token for the first user
-//	kanri user <email> <pass>   create the initial user
-//	kanri genvapid              print a fresh VAPID keypair
+//	raenil serve                 run the HTTP API + SSE + Web Push + MCP endpoint
+//	raenil migrate               apply DB migrations and exit
+//	raenil mcp                   run the MCP server over stdio (local fallback)
+//	raenil token <name>          create an API token for the first user
+//	raenil user <email> <pass>   create the initial user
+//	raenil genvapid              print a fresh VAPID keypair
 package main
 
 import (
@@ -21,20 +21,20 @@ import (
 	"syscall"
 	"time"
 
-	"kanri/internal/api"
-	"kanri/internal/auth"
-	"kanri/internal/config"
-	"kanri/internal/db"
-	"kanri/internal/events"
-	appmcp "kanri/internal/mcp"
-	"kanri/internal/push"
-	"kanri/internal/service"
-	"kanri/internal/store"
+	"raenil/internal/api"
+	"raenil/internal/auth"
+	"raenil/internal/config"
+	"raenil/internal/db"
+	"raenil/internal/events"
+	appmcp "raenil/internal/mcp"
+	"raenil/internal/push"
+	"raenil/internal/service"
+	"raenil/internal/store"
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("kanri: ")
+	log.SetPrefix("raenil: ")
 
 	cmd := "serve"
 	if len(os.Args) > 1 {
@@ -64,15 +64,15 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Print(`kanri — self-hosted issue tracker
+	fmt.Print(`raenil — self-hosted issue tracker
 
 usage:
-  kanri serve                 run the server (default)
-  kanri migrate               apply DB migrations and exit
-  kanri mcp                   run the MCP server over stdio
-  kanri token <name>          create an API token for the first user
-  kanri user <email> <pass>   create the initial user
-  kanri genvapid              print a fresh VAPID keypair
+  raenil serve                 run the server (default)
+  raenil migrate               apply DB migrations and exit
+  raenil mcp                   run the MCP server over stdio
+  raenil token <name>          create an API token for the first user
+  raenil user <email> <pass>   create the initial user
+  raenil genvapid              print a fresh VAPID keypair
 `)
 }
 
@@ -170,13 +170,13 @@ func runToken(args []string) {
 
 	u, err := st.FirstUser(ctx)
 	if err != nil {
-		log.Fatalf("no user yet — run `kanri user <email> <pass>` first")
+		log.Fatalf("no user yet — run `raenil user <email> <pass>` first")
 	}
 	raw, err := auth.RandomToken(32)
 	if err != nil {
 		log.Fatalf("token: %v", err)
 	}
-	secret := "kanri_" + raw
+	secret := "raenil_" + raw
 	if _, err := st.CreateAPIToken(ctx, u.ID, name, auth.HashToken(secret)); err != nil {
 		log.Fatalf("token: %v", err)
 	}
@@ -185,7 +185,7 @@ func runToken(args []string) {
 
 func runUser(args []string) {
 	if len(args) < 2 {
-		log.Fatalf("usage: kanri user <email> <password>")
+		log.Fatalf("usage: raenil user <email> <password>")
 	}
 	email, pass := args[0], args[1]
 	if len(pass) < 8 {
@@ -212,5 +212,5 @@ func runGenVAPID() {
 	if err != nil {
 		log.Fatalf("genvapid: %v", err)
 	}
-	fmt.Printf("KANRI_VAPID_PRIVATE=%s\nKANRI_VAPID_PUBLIC=%s\n", priv, pub)
+	fmt.Printf("RAENIL_VAPID_PRIVATE=%s\nRAENIL_VAPID_PUBLIC=%s\n", priv, pub)
 }

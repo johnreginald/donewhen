@@ -12,14 +12,14 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/kanri ./cmd/kanri
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/raenil ./cmd/raenil
 
 # ---- stage 3: minimal runtime ----
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
-COPY --from=build /out/kanri /app/kanri
+COPY --from=build /out/raenil /app/raenil
 COPY --from=web /web/build /app/web/build
 EXPOSE 8080
-ENTRYPOINT ["/app/kanri"]
+ENTRYPOINT ["/app/raenil"]
 CMD ["serve"]

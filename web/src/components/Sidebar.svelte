@@ -34,8 +34,8 @@
 
 <nav class="sidebar">
 	<div class="brand">
-		<span class="logo">K</span>
-		<span class="name">Kanri</span>
+		<span class="logo">R</span>
+		<span class="name">Raenil</span>
 	</div>
 
 	<button class="cmdk" onclick={() => paletteOpen.set(true)}>

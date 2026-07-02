@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"kanri/internal/auth"
-	"kanri/internal/models"
-	"kanri/internal/store"
+	"raenil/internal/auth"
+	"raenil/internal/models"
+	"raenil/internal/store"
 )
 
 func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {

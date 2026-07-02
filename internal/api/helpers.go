@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"kanri/internal/store"
+	"raenil/internal/store"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

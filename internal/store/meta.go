@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"kanri/internal/models"
+	"raenil/internal/models"
 )
 
 // ---- Workflow states ----

@@ -1,4 +1,4 @@
--- Core schema for Kanri.
+-- Core schema for Raenil.
 
 CREATE TABLE users (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),

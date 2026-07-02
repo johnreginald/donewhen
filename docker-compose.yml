@@ -2,44 +2,44 @@ services:
   db:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-kanri}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kanri}
-      POSTGRES_DB: ${POSTGRES_DB:-kanri}
+      POSTGRES_USER: ${POSTGRES_USER:-raenil}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-raenil}
+      POSTGRES_DB: ${POSTGRES_DB:-raenil}
     volumes:
       - ./data/pg:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kanri}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raenil}"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
-  kanri:
+  raenil:
     build: .
     depends_on:
       db:
         condition: service_healthy
     environment:
-      KANRI_DATABASE_URL: postgres://${POSTGRES_USER:-kanri}:${POSTGRES_PASSWORD:-kanri}@db:5432/${POSTGRES_DB:-kanri}?sslmode=disable
-      KANRI_BASE_URL: ${KANRI_BASE_URL:-http://localhost:8080}
-      KANRI_LISTEN_ADDR: ":8080"
-      KANRI_ENV: ${KANRI_ENV:-prod}
-      KANRI_SESSION_SECRET: ${KANRI_SESSION_SECRET}
-      KANRI_ISSUE_PREFIX: ${KANRI_ISSUE_PREFIX:-K}
-      KANRI_VAPID_PUBLIC: ${KANRI_VAPID_PUBLIC}
-      KANRI_VAPID_PRIVATE: ${KANRI_VAPID_PRIVATE}
-      KANRI_VAPID_SUBJECT: ${KANRI_VAPID_SUBJECT:-mailto:admin@localhost}
+      RAENIL_DATABASE_URL: postgres://${POSTGRES_USER:-raenil}:${POSTGRES_PASSWORD:-raenil}@db:5432/${POSTGRES_DB:-raenil}?sslmode=disable
+      RAENIL_BASE_URL: ${RAENIL_BASE_URL:-http://localhost:8080}
+      RAENIL_LISTEN_ADDR: ":8080"
+      RAENIL_ENV: ${RAENIL_ENV:-prod}
+      RAENIL_SESSION_SECRET: ${RAENIL_SESSION_SECRET}
+      RAENIL_ISSUE_PREFIX: ${RAENIL_ISSUE_PREFIX:-K}
+      RAENIL_VAPID_PUBLIC: ${RAENIL_VAPID_PUBLIC}
+      RAENIL_VAPID_PRIVATE: ${RAENIL_VAPID_PRIVATE}
+      RAENIL_VAPID_SUBJECT: ${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}
     restart: unless-stopped
 
   caddy:
     image: caddy:2-alpine
     depends_on:
-      - kanri
+      - raenil
     ports:
       - "80:80"
       - "443:443"
     environment:
-      KANRI_SITE_ADDRESS: ${KANRI_SITE_ADDRESS:-:80}
+      RAENIL_SITE_ADDRESS: ${RAENIL_SITE_ADDRESS:-:80}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - ./data/caddy:/data

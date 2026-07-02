@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"kanri/internal/models"
+	"raenil/internal/models"
 )
 
 // Event types.

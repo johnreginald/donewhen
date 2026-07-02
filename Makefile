@@ -1,9 +1,9 @@
 .PHONY: build run web web-dev migrate token genvapid test up down logs backup clean tidy
 
-BIN := ./kanri
+BIN := ./raenil
 
 build: ## build the Go binary
-	go build -o $(BIN) ./cmd/kanri
+	go build -o $(BIN) ./cmd/raenil
 
 web: ## build the SvelteKit frontend into web/build
 	cd web && npm install && npm run build
@@ -43,7 +43,7 @@ logs: ## tail compose logs
 
 backup: ## dump the database to ./backups
 	@mkdir -p backups
-	docker compose exec -T db pg_dump -U $${POSTGRES_USER:-kanri} $${POSTGRES_DB:-kanri} | gzip > backups/kanri-$$(date +%Y%m%d-%H%M%S).sql.gz
+	docker compose exec -T db pg_dump -U $${POSTGRES_USER:-raenil} $${POSTGRES_DB:-raenil} | gzip > backups/raenil-$$(date +%Y%m%d-%H%M%S).sql.gz
 	@echo "backup written to ./backups"
 
 clean:

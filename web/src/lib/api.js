@@ -8,7 +8,7 @@ function getCookie(name) {
 async function request(method, path, body) {
 	const headers = {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
-	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('kanri_csrf');
+	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('raenil_csrf');
 	const res = await fetch('/api' + path, {
 		method,
 		headers,

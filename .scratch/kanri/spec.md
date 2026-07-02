@@ -1,11 +1,11 @@
-# Kanri — self-hosted, AI-driven issue tracker (Linear replacement)
+# Raenil — self-hosted, AI-driven issue tracker (Linear replacement)
 
-> Working codename **Kanri** (管理, "management"). Rename is a find/replace.
+> Working codename **Raenil** (管理, "management"). Rename is a find/replace.
 > Status: **BUILT** (v1 implemented + verified this session). Decisions locked:
 > MCP mirrors Linear verbs · remote HTTP/SSE MCP on the Go server · argon2id
 > password + session cookie · Initiatives → Projects → Issues. Defaults taken
-> for the §11 open questions: env-driven domain (`KANRI_BASE_URL`), docker-compose,
-> start clean, kept the name Kanri.
+> for the §11 open questions: env-driven domain (`RAENIL_BASE_URL`), docker-compose,
+> start clean, kept the name Raenil.
 
 ## 1. Objective
 
@@ -62,9 +62,9 @@ flowchart LR
 ```
 
 Single Go binary, subcommands like nani/globex:
-- `kanri serve` — REST API + SSE + Web Push + MCP endpoint (all one process).
-- `kanri migrate` — run DB migrations.
-- `kanri mcp` — (optional) stdio MCP fallback for local use; primary MCP is the remote endpoint.
+- `raenil serve` — REST API + SSE + Web Push + MCP endpoint (all one process).
+- `raenil migrate` — run DB migrations.
+- `raenil mcp` — (optional) stdio MCP fallback for local use; primary MCP is the remote endpoint.
 
 ## 4. Data model
 
@@ -145,10 +145,10 @@ sequenceDiagram
 
 ## 7. Auth
 
-- Bootstrap: `kanri serve` with no user → one-time setup page to create my account (argon2id hash).
+- Bootstrap: `raenil serve` with no user → one-time setup page to create my account (argon2id hash).
 - Login → httpOnly + Secure + SameSite session cookie; CSRF token for mutations.
 - Rate-limit login. Optional TOTP / passkey later (chose password+session for v1).
-- **MCP / API tokens**: separate hashed bearer tokens (`kanri token create`), shown once.
+- **MCP / API tokens**: separate hashed bearer tokens (`raenil token create`), shown once.
 
 ## 8. Tech choices (proposed, confirm in build)
 
@@ -156,12 +156,12 @@ sequenceDiagram
   `webpush-go` (VAPID), argon2 via `golang.org/x/crypto`, MCP via official Go SDK (`modelcontextprotocol/go-sdk`).
 - **Frontend**: SvelteKit + Svelte 5 runes, `vite-plugin-pwa`, `markdown-it` + `mermaid`,
   `svelte-dnd-action` for board drag, custom Cmd-K palette.
-- **Infra**: docker-compose on Local PC (postgres + kanri + caddy). Caddy does auto-TLS for the domain.
+- **Infra**: docker-compose on Local PC (postgres + raenil + caddy). Caddy does auto-TLS for the domain.
 - **Backups**: nightly `pg_dump` to disk (+ optional offsite).
 
 ## 9. Build breakdown (Initiative → Projects → Ready issues)
 
-**Initiative: "Kanri v1 — self-hosted tracker"**
+**Initiative: "Raenil v1 — self-hosted tracker"**
 
 1. **Project: Core API + data model** — schema/migrations, states+labels seed, issue/project/initiative CRUD, auth, API tokens.
 2. **Project: MCP server** — Linear-verb tool surface over remote HTTP/SSE, token auth, mermaid-gate compatibility.
@@ -185,4 +185,4 @@ sequenceDiagram
 - Exact domain/subdomain for the tracker? (affects Caddy config + VAPID origin)
 - Local PC OS (for docker-compose vs native systemd)?
 - Migrate existing Linear issues (PP/ACM) in, or start clean and dual-run during transition?
-- Keep the codename **Kanri** or rename?
+- Keep the codename **Raenil** or rename?

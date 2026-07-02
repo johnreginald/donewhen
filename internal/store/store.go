@@ -1,4 +1,4 @@
-// Package store holds all Postgres persistence for Kanri.
+// Package store holds all Postgres persistence for Raenil.
 package store
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"kanri/internal/models"
+	"raenil/internal/models"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -22,7 +22,7 @@ type Store struct {
 
 func New(pool *pgxpool.Pool, prefix string) *Store {
 	if prefix == "" {
-		prefix = "K"
+		prefix = "R"
 	}
 	return &Store{pool: pool, prefix: prefix}
 }

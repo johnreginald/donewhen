@@ -107,7 +107,7 @@
 	<IssuePanel />
 	<CommandPalette />
 {:else}
-	<div class="booting">Loading Kanri…</div>
+	<div class="booting">Loading Raenil…</div>
 {/if}
 
 {#if $toast}

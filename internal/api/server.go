@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kanri/internal/auth"
-	"kanri/internal/config"
-	"kanri/internal/events"
-	"kanri/internal/service"
-	"kanri/internal/sse"
-	"kanri/internal/store"
+	"raenil/internal/auth"
+	"raenil/internal/config"
+	"raenil/internal/events"
+	"raenil/internal/service"
+	"raenil/internal/sse"
+	"raenil/internal/store"
 )
 
 type Server struct {
@@ -166,7 +166,7 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	// Frontend not built yet.
 	writeJSON(w, http.StatusOK, map[string]string{
-		"service": "kanri",
+		"service": "raenil",
 		"note":    "frontend not built; run the web build. API is under /api",
 	})
 }

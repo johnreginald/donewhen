@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"kanri/internal/auth"
+	"raenil/internal/auth"
 )
 
 // ---- simple in-memory login rate limiter (per client IP) ----
@@ -173,7 +173,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	plaintext := "kanri_" + raw
+	plaintext := "raenil_" + raw
 	t, err := s.store.CreateAPIToken(r.Context(), u.ID, body.Name, auth.HashToken(plaintext))
 	if handleStoreErr(w, err) {
 		return
