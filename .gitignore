@@ -1,0 +1,27 @@
+# Go
+/kanri
+/bin/
+*.test
+*.out
+
+# env / secrets
+.env
+*.local
+
+# node / sveltekit
+web/node_modules/
+web/.svelte-kit/
+web/build/
+web/.env
+
+# data / backups
+/data/
+/backups/
+*.dump
+*.sql.gz
+
+# os
+.DS_Store
+
+# local MCP config (contains token)
+.mcp.json

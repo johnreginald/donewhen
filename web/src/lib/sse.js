@@ -1,0 +1,36 @@
+// Live event stream. Reconnects automatically (EventSource does this natively).
+
+export function connectSSE(onEvent) {
+	let es;
+	let closed = false;
+
+	function open() {
+		if (closed) return;
+		es = new EventSource('/api/events', { withCredentials: true });
+		const types = [
+			'issue.created',
+			'issue.updated',
+			'issue.state_changed',
+			'issue.deleted',
+			'comment.added'
+		];
+		for (const t of types) {
+			es.addEventListener(t, (e) => {
+				try {
+					onEvent(JSON.parse(e.data));
+				} catch {
+					/* ignore */
+				}
+			});
+		}
+		es.onerror = () => {
+			// EventSource retries on its own; nothing to do.
+		};
+	}
+
+	open();
+	return () => {
+		closed = true;
+		es && es.close();
+	};
+}
