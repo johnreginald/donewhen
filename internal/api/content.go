@@ -5,6 +5,7 @@ import (
 
 	"raenil/internal/auth"
 	"raenil/internal/models"
+	"raenil/internal/store"
 )
 
 // ---- comments ----
@@ -35,7 +36,12 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 // ---- documents ----
 
 func (s *Server) handleListDocuments(w http.ResponseWriter, r *http.Request) {
-	docs, err := s.store.ListDocuments(r.Context(), r.URL.Query().Get("project"))
+	q := r.URL.Query()
+	docs, err := s.store.ListDocuments(r.Context(), store.DocFilter{
+		ProjectID:    q.Get("project"),
+		IssueID:      q.Get("issue"),
+		InitiativeID: q.Get("initiative"),
+	})
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -50,22 +56,53 @@ func (s *Server) handleGetDocument(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, d)
 }
 
+type docSaveReq struct {
+	Title        string   `json:"title"`
+	BodyMd       string   `json:"bodyMd"`
+	ProjectId    *string  `json:"projectId"`
+	InitiativeId *string  `json:"initiativeId"`
+	IssueId      *string  `json:"issueId"`
+	LabelIds     []string `json:"labelIds"`
+	LabelNames   []string `json:"labelNames"`
+}
+
 func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
-	var d models.Document
-	if err := readJSON(r, &d); err != nil {
+	var req docSaveReq
+	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
+	}
+	if req.Title == "" {
+		writeErr(w, http.StatusBadRequest, "title required")
+		return
+	}
+	d := models.Document{
+		Title:  req.Title,
+		BodyMD: req.BodyMd,
 	}
 	if id := r.PathValue("id"); id != "" {
 		d.ID = id
 	}
-	if d.Title == "" {
-		writeErr(w, http.StatusBadRequest, "title required")
-		return
+	// Empty string detaches; a value attaches; absent (nil) leaves default.
+	if req.ProjectId != nil {
+		d.ProjectID = strPtr(*req.ProjectId)
+	}
+	if req.InitiativeId != nil {
+		d.InitiativeID = strPtr(*req.InitiativeId)
+	}
+	if req.IssueId != nil {
+		d.IssueID = strPtr(*req.IssueId)
 	}
 	saved, err := s.store.SaveDocument(r.Context(), d)
 	if handleStoreErr(w, err) {
 		return
+	}
+	if req.LabelIds != nil || req.LabelNames != nil {
+		if err := s.store.SetDocumentLabels(r.Context(), saved.ID, req.LabelIds, req.LabelNames); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		saved, _ = s.store.GetDocument(r.Context(), saved.ID)
 	}
 	writeJSON(w, 200, saved)
 }

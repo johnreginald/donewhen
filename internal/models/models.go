@@ -86,12 +86,15 @@ type Comment struct {
 }
 
 type Document struct {
-	ID        string    `json:"id"`
-	Title     string    `json:"title"`
-	BodyMD    string    `json:"bodyMd"`
-	ProjectID *string   `json:"projectId"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID           string    `json:"id"`
+	Title        string    `json:"title"`
+	BodyMD       string    `json:"bodyMd"`
+	ProjectID    *string   `json:"projectId"`
+	InitiativeID *string   `json:"initiativeId"`
+	IssueID      *string   `json:"issueId"`
+	Labels       []Label   `json:"labels"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 type PushSubscription struct {
