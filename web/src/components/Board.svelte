@@ -4,9 +4,20 @@
 	import { api } from '$lib/api.js';
 	import { showToast } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
+	import StateIcon from './StateIcon.svelte';
 
 	let cols = $state([]);
 	let dragging = false;
+	let mobileCol = $state(1);
+	let mobileInit = false;
+
+	// Default the mobile tab to the first column that has issues.
+	$effect(() => {
+		if (mobileInit || !cols.length) return;
+		const firstNonEmpty = cols.findIndex((c) => c.items.length);
+		mobileCol = firstNonEmpty >= 0 ? firstNonEmpty : Math.min(1, cols.length - 1);
+		mobileInit = true;
+	});
 
 	// Rebuild columns from live data, except while a drag is in flight.
 	$effect(() => {
@@ -17,6 +28,7 @@
 			id: s.id,
 			name: s.name,
 			color: s.color,
+			category: s.category,
 			items: is
 				.filter((i) => i.stateId === s.id)
 				.sort((a, b) => a.position - b.position)
@@ -49,13 +61,17 @@
 	}
 </script>
 
-<div class="board">
+<!-- Desktop: horizontal drag-and-drop columns -->
+<div class="board desktop">
 	{#each cols as col, i (col.id)}
 		<div class="column">
 			<div class="col-head">
-				<span class="dot" style:background={col.color}></span>
+				<StateIcon category={col.category} color={col.color} />
 				<span class="col-name">{col.name}</span>
 				<span class="count">{col.items.length}</span>
+				<span class="spacer"></span>
+				<button class="ch-btn" title="Options">⋯</button>
+				<button class="ch-btn" title="New issue">+</button>
 			</div>
 			<div
 				class="col-body"
@@ -73,6 +89,26 @@
 	{/each}
 </div>
 
+<!-- Mobile: state-tab selector + a single scrolling column -->
+<div class="board mobile">
+	<div class="mtabs">
+		{#each cols as col, i (col.id)}
+			<button class="mtab" class:on={i === mobileCol} onclick={() => (mobileCol = i)}>
+				<StateIcon category={col.category} color={col.color} size={13} />
+				<span>{col.name}</span>
+				<span class="mcount">{col.items.length}</span>
+			</button>
+		{/each}
+	</div>
+	<div class="mlist">
+		{#each cols[mobileCol]?.items ?? [] as issue (issue.id)}
+			<IssueCard {issue} />
+		{:else}
+			<div class="mempty faint">Nothing in {cols[mobileCol]?.name ?? 'this state'}.</div>
+		{/each}
+	</div>
+</div>
+
 <style>
 	.board {
 		display: flex;
@@ -82,7 +118,7 @@
 		padding: 12px;
 	}
 	.column {
-		flex: 0 0 280px;
+		flex: 0 0 300px;
 		display: flex;
 		flex-direction: column;
 		background: var(--bg);
@@ -91,16 +127,41 @@
 	.col-head {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 4px 6px 10px;
+		gap: 7px;
+		padding: 4px 4px 10px;
 		font-size: 13px;
 		font-weight: 500;
-		position: sticky;
-		top: 0;
+	}
+	.col-name {
+		color: var(--text);
 	}
 	.count {
 		color: var(--text-faint);
 		font-size: 12px;
+	}
+	.col-head .spacer {
+		flex: 1;
+	}
+	.ch-btn {
+		width: 20px;
+		height: 20px;
+		display: grid;
+		place-items: center;
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		border-radius: 5px;
+		font-size: 14px;
+		line-height: 1;
+		opacity: 0;
+		transition: opacity 0.1s, background 0.1s;
+	}
+	.column:hover .ch-btn {
+		opacity: 1;
+	}
+	.ch-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text);
 	}
 	.col-body {
 		display: flex;
@@ -114,9 +175,67 @@
 	.card-wrap {
 		outline: none;
 	}
-	@media (max-width: 640px) {
-		.column {
-			flex-basis: 84vw;
+
+	/* mobile board */
+	.board.mobile {
+		display: none;
+	}
+	.mtabs {
+		display: flex;
+		gap: 6px;
+		overflow-x: auto;
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--border);
+		scrollbar-width: none;
+	}
+	.mtabs::-webkit-scrollbar {
+		display: none;
+	}
+	.mtab {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		white-space: nowrap;
+		background: var(--bg-elev);
+		border: 1px solid var(--border);
+		border-radius: 20px;
+		padding: 6px 12px;
+		color: var(--text-dim);
+		font-size: 13px;
+		font-weight: 500;
+	}
+	.mtab.on {
+		background: var(--bg-hover);
+		color: var(--text);
+		border-color: var(--border-strong);
+	}
+	.mcount {
+		color: var(--text-faint);
+		font-size: 12px;
+	}
+	.mlist {
+		flex: 1;
+		overflow-y: auto;
+		padding: 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 9px;
+	}
+	.mempty {
+		padding: 44px 10px;
+		text-align: center;
+	}
+
+	@media (max-width: 720px) {
+		.board.desktop {
+			display: none;
+		}
+		.board.mobile {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			overflow: hidden;
+			padding: 0;
 		}
 	}
 </style>

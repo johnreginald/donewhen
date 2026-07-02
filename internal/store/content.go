@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
@@ -43,13 +44,37 @@ func (s *Store) CreateComment(ctx context.Context, issueID, body, actor string) 
 
 // ---- Documents ----
 
-func (s *Store) ListDocuments(ctx context.Context, projectID string) ([]models.Document, error) {
-	q := `SELECT id, title, body_md, project_id, created_at, updated_at FROM documents`
+// DocFilter narrows a document listing to one attach target.
+type DocFilter struct {
+	ProjectID    string
+	IssueID      string
+	InitiativeID string
+}
+
+const docCols = `id, title, body_md, project_id, initiative_id, issue_id, created_at, updated_at`
+
+func scanDocument(row pgx.Row) (models.Document, error) {
+	var d models.Document
+	err := row.Scan(&d.ID, &d.Title, &d.BodyMD, &d.ProjectID, &d.InitiativeID, &d.IssueID,
+		&d.CreatedAt, &d.UpdatedAt)
+	return d, err
+}
+
+func (s *Store) ListDocuments(ctx context.Context, f DocFilter) ([]models.Document, error) {
+	q := `SELECT ` + docCols + ` FROM documents WHERE 1=1`
 	args := []any{}
-	if projectID != "" {
-		q += ` WHERE project_id=$1`
-		args = append(args, projectID)
+	n := 0
+	add := func(col string, v string) {
+		if v == "" {
+			return
+		}
+		n++
+		q += fmt.Sprintf(" AND %s=$%d", col, n)
+		args = append(args, v)
 	}
+	add("project_id", f.ProjectID)
+	add("issue_id", f.IssueID)
+	add("initiative_id", f.InitiativeID)
 	q += ` ORDER BY updated_at DESC`
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -58,37 +83,79 @@ func (s *Store) ListDocuments(ctx context.Context, projectID string) ([]models.D
 	defer rows.Close()
 	var out []models.Document
 	for rows.Next() {
-		var d models.Document
-		if err := rows.Scan(&d.ID, &d.Title, &d.BodyMD, &d.ProjectID, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		d, err := scanDocument(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, d)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return s.attachDocLabels(ctx, out)
+}
+
+func (s *Store) attachDocLabels(ctx context.Context, docs []models.Document) ([]models.Document, error) {
+	if len(docs) == 0 {
+		return docs, nil
+	}
+	idx := map[string]int{}
+	ids := make([]string, len(docs))
+	for i := range docs {
+		docs[i].Labels = []models.Label{}
+		idx[docs[i].ID] = i
+		ids[i] = docs[i].ID
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT dl.document_id, l.id, l.group_id, l.name, l.color
+		FROM document_labels dl JOIN labels l ON l.id = dl.label_id
+		WHERE dl.document_id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var docID string
+		var l models.Label
+		if err := rows.Scan(&docID, &l.ID, &l.GroupID, &l.Name, &l.Color); err != nil {
+			return nil, err
+		}
+		if i, ok := idx[docID]; ok {
+			docs[i].Labels = append(docs[i].Labels, l)
+		}
+	}
+	return docs, rows.Err()
 }
 
 func (s *Store) GetDocument(ctx context.Context, id string) (models.Document, error) {
-	var d models.Document
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, title, body_md, project_id, created_at, updated_at FROM documents WHERE id=$1`, id).
-		Scan(&d.ID, &d.Title, &d.BodyMD, &d.ProjectID, &d.CreatedAt, &d.UpdatedAt)
+	d, err := scanDocument(s.pool.QueryRow(ctx, `SELECT `+docCols+` FROM documents WHERE id=$1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrNotFound
 	}
-	return d, err
+	if err != nil {
+		return d, err
+	}
+	out, err := s.attachDocLabels(ctx, []models.Document{d})
+	if err != nil {
+		return d, err
+	}
+	return out[0], nil
 }
 
 func (s *Store) SaveDocument(ctx context.Context, d models.Document) (models.Document, error) {
 	if d.ID == "" {
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO documents (title, body_md, project_id) VALUES ($1,$2,$3)
-			 RETURNING id, created_at, updated_at`,
-			d.Title, d.BodyMD, d.ProjectID).Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt)
-		return d, err
+			`INSERT INTO documents (title, body_md, project_id, initiative_id, issue_id)
+			 VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at, updated_at`,
+			d.Title, d.BodyMD, d.ProjectID, d.InitiativeID, d.IssueID).Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt)
+		if err != nil {
+			return d, err
+		}
+		return s.GetDocument(ctx, d.ID)
 	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE documents SET title=$2, body_md=$3, project_id=$4, updated_at=now() WHERE id=$1`,
-		d.ID, d.Title, d.BodyMD, d.ProjectID)
+		`UPDATE documents SET title=$2, body_md=$3, project_id=$4, initiative_id=$5, issue_id=$6, updated_at=now() WHERE id=$1`,
+		d.ID, d.Title, d.BodyMD, d.ProjectID, d.InitiativeID, d.IssueID)
 	if err != nil {
 		return d, err
 	}
@@ -96,6 +163,30 @@ func (s *Store) SaveDocument(ctx context.Context, d models.Document) (models.Doc
 		return d, ErrNotFound
 	}
 	return s.GetDocument(ctx, d.ID)
+}
+
+// SetDocumentLabels replaces a document's label set (exclusive-group aware).
+func (s *Store) SetDocumentLabels(ctx context.Context, docID string, ids, names []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	labelIDs, err := s.resolveLabelIDsTx(ctx, tx, ids, names)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM document_labels WHERE document_id=$1`, docID); err != nil {
+		return err
+	}
+	for _, lid := range labelIDs {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO document_labels (document_id, label_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+			docID, lid); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) DeleteDocument(ctx context.Context, id string) error {
