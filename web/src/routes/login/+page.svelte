@@ -89,12 +89,14 @@
 	.logo {
 		width: 26px;
 		height: 26px;
-		border-radius: 6px;
-		background: var(--accent);
+		border-radius: 8px;
+		background: var(--accent-grad);
 		color: #fff;
 		display: grid;
 		place-items: center;
-		font-weight: 700;
+		font-family: var(--disp);
+		font-weight: 800;
+		box-shadow: 0 4px 14px var(--accent-soft);
 	}
 	h1 {
 		font-size: 18px;

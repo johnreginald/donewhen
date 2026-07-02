@@ -1,19 +1,35 @@
 :root {
-	--bg: #0d0e12;
-	--bg-elev: #16171d;
-	--bg-elev2: #1c1e26;
-	--bg-hover: #232530;
-	--border: #262832;
-	--border-strong: #333644;
-	--text: #e6e8ee;
-	--text-dim: #9498a6;
-	--text-faint: #6b6f7d;
-	--accent: #6e79f1;
+	/* Raenil dark system (from the Claude Design canvas) */
+	--bg: #0b0c10;
+	--bg-elev: #161a24;
+	--bg-elev2: #1c212d;
+	--bg-hover: #222839;
+	--border: #20242f;
+	--border-strong: #2c3140;
+	--text: #e7e9f0;
+	--text-dim: #9aa0af;
+	--text-faint: #646a7b;
+	--accent: #6e7bf6;
+	--accent2: #8b7bff;
+	--accent-soft: rgba(110, 123, 246, 0.16);
 	--accent-dim: #3b3f66;
-	--radius: 8px;
-	--shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-	--font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, system-ui, sans-serif;
-	--mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+	--accent-grad: linear-gradient(145deg, var(--accent), var(--accent2));
+	--radius: 9px;
+	--radius-lg: 12px;
+	--shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+	--font: -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+	--disp: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+	--mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+
+	/* workflow state + priority hues */
+	--st-triage: #8a8f9c;
+	--st-backlog: #7c8698;
+	--st-aligning: #a78bfa;
+	--st-ready: #38bdf8;
+	--st-progress: #fbbf24;
+	--st-review: #fb923c;
+	--st-done: #34d399;
+	--st-canceled: #6b7280;
 }
 
 * {
@@ -78,26 +94,29 @@ select {
 	padding: 6px 12px;
 	border-radius: var(--radius);
 	font-size: 13px;
-	transition: background 0.12s, border-color 0.12s;
+	transition: background 0.12s, border-color 0.12s, filter 0.12s;
 }
 .btn:hover {
 	background: var(--bg-hover);
 	border-color: var(--border-strong);
 }
 .btn.primary {
-	background: var(--accent);
-	border-color: var(--accent);
-	color: white;
+	background: var(--accent-grad);
+	border-color: transparent;
+	color: #fff;
+	box-shadow: 0 4px 14px var(--accent-soft);
 }
 .btn.primary:hover {
-	filter: brightness(1.1);
+	filter: brightness(1.08);
 }
 .btn.ghost {
 	background: transparent;
 	border-color: transparent;
+	color: var(--text-dim);
 }
 .btn.ghost:hover {
 	background: var(--bg-hover);
+	color: var(--text);
 }
 
 .pill {
@@ -108,13 +127,14 @@ select {
 	border-radius: 20px;
 	font-size: 11px;
 	font-weight: 500;
+	color: var(--text-dim);
 	background: var(--bg-elev2);
 	border: 1px solid var(--border);
 	white-space: nowrap;
 }
 .dot {
-	width: 8px;
-	height: 8px;
+	width: 7px;
+	height: 7px;
 	border-radius: 50%;
 	flex-shrink: 0;
 }
@@ -127,6 +147,7 @@ select {
 	font-size: 14px;
 	width: 100%;
 	outline: none;
+	transition: border-color 0.12s;
 }
 .input:focus {
 	border-color: var(--accent);
