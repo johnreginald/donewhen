@@ -11,10 +11,10 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
-	"kanri/internal/config"
-	"kanri/internal/events"
-	"kanri/internal/models"
-	"kanri/internal/store"
+	"raenil/internal/config"
+	"raenil/internal/events"
+	"raenil/internal/models"
+	"raenil/internal/store"
 )
 
 type Notifier struct {

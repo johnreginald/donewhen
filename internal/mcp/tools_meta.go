@@ -6,7 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"kanri/internal/models"
+	"raenil/internal/models"
 )
 
 func (d *deps) registerMeta(s *server.MCPServer) {

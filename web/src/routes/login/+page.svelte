@@ -40,7 +40,7 @@
 
 <div class="wrap">
 	<form class="card" onsubmit={submit}>
-		<div class="brand"><span class="logo">K</span> Kanri</div>
+		<div class="brand"><span class="logo">R</span> Raenil</div>
 		<h1>{setupRequired ? 'Create your account' : 'Sign in'}</h1>
 		{#if setupRequired}
 			<p class="faint">First run — set up the single account for this tracker.</p>

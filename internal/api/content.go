@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"kanri/internal/auth"
-	"kanri/internal/models"
+	"raenil/internal/auth"
+	"raenil/internal/models"
 )
 
 // ---- comments ----

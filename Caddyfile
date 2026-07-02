@@ -1,14 +1,14 @@
-# Set KANRI_SITE_ADDRESS to your domain (e.g. tracker.example.com) for automatic
+# Set RAENIL_SITE_ADDRESS to your domain (e.g. tracker.example.com) for automatic
 # HTTPS, or leave as :80 for local. SSE needs buffering off, which reverse_proxy
 # handles by streaming; flush_interval -1 forces immediate flush.
-{$KANRI_SITE_ADDRESS} {
+{$RAENIL_SITE_ADDRESS} {
 	encode gzip
 
 	# Stream Server-Sent Events without buffering.
 	@sse path /api/events
-	reverse_proxy @sse kanri:8080 {
+	reverse_proxy @sse raenil:8080 {
 		flush_interval -1
 	}
 
-	reverse_proxy kanri:8080
+	reverse_proxy raenil:8080
 }

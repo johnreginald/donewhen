@@ -1,4 +1,4 @@
-# Deploying Kanri on the Local PC (24/7)
+# Deploying Raenil on the Local PC (24/7)
 
 Target: your always-on machine with a domain and 1000/500 Mbps. Caddy handles
 TLS; the Go binary serves everything else (API, SSE, Web Push, MCP, static PWA).
@@ -18,50 +18,50 @@ cp .env.example .env
 Set at minimum:
 
 ```
-KANRI_ENV=prod
-KANRI_SITE_ADDRESS=tracker.yourdomain.com     # Caddy auto-TLS
-KANRI_BASE_URL=https://tracker.yourdomain.com # cookies, push origin, deep links
-KANRI_SESSION_SECRET=<openssl rand -hex 32>
+RAENIL_ENV=prod
+RAENIL_SITE_ADDRESS=tracker.yourdomain.com     # Caddy auto-TLS
+RAENIL_BASE_URL=https://tracker.yourdomain.com # cookies, push origin, deep links
+RAENIL_SESSION_SECRET=<openssl rand -hex 32>
 POSTGRES_PASSWORD=<something strong>
 ```
 
 Generate VAPID keys once and paste both lines in:
 
 ```bash
-docker compose run --rm kanri /app/kanri genvapid
-# -> KANRI_VAPID_PRIVATE=... / KANRI_VAPID_PUBLIC=...
+docker compose run --rm raenil /app/raenil genvapid
+# -> RAENIL_VAPID_PRIVATE=... / RAENIL_VAPID_PUBLIC=...
 ```
 
 ## 3. Bring it up
 
 ```bash
 docker compose up -d --build
-docker compose exec kanri /app/kanri user you@example.com 'a-strong-password'
-docker compose exec kanri /app/kanri token claude   # copy the token
+docker compose exec raenil /app/raenil user you@example.com 'a-strong-password'
+docker compose exec raenil /app/raenil token claude   # copy the token
 ```
 
 Open `https://tracker.yourdomain.com`, sign in, and (Settings → Notifications)
 enable push on your phone after installing the PWA (Chrome → Add to home screen).
 
-## 4. Wire the mermaid hook to Kanri's MCP
+## 4. Wire the mermaid hook to Raenil's MCP
 
-The global hook currently gates only Linear's `save_issue`. To also gate Kanri,
+The global hook currently gates only Linear's `save_issue`. To also gate Raenil,
 extend the PreToolUse matcher in `~/.claude/settings.json`:
 
 ```json
 {
-  "matcher": "mcp__plugin_linear_linear__save_issue|mcp__kanri__save_issue",
+  "matcher": "mcp__plugin_linear_linear__save_issue|mcp__raenil__save_issue",
   "hooks": [{ "type": "command", "command": "python3 \"$HOME/.claude/hooks/require-mermaid.py\"" }]
 }
 ```
 
-The hook already inspects the `labels` + `description` fields, which Kanri's
+The hook already inspects the `labels` + `description` fields, which Raenil's
 `save_issue` provides in the same shape, so no hook code changes are needed.
 
 ## 5. Register the MCP server
 
 ```bash
-claude mcp add --transport http kanri https://tracker.yourdomain.com/mcp \
+claude mcp add --transport http raenil https://tracker.yourdomain.com/mcp \
   --header "Authorization: Bearer <token>"
 ```
 
@@ -69,14 +69,14 @@ claude mcp add --transport http kanri https://tracker.yourdomain.com/mcp \
 
 ```cron
 # m h dom mon dow
-30 3 * * *  cd /path/to/kanri && /usr/bin/make backup >> /var/log/kanri-backup.log 2>&1
+30 3 * * *  cd /path/to/raenil && /usr/bin/make backup >> /var/log/raenil-backup.log 2>&1
 ```
 
 Keep the `data/` volume (Postgres + Caddy certs) on durable storage. To restore:
 
 ```bash
-gunzip -c backups/kanri-YYYYMMDD-HHMMSS.sql.gz | \
-  docker compose exec -T db psql -U kanri kanri
+gunzip -c backups/raenil-YYYYMMDD-HHMMSS.sql.gz | \
+  docker compose exec -T db psql -U raenil raenil
 ```
 
 ## Updating

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"kanri/internal/models"
+	"raenil/internal/models"
 )
 
 // ---- states ----

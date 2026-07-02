@@ -1,4 +1,4 @@
-// Package mcp exposes Kanri over the Model Context Protocol using a tool
+// Package mcp exposes Raenil over the Model Context Protocol using a tool
 // surface that mirrors Linear's verbs (save_issue, list_issues, ...), served
 // over Streamable HTTP and authenticated with a bearer API token.
 package mcp
@@ -12,11 +12,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"kanri/internal/auth"
-	"kanri/internal/config"
-	"kanri/internal/models"
-	"kanri/internal/service"
-	"kanri/internal/store"
+	"raenil/internal/auth"
+	"raenil/internal/config"
+	"raenil/internal/models"
+	"raenil/internal/service"
+	"raenil/internal/store"
 )
 
 const version = "1.0.0"
@@ -28,10 +28,10 @@ type deps struct {
 }
 
 func buildServer(d *deps) *server.MCPServer {
-	s := server.NewMCPServer("kanri", version,
+	s := server.NewMCPServer("raenil", version,
 		server.WithToolCapabilities(true),
 		server.WithInstructions(
-			"Kanri issue tracker. Continuous-flow Kanban: Triage → Backlog → Aligning → "+
+			"Raenil issue tracker. Continuous-flow Kanban: Triage → Backlog → Aligning → "+
 				"Ready → In Progress → In Review → Done → Canceled. Hierarchy is "+
 				"Initiatives → Projects → Issues. Use save_issue to create/move issues "+
 				"(pass 'state' as a status name). Backend-labeled issues should include a "+

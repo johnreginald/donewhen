@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"kanri/internal/events"
+	"raenil/internal/events"
 )
 
 type Handler struct {

@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"kanri/internal/models"
-	"kanri/internal/store"
+	"raenil/internal/models"
+	"raenil/internal/store"
 )
 
 const (
-	SessionCookie = "kanri_session"
-	CSRFCookie    = "kanri_csrf"
+	SessionCookie = "raenil_session"
+	CSRFCookie    = "raenil_csrf"
 	CSRFHeader    = "X-CSRF-Token"
 	SessionTTL    = 30 * 24 * time.Hour
 	ActorHuman    = "human"
@@ -133,7 +133,7 @@ func (m *Manager) NewCSRFCookie() (*http.Cookie, error) {
 }
 
 // CheckCSRF validates the double-submit token: the X-CSRF-Token header must
-// match the kanri_csrf cookie.
+// match the raenil_csrf cookie.
 func (m *Manager) CheckCSRF(r *http.Request) bool {
 	c, err := r.Cookie(CSRFCookie)
 	if err != nil || c.Value == "" {

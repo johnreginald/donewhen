@@ -1,4 +1,4 @@
-// Package config loads Kanri configuration from environment variables.
+// Package config loads Raenil configuration from environment variables.
 package config
 
 import (
@@ -43,24 +43,24 @@ func env(key, def string) string {
 // Load reads configuration from the environment, applying defaults.
 func Load() (Config, error) {
 	c := Config{
-		BaseURL:       env("KANRI_BASE_URL", "http://localhost:8080"),
-		ListenAddr:    env("KANRI_LISTEN_ADDR", ":8080"),
-		DatabaseURL:   env("KANRI_DATABASE_URL", "postgres://kanri:kanri@localhost:5432/kanri?sslmode=disable"),
-		Env:           env("KANRI_ENV", "dev"),
-		SessionSecret: os.Getenv("KANRI_SESSION_SECRET"),
-		IssuePrefix:   env("KANRI_ISSUE_PREFIX", "K"),
-		VAPIDPublic:   os.Getenv("KANRI_VAPID_PUBLIC"),
-		VAPIDPrivate:  os.Getenv("KANRI_VAPID_PRIVATE"),
-		VAPIDSubject:  env("KANRI_VAPID_SUBJECT", "mailto:admin@localhost"),
+		BaseURL:       env("RAENIL_BASE_URL", "http://localhost:8080"),
+		ListenAddr:    env("RAENIL_LISTEN_ADDR", ":8080"),
+		DatabaseURL:   env("RAENIL_DATABASE_URL", "postgres://raenil:raenil@localhost:5432/raenil?sslmode=disable"),
+		Env:           env("RAENIL_ENV", "dev"),
+		SessionSecret: os.Getenv("RAENIL_SESSION_SECRET"),
+		IssuePrefix:   env("RAENIL_ISSUE_PREFIX", "R"),
+		VAPIDPublic:   os.Getenv("RAENIL_VAPID_PUBLIC"),
+		VAPIDPrivate:  os.Getenv("RAENIL_VAPID_PRIVATE"),
+		VAPIDSubject:  env("RAENIL_VAPID_SUBJECT", "mailto:admin@localhost"),
 	}
 	if c.SessionSecret == "" {
 		if c.IsProd() {
-			return c, fmt.Errorf("KANRI_SESSION_SECRET is required in prod")
+			return c, fmt.Errorf("RAENIL_SESSION_SECRET is required in prod")
 		}
 		c.SessionSecret = "dev-insecure-session-secret-do-not-use-in-prod"
 	}
 	if len(c.SessionSecret) < 16 {
-		return c, fmt.Errorf("KANRI_SESSION_SECRET must be at least 16 bytes")
+		return c, fmt.Errorf("RAENIL_SESSION_SECRET must be at least 16 bytes")
 	}
 	c.BaseURL = strings.TrimRight(c.BaseURL, "/")
 	return c, nil

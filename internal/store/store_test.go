@@ -5,15 +5,15 @@ import (
 	"os"
 	"testing"
 
-	"kanri/internal/db"
+	"raenil/internal/db"
 )
 
-// These tests need a throwaway Postgres. Set KANRI_TEST_DATABASE_URL to run;
+// These tests need a throwaway Postgres. Set RAENIL_TEST_DATABASE_URL to run;
 // otherwise they skip (so `go test ./...` stays green without a database).
 func testStore(t *testing.T) *Store {
-	dsn := os.Getenv("KANRI_TEST_DATABASE_URL")
+	dsn := os.Getenv("RAENIL_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("set KANRI_TEST_DATABASE_URL to run store tests")
+		t.Skip("set RAENIL_TEST_DATABASE_URL to run store tests")
 	}
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)

@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
 	<rect width="512" height="512" rx="112" fill="#6e79f1" />
-	<path d="M170 120h56v112l104-112h70L266 256l134 136h-72L226 280v112h-56z" fill="#fff" />
+	<text x="256" y="358" font-family="-apple-system, Segoe UI, Roboto, sans-serif" font-size="300"
+		font-weight="700" fill="#fff" text-anchor="middle">R</text>
 </svg>
