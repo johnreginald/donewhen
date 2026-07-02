@@ -1,13 +1,15 @@
 <script>
 	import LabelPill from './LabelPill.svelte';
 	import PriorityIcon from './PriorityIcon.svelte';
-	import { openIssue } from '$lib/ui.js';
+	import { openIssue, flashIssueId } from '$lib/ui.js';
 
 	let { issue } = $props();
+	const flashing = $derived($flashIssueId === issue.id);
 </script>
 
 <div
 	class="card"
+	class:live={flashing}
 	role="button"
 	tabindex="0"
 	onclick={() => openIssue(issue.key)}
@@ -31,17 +33,21 @@
 	.card {
 		background: var(--bg-elev);
 		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		padding: 10px 12px;
+		border-radius: 11px;
+		padding: 11px 12px;
 		display: flex;
 		flex-direction: column;
-		gap: 7px;
+		gap: 8px;
 		cursor: pointer;
-		transition: border-color 0.1s, background 0.1s;
+		transition: border-color 0.12s, background 0.12s, box-shadow 0.3s;
 	}
 	.card:hover {
 		border-color: var(--border-strong);
 		background: var(--bg-elev2);
+	}
+	.card.live {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--accent-soft);
 	}
 	.top {
 		display: flex;

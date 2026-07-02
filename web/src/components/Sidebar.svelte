@@ -96,14 +96,16 @@
 		padding: 4px 8px;
 	}
 	.logo {
-		width: 24px;
-		height: 24px;
-		border-radius: 6px;
-		background: var(--accent);
+		width: 26px;
+		height: 26px;
+		border-radius: 8px;
+		background: var(--accent-grad);
 		color: white;
 		display: grid;
 		place-items: center;
-		font-weight: 700;
+		font-family: var(--disp);
+		font-weight: 800;
+		box-shadow: 0 4px 14px var(--accent-soft);
 	}
 	.name {
 		font-weight: 600;

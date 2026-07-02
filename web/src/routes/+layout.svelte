@@ -9,7 +9,7 @@
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, applyEvent, me } from '$lib/store.js';
-	import { paletteOpen, panelIssueId, toast, showToast } from '$lib/ui.js';
+	import { paletteOpen, panelIssueId, toast, showToast, flashIssue } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 
 	let { children } = $props();
@@ -48,6 +48,7 @@
 
 	function handleEvent(ev) {
 		applyEvent(ev);
+		if (ev.issue) flashIssue(ev.issue.id);
 		if (ev.type === 'issue.state_changed' && ev.issue && ev.to) {
 			const who = ev.actor === 'ai' ? 'AI' : 'you';
 			showToast(`${ev.issue.key} → ${ev.to.name} (by ${who})`);
@@ -95,7 +96,7 @@
 			<header class="topbar">
 				<button class="hamburger btn ghost" onclick={() => (mobileNav = !mobileNav)}>☰</button>
 				<div class="spacer"></div>
-				<button class="btn" onclick={() => paletteOpen.set(true)}>+ New</button>
+				<button class="btn primary" onclick={() => paletteOpen.set(true)}>+ New issue</button>
 				<span class="email faint">{$me?.email}</span>
 				<button class="btn ghost" onclick={logout}>Logout</button>
 			</header>
