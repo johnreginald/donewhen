@@ -1,0 +1,12 @@
+{
+	"//": "Copy to .mcp.json and fill in a real token to let Claude Code use Kanri's MCP while working in this repo. .mcp.json is gitignored.",
+	"mcpServers": {
+		"kanri": {
+			"type": "http",
+			"url": "http://localhost:8080/mcp",
+			"headers": {
+				"Authorization": "Bearer kanri_REPLACE_WITH_TOKEN"
+			}
+		}
+	}
+}

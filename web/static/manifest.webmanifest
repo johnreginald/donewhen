@@ -1,0 +1,19 @@
+{
+	"name": "Kanri",
+	"short_name": "Kanri",
+	"description": "Self-hosted issue tracker",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "portrait-primary",
+	"background_color": "#0d0e12",
+	"theme_color": "#0d0e12",
+	"icons": [
+		{
+			"src": "/icon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any maskable"
+		}
+	]
+}
