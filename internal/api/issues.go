@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"kanri/internal/auth"
+	"kanri/internal/models"
 	"kanri/internal/store"
 )
 
@@ -24,11 +25,27 @@ func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetIssue(w http.ResponseWriter, r *http.Request) {
-	is, err := s.store.GetIssue(r.Context(), r.PathValue("id"))
+	is, err := s.resolveIssue(r, r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
 	writeJSON(w, 200, is)
+}
+
+// resolveIssue accepts either a UUID or a human key (e.g. K-42).
+func (s *Server) resolveIssue(r *http.Request, ref string) (models.Issue, error) {
+	// A key looks like "PREFIX-<n>"; a UUID is 36 chars with dashes at 8-13-18-23.
+	if looksLikeKey(ref) {
+		return s.store.GetIssueByKey(r.Context(), ref)
+	}
+	return s.store.GetIssue(r.Context(), ref)
+}
+
+func looksLikeKey(ref string) bool {
+	if len(ref) == 36 && ref[8] == '-' && ref[13] == '-' && ref[18] == '-' && ref[23] == '-' {
+		return false // UUID
+	}
+	return true
 }
 
 type issueCreateReq struct {
