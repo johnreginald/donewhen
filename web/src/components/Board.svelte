@@ -64,7 +64,7 @@
 <!-- Desktop: horizontal drag-and-drop columns -->
 <div class="board desktop">
 	{#each cols as col, i (col.id)}
-		<div class="column">
+		<div class="column" style:--col-color={col.color}>
 			<div class="col-head">
 				<StateIcon category={col.category} color={col.color} />
 				<span class="col-name">{col.name}</span>
@@ -121,14 +121,18 @@
 		flex: 0 0 300px;
 		display: flex;
 		flex-direction: column;
-		background: var(--bg);
 		min-height: 0;
+		/* subtle per-status tinted lane, Linear-style */
+		background: color-mix(in srgb, var(--col-color, var(--border)) 7%, var(--bg));
+		border: 1px solid color-mix(in srgb, var(--col-color, var(--border)) 11%, var(--border));
+		border-radius: 12px;
+		padding: 8px 8px 4px;
 	}
 	.col-head {
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		padding: 4px 4px 10px;
+		padding: 4px 6px 10px;
 		font-size: 13px;
 		font-weight: 500;
 	}
