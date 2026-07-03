@@ -6,7 +6,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-raenil}
       POSTGRES_DB: ${POSTGRES_DB:-raenil}
     volumes:
-      - ./data/pg:/var/lib/postgresql/data
+      # PG18+ wants the mount at the parent dir (data lands in a subdir).
+      - ./data/pg:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raenil}"]
       interval: 5s
