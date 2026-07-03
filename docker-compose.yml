@@ -19,20 +19,29 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Publish on localhost only, for a host reverse proxy (Caddy/nginx) to front.
+    # When using the bundled Caddy (profile "edge"), this is still harmless.
+    ports:
+      - "127.0.0.1:${RAENIL_HOST_PORT:-8090}:8080"
     environment:
       RAENIL_DATABASE_URL: postgres://${POSTGRES_USER:-raenil}:${POSTGRES_PASSWORD:-raenil}@db:5432/${POSTGRES_DB:-raenil}?sslmode=disable
       RAENIL_BASE_URL: ${RAENIL_BASE_URL:-http://localhost:8080}
       RAENIL_LISTEN_ADDR: ":8080"
       RAENIL_ENV: ${RAENIL_ENV:-prod}
       RAENIL_SESSION_SECRET: ${RAENIL_SESSION_SECRET}
-      RAENIL_ISSUE_PREFIX: ${RAENIL_ISSUE_PREFIX:-K}
+      RAENIL_ISSUE_PREFIX: ${RAENIL_ISSUE_PREFIX:-R}
       RAENIL_VAPID_PUBLIC: ${RAENIL_VAPID_PUBLIC}
       RAENIL_VAPID_PRIVATE: ${RAENIL_VAPID_PRIVATE}
       RAENIL_VAPID_SUBJECT: ${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}
     restart: unless-stopped
 
+  # Bundled edge TLS proxy — only for boxes with FREE 80/443.
+  # Enable with:  docker compose --profile edge up -d
+  # If a host reverse proxy already owns 80/443, leave this disabled and point
+  # that proxy at 127.0.0.1:${RAENIL_HOST_PORT:-8090}.
   caddy:
     image: caddy:2-alpine
+    profiles: ["edge"]
     depends_on:
       - raenil
     ports:
