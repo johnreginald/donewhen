@@ -1,0 +1,18 @@
+# Keep the build context small + avoid unreadable runtime dirs (root-owned pg data).
+.git
+data
+backups
+.env
+*.local
+
+# node / sveltekit build artifacts (image rebuilds these)
+web/node_modules
+web/build
+web/.svelte-kit
+
+# compiled binary (image builds its own)
+/raenil
+/kanri
+
+# os
+.DS_Store
