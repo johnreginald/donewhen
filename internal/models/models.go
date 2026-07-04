@@ -73,6 +73,7 @@ type Issue struct {
 	Priority      int       `json:"priority"` // 0 none,1 urgent,2 high,3 medium,4 low
 	Position      float64   `json:"position"` // ordering within a state column
 	Labels        []Label   `json:"labels"`
+	DocCount      int       `json:"docCount"` // attached documents (implementation coverage)
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -89,6 +90,8 @@ type Document struct {
 	ID           string    `json:"id"`
 	Title        string    `json:"title"`
 	BodyMD       string    `json:"bodyMd"`
+	Type         string    `json:"type"`   // feature | change | decision | reference | overview
+	Author       string    `json:"author"` // ai | human
 	ProjectID    *string   `json:"projectId"`
 	InitiativeID *string   `json:"initiativeId"`
 	IssueID      *string   `json:"issueId"`

@@ -39,13 +39,15 @@ type IssueFilter struct {
 }
 
 const issueCols = `i.id, i.number, i.key, i.title, i.description_md, i.state_id,
-	i.project_id, i.assignee_id, i.priority, i.position, i.created_at, i.updated_at`
+	i.project_id, i.assignee_id, i.priority, i.position,
+	(SELECT count(*) FROM documents d WHERE d.issue_id = i.id) AS doc_count,
+	i.created_at, i.updated_at`
 
 func scanIssue(row pgx.Row) (models.Issue, error) {
 	var is models.Issue
 	err := row.Scan(&is.ID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
 		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
-		&is.CreatedAt, &is.UpdatedAt)
+		&is.DocCount, &is.CreatedAt, &is.UpdatedAt)
 	return is, err
 }
 
@@ -125,6 +127,31 @@ func (s *Store) attachLabels(ctx context.Context, issues []models.Issue) ([]mode
 		}
 	}
 	return issues, rows.Err()
+}
+
+// IssuesMissingDocs returns completed-category issues with no attached document.
+func (s *Store) IssuesMissingDocs(ctx context.Context) ([]models.Issue, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+issueCols+`
+		FROM issues i JOIN workflow_states w ON w.id = i.state_id
+		WHERE w.category = 'completed'
+		  AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.issue_id = i.id)
+		ORDER BY i.number`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Issue
+	for rows.Next() {
+		is, err := scanIssue(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, is)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return s.attachLabels(ctx, out)
 }
 
 func (s *Store) GetIssue(ctx context.Context, id string) (models.Issue, error) {

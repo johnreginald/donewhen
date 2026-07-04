@@ -6,15 +6,22 @@ let mermaidCounter = 0;
 
 async function getMermaid() {
 	if (!mermaidPromise) {
-		mermaidPromise = import('mermaid').then((m) => {
-			m.default.initialize({
-				startOnLoad: false,
-				theme: 'dark',
-				securityLevel: 'strict',
-				fontFamily: 'inherit'
+		mermaidPromise = import('mermaid')
+			.then((m) => {
+				m.default.initialize({
+					startOnLoad: false,
+					theme: 'dark',
+					securityLevel: 'strict',
+					fontFamily: 'inherit'
+				});
+				return m.default;
+			})
+			.catch((e) => {
+				// Don't cache a failed import (e.g. a chunk fetch aborted by
+				// navigation) — let the next render retry.
+				mermaidPromise = null;
+				throw e;
 			});
-			return m.default;
-		});
 	}
 	return mermaidPromise;
 }
