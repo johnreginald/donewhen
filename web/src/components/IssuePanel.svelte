@@ -1,4 +1,5 @@
 <script>
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { states, projects, labels as allLabels, PRIORITIES } from '$lib/store.js';
 	import { panelIssueId, closeIssue, showToast } from '$lib/ui.js';
@@ -7,6 +8,9 @@
 
 	let issue = $state(null);
 	let comments = $state([]);
+	let docs = $state([]);
+	const stateCat = $derived($states.find((s) => s.id === issue?.stateId)?.category);
+	const DOC_ICON = { change: '⟳', feature: '◈', decision: '◆', overview: '◇', reference: '▤' };
 	let editingDesc = $state(false);
 	let descDraft = $state('');
 	let titleDraft = $state('');
@@ -29,6 +33,7 @@
 			titleDraft = issue.title;
 			descDraft = issue.descriptionMd || '';
 			comments = (await api.comments(issue.id)) || [];
+			docs = (await api.documents({ issue: issue.id })) || [];
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
 			closeIssue();
@@ -184,6 +189,23 @@
 				{/if}
 			</div>
 
+			<div class="docs-sec">
+				<label>Documents</label>
+				{#each docs as d (d.id)}
+					<button class="doc-link" onclick={() => goto(`/docs?doc=${d.id}`)}>
+						<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
+						<span class="dl-t">{d.title}</span>
+						{#if d.author === 'ai'}<span class="dl-ai">✦ AI</span>{/if}
+					</button>
+				{:else}
+					<div class="doc-empty faint">
+						{stateCat === 'completed' || stateCat === 'started'
+							? 'No implementation doc yet — Claude writes one via MCP when the work lands.'
+							: 'No documents attached.'}
+					</div>
+				{/each}
+			</div>
+
 			<div class="comments">
 				<label>Comments</label>
 				{#each comments as c (c.id)}
@@ -330,6 +352,47 @@
 	}
 	.desc-view {
 		min-height: 40px;
+	}
+	.docs-sec {
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+	}
+	.doc-link {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 8px 11px;
+		color: var(--text);
+		font-size: 13px;
+		text-align: left;
+	}
+	.doc-link:hover {
+		border-color: var(--border-strong);
+		background: var(--bg-elev2);
+	}
+	.dl-ic {
+		color: var(--accent);
+		flex: none;
+	}
+	.dl-t {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.dl-ai {
+		font-size: 10px;
+		color: var(--accent2);
+		flex: none;
+	}
+	.doc-empty {
+		font-size: 12px;
+		line-height: 1.5;
+		padding: 2px 2px 4px;
 	}
 	.comments {
 		display: flex;

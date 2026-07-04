@@ -90,13 +90,24 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	})
 
 	s.AddTool(mcp.NewTool("save_document",
-		mcp.WithDescription("Create (omit id) or update a markdown document. May contain ```mermaid blocks. "+
-			"Attach it to a project (epic), issue (ticket), or initiative, and add labels."),
+		mcp.WithDescription("Write an engineering document to the knowledge base (create: omit id; update: pass id). "+
+			"Documents are AI-authored: after implementing or changing something, record it here and attach it to the "+
+			"issue you worked on (and/or its project).\n\n"+
+			"Recommended structure for an implementation doc (type 'change'):\n"+
+			"# <Feature / change title>\n"+
+			"## Summary — what changed and why, in 2-3 sentences.\n"+
+			"## How it works — the mechanism; INCLUDE a ```mermaid diagram of the flow.\n"+
+			"## Key files — the files/functions that matter, as a list.\n"+
+			"## Decisions — trade-offs taken and why.\n"+
+			"## Related — issue keys, other docs.\n\n"+
+			"Use type 'feature' for an evergreen feature/area doc, 'decision' for an ADR, 'overview' for a system map, "+
+			"'reference' otherwise."),
 		mcp.WithString("id", mcp.Description("Document id to update; omit to create")),
 		mcp.WithString("title", mcp.Description("Document title")),
-		mcp.WithString("body", mcp.Description("Markdown body")),
+		mcp.WithString("body", mcp.Description("Markdown body (use the recommended structure; include a ```mermaid diagram)")),
+		mcp.WithString("type", mcp.Description("feature | change | decision | reference | overview (default: change)")),
+		mcp.WithString("issue", mcp.Description("Attach to this issue (ticket) id or key — do this for implementation docs")),
 		mcp.WithString("project", mcp.Description("Attach to this project (epic) id")),
-		mcp.WithString("issue", mcp.Description("Attach to this issue (ticket) id or key")),
 		mcp.WithString("initiative", mcp.Description("Attach to this initiative id")),
 		mcp.WithArray("labels", mcp.Description("Label names (exclusive groups enforced)"),
 			mcp.Items(map[string]any{"type": "string"})),
@@ -111,6 +122,8 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			ID:           req.GetString("id", ""),
 			Title:        req.GetString("title", ""),
 			BodyMD:       req.GetString("body", ""),
+			Type:         req.GetString("type", "change"),
+			Author:       "ai",
 			ProjectID:    strp(req.GetString("project", "")),
 			IssueID:      strp(issueID),
 			InitiativeID: strp(req.GetString("initiative", "")),
@@ -126,6 +139,18 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			saved, _ = d.store.GetDocument(ctx, saved.ID)
 		}
 		return jsonResult(saved)
+	})
+
+	// ---- coverage ----
+	s.AddTool(mcp.NewTool("list_issues_missing_docs",
+		mcp.WithDescription("List completed (Done) issues that have no attached document yet — the gaps in the "+
+			"engineering journal. Write an implementation doc for each with save_document."),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		issues, err := d.store.IssuesMissingDocs(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return jsonResult(issues)
 	})
 
 	// ---- user ----

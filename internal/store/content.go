@@ -51,11 +51,11 @@ type DocFilter struct {
 	InitiativeID string
 }
 
-const docCols = `id, title, body_md, project_id, initiative_id, issue_id, created_at, updated_at`
+const docCols = `id, title, body_md, type, author, project_id, initiative_id, issue_id, created_at, updated_at`
 
 func scanDocument(row pgx.Row) (models.Document, error) {
 	var d models.Document
-	err := row.Scan(&d.ID, &d.Title, &d.BodyMD, &d.ProjectID, &d.InitiativeID, &d.IssueID,
+	err := row.Scan(&d.ID, &d.Title, &d.BodyMD, &d.Type, &d.Author, &d.ProjectID, &d.InitiativeID, &d.IssueID,
 		&d.CreatedAt, &d.UpdatedAt)
 	return d, err
 }
@@ -143,19 +143,26 @@ func (s *Store) GetDocument(ctx context.Context, id string) (models.Document, er
 }
 
 func (s *Store) SaveDocument(ctx context.Context, d models.Document) (models.Document, error) {
+	if d.Type == "" {
+		d.Type = "reference"
+	}
 	if d.ID == "" {
+		if d.Author == "" {
+			d.Author = "human"
+		}
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO documents (title, body_md, project_id, initiative_id, issue_id)
-			 VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at, updated_at`,
-			d.Title, d.BodyMD, d.ProjectID, d.InitiativeID, d.IssueID).Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt)
+			`INSERT INTO documents (title, body_md, type, author, project_id, initiative_id, issue_id)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at, updated_at`,
+			d.Title, d.BodyMD, d.Type, d.Author, d.ProjectID, d.InitiativeID, d.IssueID).Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt)
 		if err != nil {
 			return d, err
 		}
 		return s.GetDocument(ctx, d.ID)
 	}
+	// Update leaves author (provenance) immutable.
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE documents SET title=$2, body_md=$3, project_id=$4, initiative_id=$5, issue_id=$6, updated_at=now() WHERE id=$1`,
-		d.ID, d.Title, d.BodyMD, d.ProjectID, d.InitiativeID, d.IssueID)
+		`UPDATE documents SET title=$2, body_md=$3, type=$4, project_id=$5, initiative_id=$6, issue_id=$7, updated_at=now() WHERE id=$1`,
+		d.ID, d.Title, d.BodyMD, d.Type, d.ProjectID, d.InitiativeID, d.IssueID)
 	if err != nil {
 		return d, err
 	}

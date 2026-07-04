@@ -59,6 +59,7 @@ func (s *Server) handleGetDocument(w http.ResponseWriter, r *http.Request) {
 type docSaveReq struct {
 	Title        string   `json:"title"`
 	BodyMd       string   `json:"bodyMd"`
+	Type         string   `json:"type"`
 	ProjectId    *string  `json:"projectId"`
 	InitiativeId *string  `json:"initiativeId"`
 	IssueId      *string  `json:"issueId"`
@@ -79,9 +80,19 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 	d := models.Document{
 		Title:  req.Title,
 		BodyMD: req.BodyMd,
+		Type:   req.Type,
 	}
 	if id := r.PathValue("id"); id != "" {
 		d.ID = id
+		// Preserve type on curate when the client didn't send one.
+		if d.Type == "" {
+			if cur, err := s.store.GetDocument(r.Context(), id); err == nil {
+				d.Type = cur.Type
+			}
+		}
+	} else {
+		// New docs are attributed to whoever created them (MCP bearer => ai).
+		d.Author = auth.ActorFrom(r.Context())
 	}
 	// Empty string detaches; a value attaches; absent (nil) leaves default.
 	if req.ProjectId != nil {

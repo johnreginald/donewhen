@@ -1,120 +1,84 @@
 <script>
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { api } from '$lib/api.js';
 	import { projects, initiatives, issues, labels as allLabels } from '$lib/store.js';
-	import { showToast } from '$lib/ui.js';
+	import { showToast, openIssue } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
+
+	const TYPES = {
+		change: { label: 'Change', icon: '⟳', color: 'var(--accent)' },
+		feature: { label: 'Feature', icon: '◈', color: 'var(--st-done)' },
+		decision: { label: 'Decision', icon: '◆', color: 'var(--st-progress)' },
+		overview: { label: 'Overview', icon: '◇', color: 'var(--st-ready)' },
+		reference: { label: 'Reference', icon: '▤', color: 'var(--text-dim)' }
+	};
+	const typeMeta = (t) => TYPES[t] || TYPES.reference;
 
 	let docs = $state([]);
 	let sel = $state(null);
 	let query = $state('');
-	let titleDraft = $state('');
-	let bodyDraft = $state('');
-	let previewSource = $state('');
-	let mode = $state('preview'); // edit | split | preview
-	let saveStatus = $state('idle'); // idle | saving | saved
+	let typeFilter = $state('');
+	let aiOnly = $state(false);
 	let attachOpen = $state(false);
+	let typeOpen = $state(false);
 	let labelPickerOpen = $state(false);
+	let contentEl = $state(null);
 
-	let saveTimer, previewTimer;
-	let dirty = false;
-
-	onMount(load);
+	onMount(async () => {
+		await load();
+		const wanted = $page.url.searchParams.get('doc');
+		if (wanted) {
+			const d = docs.find((x) => x.id === wanted);
+			if (d) open(d);
+		}
+	});
 	async function load() {
 		docs = (await api.documents()) || [];
 	}
 
 	const filtered = $derived(
-		query.trim()
-			? docs.filter((d) => d.title.toLowerCase().includes(query.trim().toLowerCase()))
-			: docs
+		docs.filter((d) => {
+			if (query.trim() && !d.title.toLowerCase().includes(query.trim().toLowerCase())) return false;
+			if (typeFilter && d.type !== typeFilter) return false;
+			if (aiOnly && d.author !== 'ai') return false;
+			return true;
+		})
 	);
 
 	async function open(d) {
-		await flushSave();
 		sel = await api.document(d.id);
-		titleDraft = sel.title;
-		bodyDraft = sel.bodyMd || '';
-		previewSource = bodyDraft;
-		mode = 'preview';
-		saveStatus = 'idle';
-		dirty = false;
-		attachOpen = false;
-		labelPickerOpen = false;
+		attachOpen = typeOpen = labelPickerOpen = false;
 	}
 
-	async function create() {
-		await flushSave();
-		sel = await api.saveDocument({
-			title: 'Untitled',
-			bodyMd: ''
-		});
-		titleDraft = 'Untitled';
-		bodyDraft = '';
-		previewSource = '';
-		mode = 'split';
-		dirty = false;
-		saveStatus = 'saved';
-		await load();
+	const toc = $derived(extractToc(sel?.bodyMd || ''));
+	function extractToc(md) {
+		const out = [];
+		for (const line of md.split('\n')) {
+			const m = line.match(/^(#{2,3})\s+(.+)/);
+			if (m) out.push({ level: m[1].length, text: m[2].replace(/[*`]/g, '').trim() });
+		}
+		return out;
+	}
+	function scrollToHeading(text) {
+		if (!contentEl) return;
+		for (const h of contentEl.querySelectorAll('h1,h2,h3')) {
+			if (h.textContent.trim() === text) {
+				h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+				return;
+			}
+		}
 	}
 
-	// ---- autosave ----
-	function scheduleSave() {
-		dirty = true;
-		saveStatus = 'saving';
-		clearTimeout(saveTimer);
-		saveTimer = setTimeout(() => persist({ title: titleDraft, bodyMd: bodyDraft }), 700);
-	}
-	async function flushSave() {
-		clearTimeout(saveTimer);
-		if (sel && dirty) await persist({ title: titleDraft, bodyMd: bodyDraft });
-	}
 	async function persist(extra) {
 		if (!sel) return;
-		saveStatus = 'saving';
-		try {
-			const updated = await api.saveDocument({ id: sel.id, ...extra });
-			sel = updated;
-			// keep drafts in sync only for fields we did not just type
-			if (extra.title === undefined) titleDraft = sel.title;
-			// update the list entry in place (no reorder while editing)
-			docs = docs.map((d) => (d.id === sel.id ? sel : d));
-			dirty = false;
-			saveStatus = 'saved';
-		} catch (e) {
-			saveStatus = 'idle';
-			showToast('Save failed: ' + e.message, 'error');
-		}
+		sel = await api.saveDocument({ id: sel.id, title: sel.title, bodyMd: sel.bodyMd, type: sel.type, ...extra });
+		await load();
 	}
-
-	function onBodyInput() {
-		scheduleSave();
-		clearTimeout(previewTimer);
-		previewTimer = setTimeout(() => (previewSource = bodyDraft), 350);
-	}
-	function onTitleInput() {
-		scheduleSave();
-	}
-	function onKey(e) {
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
-			e.preventDefault();
-			flushSave();
-		}
-	}
-
-	// ---- attach ----
-	function currentAttach() {
-		if (!sel) return null;
-		if (sel.initiativeId)
-			return { icon: '◈', label: $initiatives.find((i) => i.id === sel.initiativeId)?.name ?? 'Initiative' };
-		if (sel.projectId)
-			return { icon: '▢', label: $projects.find((p) => p.id === sel.projectId)?.name ?? 'Project' };
-		if (sel.issueId) {
-			const is = $issues.find((i) => i.id === sel.issueId);
-			return { icon: '◦', label: is ? `${is.key} ${is.title}` : 'Issue' };
-		}
-		return null;
+	async function setType(t) {
+		typeOpen = false;
+		await persist({ type: t });
 	}
 	async function setAttach(kind, id) {
 		attachOpen = false;
@@ -131,505 +95,240 @@
 			: [...sel.labels.map((l) => l.id), id];
 		persist({ labelIds: ids });
 	}
-
 	async function del() {
 		if (!sel || !confirm('Delete this document?')) return;
-		clearTimeout(saveTimer);
-		dirty = false;
 		await api.deleteDocument(sel.id);
 		sel = null;
 		await load();
 	}
 
-	function attachLabel(d) {
-		if (d.initiativeId) return '◈ ' + ($initiatives.find((i) => i.id === d.initiativeId)?.name ?? 'Initiative');
-		if (d.projectId) return '▢ ' + ($projects.find((p) => p.id === d.projectId)?.name ?? 'Project');
-		if (d.issueId) return ($issues.find((i) => i.id === d.issueId)?.key ?? 'Issue');
-		return '';
+	function attachOf(d) {
+		if (d.initiativeId) return { icon: '◈', label: $initiatives.find((i) => i.id === d.initiativeId)?.name ?? 'Initiative', kind: 'initiative' };
+		if (d.projectId) return { icon: '▢', label: $projects.find((p) => p.id === d.projectId)?.name ?? 'Project', kind: 'project' };
+		if (d.issueId) {
+			const is = $issues.find((i) => i.id === d.issueId);
+			return { icon: '◦', label: is ? is.key : 'Issue', kind: 'issue', issue: is };
+		}
+		return null;
 	}
 	function relTime(iso) {
-		const t = new Date(iso).getTime();
-		const s = Math.floor((Date.now() - t) / 1000);
-		if (s < 60) return 'now';
-		if (s < 3600) return Math.floor(s / 60) + 'm';
-		if (s < 86400) return Math.floor(s / 3600) + 'h';
-		if (s < 604800) return Math.floor(s / 86400) + 'd';
+		const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+		if (s < 60) return 'just now';
+		if (s < 3600) return Math.floor(s / 60) + 'm ago';
+		if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+		if (s < 604800) return Math.floor(s / 86400) + 'd ago';
 		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 	}
 </script>
 
-<svelte:window onkeydown={onKey} />
-
 <div class="docs">
-	<!-- index -->
 	<aside class="index">
-		<div class="index-head">
-			<span class="ih-title">Documents</span>
-			<button class="new-btn" title="New document" onclick={create}>+</button>
+		<div class="ihead"><span class="it">Documents</span><span class="isub">{docs.length}</span></div>
+		<input class="search" placeholder="Search…" bind:value={query} />
+		<div class="chips">
+			<button class="fc" class:on={typeFilter === ''} onclick={() => (typeFilter = '')}>All</button>
+			{#each Object.entries(TYPES) as [k, t] (k)}
+				<button class="fc" class:on={typeFilter === k} onclick={() => (typeFilter = k)}>
+					<span style:color={t.color}>{t.icon}</span>{t.label}
+				</button>
+			{/each}
+			<button class="fc" class:on={aiOnly} onclick={() => (aiOnly = !aiOnly)}>✦ AI</button>
 		</div>
-		<input class="search" placeholder="Search documents…" bind:value={query} />
-		<div class="doc-list">
+		<div class="list">
 			{#each filtered as d (d.id)}
-				<button class="doc-item" class:active={sel && sel.id === d.id} onclick={() => open(d)}>
-					<div class="di-title">{d.title || 'Untitled'}</div>
-					<div class="di-sub">
-						{#if attachLabel(d)}<span class="di-attach">{attachLabel(d)}</span><span class="di-sep">·</span>{/if}
-						<span class="di-time">{relTime(d.updatedAt)}</span>
-						{#each d.labels ?? [] as l (l.id)}<span class="di-dot" style:background={l.color}></span>{/each}
+				<button class="item" class:active={sel && sel.id === d.id} onclick={() => open(d)}>
+					<div class="i-top">
+						<span class="i-ic" style:color={typeMeta(d.type).color}>{typeMeta(d.type).icon}</span>
+						<span class="i-title">{d.title || 'Untitled'}</span>
+						{#if d.author === 'ai'}<span class="ai-badge">✦</span>{/if}
+					</div>
+					<div class="i-sub">
+						{#if attachOf(d)}<span class="i-at">{attachOf(d).icon} {attachOf(d).label}</span><span class="sep">·</span>{/if}
+						<span>{relTime(d.updatedAt)}</span>
+						{#each d.labels ?? [] as l (l.id)}<span class="i-dot" style:background={l.color}></span>{/each}
 					</div>
 				</button>
 			{:else}
-				<div class="empty faint">{query ? 'No matches.' : 'No documents yet.'}</div>
+				<div class="empty faint">{query || typeFilter || aiOnly ? 'No matches.' : 'No documents yet — Claude writes them as it works.'}</div>
 			{/each}
 		</div>
 	</aside>
 
-	<!-- view / editor -->
 	<section class="view">
 		{#if sel}
-			<div class="toolbar">
-				<div class="seg">
-					<button class:on={mode === 'edit'} onclick={() => (mode = 'edit')}>Edit</button>
-					<button class:on={mode === 'split'} onclick={() => (mode = 'split')}>Split</button>
-					<button class:on={mode === 'preview'} onclick={() => (mode = 'preview')}>Preview</button>
+			{@const at = attachOf(sel)}
+			<div class="topbar">
+				<div class="crumb">
+					<span class="ci">▤</span>Documents
+					{#if at}<span class="sepp">›</span><button class="crumb-lnk" onclick={() => at.kind === 'issue' && at.issue && openIssue(at.issue.key)}>{at.icon} {at.label}</button>{/if}
 				</div>
-				<span class="status {saveStatus}">
-					{saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
-				</span>
 				<div class="grow"></div>
+				<div class="typewrap">
+					<button class="chip" onclick={() => (typeOpen = !typeOpen)}>
+						<span style:color={typeMeta(sel.type).color}>{typeMeta(sel.type).icon}</span>{typeMeta(sel.type).label}
+					</button>
+					{#if typeOpen}
+						<button class="bd" aria-label="x" onclick={() => (typeOpen = false)}></button>
+						<div class="pop">
+							{#each Object.entries(TYPES) as [k, t] (k)}
+								<button class="pi" class:on={sel.type === k} onclick={() => setType(k)}><span style:color={t.color}>{t.icon}</span>{t.label}</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
 				<button class="btn ghost" onclick={del} title="Delete">🗑</button>
 			</div>
 
-			<div class="scroll">
-				<div class="doc">
-					<input
-						class="title"
-						bind:value={titleDraft}
-						oninput={onTitleInput}
-						onblur={flushSave}
-						placeholder="Untitled"
-					/>
-
-					<div class="meta">
-						<!-- attach chip -->
-						<div class="attach-wrap">
-							<button class="chip" class:set={currentAttach()} onclick={() => (attachOpen = !attachOpen)}>
-								{#if currentAttach()}
-									<span class="ci">{currentAttach().icon}</span>{currentAttach().label}
-								{:else}
-									＋ Attach
-								{/if}
-							</button>
-							{#if attachOpen}
-								<button class="pop-backdrop" aria-label="close" onclick={() => (attachOpen = false)}></button>
-								<div class="popover">
-									<button class="pop-item" onclick={() => setAttach('none', '')}>No attachment</button>
-									{#if $initiatives.length}<div class="pop-sec">Initiatives</div>{/if}
-									{#each $initiatives as i (i.id)}
-										<button class="pop-item" onclick={() => setAttach('initiative', i.id)}><span class="ci">◈</span>{i.name}</button>
-									{/each}
-									{#if $projects.length}<div class="pop-sec">Projects</div>{/if}
-									{#each $projects as p (p.id)}
-										<button class="pop-item" onclick={() => setAttach('project', p.id)}><span class="ci">▢</span>{p.name}</button>
-									{/each}
-									{#if $issues.length}<div class="pop-sec">Issues</div>{/if}
-									{#each $issues.slice(0, 40) as is (is.id)}
-										<button class="pop-item" onclick={() => setAttach('issue', is.id)}><span class="ci mono">{is.key}</span>{is.title}</button>
-									{/each}
-								</div>
-							{/if}
+			<div class="body">
+				<div class="scroll" bind:this={contentEl}>
+					<div class="doc">
+						<h1 class="doctitle">{sel.title}</h1>
+						<div class="prov">
+							{#if sel.author === 'ai'}<span class="by ai">✦ Written by AI</span>{:else}<span class="by">Written by you</span>{/if}
+							{#if at && at.kind === 'issue' && at.issue}<span class="sep">·</span><button class="prov-lnk" onclick={() => openIssue(at.issue.key)}>from {at.issue.key}</button>{/if}
+							<span class="sep">·</span><span>{relTime(sel.updatedAt)}</span>
 						</div>
-
-						<!-- labels -->
-						{#each sel.labels as l (l.id)}
-							<button class="label-chip" onclick={() => toggleLabel(l.id)}>
-								<LabelPill label={l} /><span class="x">✕</span>
-							</button>
-						{/each}
-						<div class="attach-wrap">
-							<button class="chip" onclick={() => (labelPickerOpen = !labelPickerOpen)}>＋ Label</button>
-							{#if labelPickerOpen}
-								<button class="pop-backdrop" aria-label="close" onclick={() => (labelPickerOpen = false)}></button>
-								<div class="popover">
-									{#each $allLabels as l (l.id)}
-										<button class="pop-item" class:on={sel.labels.some((x) => x.id === l.id)} onclick={() => toggleLabel(l.id)}>
-											<span class="dot" style:background={l.color}></span>{l.name}
-										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
-					</div>
-
-					<div class="body {mode}">
-						{#if mode === 'edit' || mode === 'split'}
-							<textarea
-								class="editor"
-								bind:value={bodyDraft}
-								oninput={onBodyInput}
-								onblur={flushSave}
-								placeholder="Write markdown…  ```mermaid diagrams render in preview."
-							></textarea>
-						{/if}
-						{#if mode === 'preview' || mode === 'split'}
-							<div class="rendered">
-								{#if previewSource.trim()}
-									<Markdown source={previewSource} />
-								{:else}
-									<span class="faint">Nothing to preview yet.</span>
-								{/if}
+						{#if sel.labels.length}
+							<div class="dlabels">
+								{#each sel.labels as l (l.id)}
+									<button class="lbtn" onclick={() => toggleLabel(l.id)}><LabelPill label={l} /><span class="x">✕</span></button>
+								{/each}
 							</div>
 						{/if}
+						<div class="rendered"><Markdown source={sel.bodyMd} /></div>
 					</div>
 				</div>
+
+				<aside class="rail">
+					{#if toc.length}
+						<div><div class="rh">On this page</div>
+							<div class="toc">
+								{#each toc as h}<button class="ta" class:sub={h.level === 3} onclick={() => scrollToHeading(h.text)}>{h.text}</button>{/each}
+							</div>
+						</div>
+					{/if}
+					<div>
+						<div class="rh">Attached to</div>
+						<div class="attachwrap">
+							<button class="chip full" onclick={() => (attachOpen = !attachOpen)}>
+								{#if at}<span class="ci">{at.icon}</span>{at.label}{:else}＋ Attach{/if}
+							</button>
+							{#if attachOpen}
+								<button class="bd" aria-label="x" onclick={() => (attachOpen = false)}></button>
+								<div class="pop wide">
+									<button class="pi" onclick={() => setAttach('none', '')}>No attachment</button>
+									{#if $projects.length}<div class="ps">Projects</div>{/if}
+									{#each $projects as p (p.id)}<button class="pi" onclick={() => setAttach('project', p.id)}><span class="dim">▢</span>{p.name}</button>{/each}
+									{#if $issues.length}<div class="ps">Issues</div>{/if}
+									{#each $issues.slice(0, 40) as is (is.id)}<button class="pi" onclick={() => setAttach('issue', is.id)}><span class="mono">{is.key}</span>{is.title}</button>{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+					<div>
+						<div class="rh">Labels</div>
+						<div class="railwrap">
+							{#each sel.labels as l (l.id)}<button class="lbtn" onclick={() => toggleLabel(l.id)}><LabelPill label={l} /><span class="x">✕</span></button>{/each}
+							<button class="chip" onclick={() => (labelPickerOpen = !labelPickerOpen)}>＋</button>
+							{#if labelPickerOpen}
+								<button class="bd" aria-label="x" onclick={() => (labelPickerOpen = false)}></button>
+								<div class="pop">
+									{#each $allLabels as l (l.id)}<button class="pi" class:on={sel.labels.some((x) => x.id === l.id)} onclick={() => toggleLabel(l.id)}><span class="dot" style:background={l.color}></span>{l.name}</button>{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</aside>
 			</div>
 		{:else}
-			<div class="placeholder">
-				<div class="ph-icon">📄</div>
-				<div class="ph-title">No document selected</div>
-				<div class="faint">Pick one on the left, or create a new document.</div>
-				<button class="btn primary" onclick={create}>+ New document</button>
+			<div class="ph">
+				<div class="ph-ic">✦</div>
+				<div class="ph-t">The AI's engineering journal</div>
+				<div class="faint">Claude writes a document when it implements or changes something — what it is, how it works, a mermaid diagram, key files. Pick one on the left to read.</div>
 			</div>
 		{/if}
 	</section>
 </div>
 
 <style>
-	.docs {
-		display: flex;
-		height: 100%;
-		min-height: 0;
-	}
-	/* index */
-	.index {
-		width: 288px;
-		flex: none;
-		border-right: 1px solid var(--border);
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-	}
-	.index-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 14px 14px 8px;
-	}
-	.ih-title {
-		font: 600 15px/1 var(--disp);
-	}
-	.new-btn {
-		width: 26px;
-		height: 26px;
-		border-radius: 7px;
-		background: var(--accent-grad);
-		color: #fff;
-		border: none;
-		font-size: 17px;
-		line-height: 1;
-		box-shadow: 0 3px 10px var(--accent-soft);
-	}
-	.search {
-		margin: 0 12px 8px;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 7px 10px;
-		font-size: 13px;
-		outline: none;
-	}
-	.search:focus {
-		border-color: var(--accent);
-	}
-	.doc-list {
-		flex: 1;
-		overflow-y: auto;
-		padding: 4px 8px 12px;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-	.doc-item {
-		text-align: left;
-		background: none;
-		border: none;
-		color: var(--text);
-		padding: 8px 10px;
-		border-radius: 8px;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-	.doc-item:hover {
-		background: var(--bg-elev);
-	}
-	.doc-item.active {
-		background: var(--bg-hover);
-	}
-	.di-title {
-		font-size: 13.5px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.di-sub {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		font-size: 11px;
-		color: var(--text-faint);
-	}
-	.di-attach {
-		color: var(--text-dim);
-		max-width: 130px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.di-dot {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-	}
-	.empty {
-		padding: 30px 12px;
-		text-align: center;
-		font-size: 13px;
-	}
+	.docs { display: flex; height: 100%; min-height: 0; }
+	.index { width: 300px; flex: none; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+	.ihead { display: flex; align-items: baseline; gap: 8px; padding: 15px 14px 8px; }
+	.it { font: 600 15px/1 var(--disp); }
+	.isub { font-size: 12px; color: var(--text-faint); }
+	.search { margin: 0 12px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; outline: none; }
+	.search:focus { border-color: var(--accent); }
+	.chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 12px 10px; border-bottom: 1px solid var(--border); }
+	.fc { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-elev); border: 1px solid var(--border); color: var(--text-dim); border-radius: 20px; padding: 3px 9px; font-size: 11.5px; }
+	.fc.on { background: var(--bg-hover); color: var(--text); border-color: var(--border-strong); }
+	.list { flex: 1; overflow-y: auto; padding: 6px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+	.item { text-align: left; background: none; border: none; color: var(--text); padding: 8px 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+	.item:hover { background: var(--bg-elev); }
+	.item.active { background: var(--bg-hover); }
+	.i-top { display: flex; align-items: center; gap: 7px; }
+	.i-ic { font-size: 13px; flex: none; }
+	.i-title { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+	.ai-badge { color: var(--accent2); font-size: 11px; flex: none; }
+	.i-sub { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-faint); padding-left: 20px; }
+	.i-at { color: var(--text-dim); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.i-dot { width: 7px; height: 7px; border-radius: 50%; }
+	.empty { padding: 30px 14px; text-align: center; font-size: 13px; line-height: 1.5; }
 
-	/* view */
-	.view {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-		min-height: 0;
-	}
-	.toolbar {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 9px 16px;
-		border-bottom: 1px solid var(--border);
-	}
-	.seg {
-		display: flex;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 2px;
-		gap: 2px;
-	}
-	.seg button {
-		background: none;
-		border: none;
-		color: var(--text-dim);
-		padding: 4px 12px;
-		border-radius: 6px;
-		font-size: 12.5px;
-	}
-	.seg button.on {
-		background: var(--bg-elev2);
-		color: var(--text);
-	}
-	.status {
-		font-size: 12px;
-		color: var(--text-faint);
-		min-width: 52px;
-	}
-	.status.saved {
-		color: var(--st-done);
-	}
-	.grow {
-		flex: 1;
-	}
-	.scroll {
-		flex: 1;
-		overflow-y: auto;
-		min-height: 0;
-	}
-	.doc {
-		max-width: 780px;
-		margin: 0 auto;
-		padding: 28px 32px 80px;
-		display: flex;
-		flex-direction: column;
-		min-height: 100%;
-	}
-	.title {
-		background: none;
-		border: none;
-		outline: none;
-		font: 700 30px/1.2 var(--disp);
-		letter-spacing: -0.01em;
-		color: var(--text);
-		padding: 0;
-		margin-bottom: 12px;
-	}
-	.title::placeholder {
-		color: var(--text-faint);
-	}
-	.meta {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 7px;
-		margin-bottom: 20px;
-		padding-bottom: 16px;
-		border-bottom: 1px solid var(--border);
-	}
-	.attach-wrap {
-		position: relative;
-		display: inline-flex;
-	}
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		color: var(--text-dim);
-		border-radius: 7px;
-		padding: 4px 10px;
-		font-size: 12.5px;
-	}
-	.chip:hover {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.chip.set {
-		color: var(--text);
-	}
-	.ci {
-		color: var(--text-faint);
-		font-size: 11px;
-	}
-	.ci.mono {
-		font-family: var(--mono);
-	}
-	.label-chip {
-		background: none;
-		border: none;
-		padding: 0;
-		display: inline-flex;
-		align-items: center;
-	}
-	.label-chip .x {
-		font-size: 9px;
-		color: var(--text-faint);
-		margin-left: 3px;
-	}
-	.pop-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 30;
-		background: none;
-		border: none;
-	}
-	.popover {
-		position: absolute;
-		top: calc(100% + 6px);
-		left: 0;
-		z-index: 31;
-		width: 280px;
-		max-height: 340px;
-		overflow-y: auto;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
-		border-radius: 10px;
-		box-shadow: var(--shadow);
-		padding: 5px;
-	}
-	.pop-sec {
-		font-size: 10.5px;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-faint);
-		padding: 8px 9px 3px;
-	}
-	.pop-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		text-align: left;
-		background: none;
-		border: none;
-		color: var(--text);
-		padding: 7px 9px;
-		border-radius: 6px;
-		font-size: 13px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.pop-item:hover {
-		background: var(--bg-hover);
-	}
-	.pop-item.on {
-		color: var(--accent);
-	}
+	.view { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+	.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--border); }
+	.crumb { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--dim); }
+	.crumb .ci { color: var(--text-faint); }
+	.crumb .sepp { color: var(--text-faint); }
+	.crumb-lnk { background: none; border: none; color: var(--text); font-size: 12.5px; padding: 0; }
+	.crumb-lnk:hover { color: var(--accent); }
+	.grow { flex: 1; }
+	.body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+	.scroll { flex: 1; overflow-y: auto; min-width: 0; }
+	.doc { max-width: 720px; margin: 0 auto; padding: 30px 36px 80px; }
+	.doctitle { font: 700 30px/1.2 var(--disp); letter-spacing: -0.015em; margin: 0 0 10px; }
+	.prov { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-faint); margin-bottom: 14px; }
+	.prov .by.ai { color: var(--accent2); }
+	.prov .sep, .i-sub .sep { color: var(--text-faint); }
+	.prov-lnk { background: none; border: none; color: var(--text-dim); font-size: 12.5px; padding: 0; }
+	.prov-lnk:hover { color: var(--accent); }
+	.dlabels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+	.rendered { font-size: 15px; }
+	.rendered :global(h1) { font: 700 24px/1.3 var(--disp); margin: 22px 0 10px; }
+	.rendered :global(h2) { font: 650 19px/1.3 var(--disp); margin: 26px 0 10px; }
+	.rendered :global(h3) { font: 600 16px/1.3 var(--disp); margin: 20px 0 8px; }
 
-	.body {
-		flex: 1;
-		min-height: 340px;
-	}
-	.body.split {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 20px;
-	}
-	.editor {
-		width: 100%;
-		height: 100%;
-		min-height: 340px;
-		background: none;
-		border: none;
-		outline: none;
-		resize: none;
-		color: var(--text);
-		font-family: var(--mono);
-		font-size: 14px;
-		line-height: 1.7;
-	}
-	.body.split .editor {
-		border-right: 1px solid var(--border);
-		padding-right: 18px;
-	}
-	.rendered {
-		min-height: 200px;
-		font-size: 15px;
-	}
+	.rail { width: 232px; flex: none; border-left: 1px solid var(--border); padding: 26px 16px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
+	.rh { font: 600 10.5px/1 var(--font); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 9px; }
+	.toc { display: flex; flex-direction: column; gap: 1px; }
+	.ta { text-align: left; background: none; border: none; border-left: 2px solid transparent; color: var(--text-dim); font-size: 13px; padding: 5px 10px; }
+	.ta.sub { padding-left: 22px; font-size: 12.5px; }
+	.ta:hover { color: var(--text); border-left-color: var(--accent); }
 
-	/* empty */
-	.placeholder {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-	}
-	.ph-icon {
-		font-size: 34px;
-		opacity: 0.5;
-	}
-	.ph-title {
-		font: 600 16px/1 var(--disp);
-	}
-	.placeholder .btn {
-		margin-top: 10px;
-	}
+	.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-elev); border: 1px solid var(--border); color: var(--text-dim); border-radius: 7px; padding: 5px 10px; font-size: 12.5px; }
+	.chip:hover { background: var(--bg-hover); color: var(--text); }
+	.chip.full { width: 100%; justify-content: flex-start; }
+	.chip .ci { color: var(--text-faint); }
+	.typewrap, .attachwrap, .railwrap { position: relative; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+	.lbtn { background: none; border: none; padding: 0; display: inline-flex; align-items: center; }
+	.lbtn .x { font-size: 9px; color: var(--text-faint); margin-left: 3px; }
+	.bd { position: fixed; inset: 0; z-index: 30; background: none; border: none; }
+	.pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; min-width: 170px; background: var(--bg-elev); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow); padding: 5px; }
+	.pop.wide { width: 250px; max-height: 320px; overflow-y: auto; }
+	.ps { font: 600 10px/1 var(--font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); padding: 8px 9px 3px; }
+	.pi { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; color: var(--text); padding: 7px 9px; border-radius: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.pi:hover { background: var(--bg-hover); }
+	.pi.on { color: var(--accent); }
+	.pi .mono { font-family: var(--mono); color: var(--text-faint); font-size: 11px; }
+	.pi .dim { color: var(--text-faint); }
+
+	.ph { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 40px; }
+	.ph-ic { font-size: 30px; color: var(--accent2); }
+	.ph-t { font: 600 17px/1 var(--disp); }
+	.ph .faint { max-width: 420px; line-height: 1.6; font-size: 13.5px; }
 
 	@media (max-width: 720px) {
-		.index {
-			width: 150px;
-		}
-		.doc {
-			padding: 18px 16px 60px;
-		}
-		.body.split {
-			grid-template-columns: 1fr;
-		}
+		.index { width: 150px; }
+		.rail { display: none; }
+		.doc { padding: 18px 16px 60px; }
 	}
 </style>

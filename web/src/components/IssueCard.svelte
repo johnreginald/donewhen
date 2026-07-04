@@ -32,6 +32,9 @@
 			<StateIcon category={state.category} color={state.color} />
 		{/if}
 		<span class="key">{issue.key}</span>
+		{#if state?.category === 'completed' && !issue.docCount}
+			<span class="nodoc" title="No implementation doc yet">✦</span>
+		{/if}
 		<span class="spacer"></span>
 		<span class="assignee" class:on={issue.assigneeId}></span>
 	</div>
@@ -85,6 +88,11 @@
 		color: var(--text-faint);
 		font-family: var(--mono);
 		letter-spacing: -0.02em;
+	}
+	.nodoc {
+		font-size: 10px;
+		color: var(--text-faint);
+		opacity: 0.6;
 	}
 	.spacer {
 		flex: 1;

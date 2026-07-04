@@ -70,8 +70,11 @@ export const api = {
 	addComment: (id, bodyMd) => request('POST', `/issues/${id}/comments`, { bodyMd }),
 
 	// documents
-	documents: (project) =>
-		request('GET', '/documents' + (project ? `?project=${project}` : '')),
+	documents: (filter = {}) => {
+		const p = new URLSearchParams(Object.entries(filter).filter(([, v]) => v));
+		const s = p.toString();
+		return request('GET', '/documents' + (s ? `?${s}` : ''));
+	},
 	document: (id) => request('GET', `/documents/${id}`),
 	saveDocument: (b) => request('POST', '/documents', b),
 	deleteDocument: (id) => request('DELETE', `/documents/${id}`),
