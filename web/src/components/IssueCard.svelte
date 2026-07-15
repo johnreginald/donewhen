@@ -44,19 +44,15 @@
 
 	<div class="title">{issue.title}</div>
 
-	{#if issue.priority || project || (issue.labels && issue.labels.length)}
-		<div class="meta">
-			{#if issue.priority}
-				<PriorityIcon priority={issue.priority} />
-			{/if}
-			{#if project}
-				<span class="pill proj"><span class="pglyph">▢</span>{project.name}</span>
-			{/if}
-			{#each issue.labels ?? [] as l (l.id)}
-				<LabelPill label={l} />
-			{/each}
-		</div>
-	{/if}
+	<div class="meta">
+		<PriorityIcon priority={issue.priority} />
+		{#if project}
+			<span class="pill proj"><span class="pglyph">▢</span>{project.name}</span>
+		{/if}
+		{#each issue.labels ?? [] as l (l.id)}
+			<LabelPill label={l} />
+		{/each}
+	</div>
 
 	<div class="foot">Created {shortDate(issue.createdAt)}</div>
 </div>
@@ -123,7 +119,9 @@
 	.title {
 		font-size: 14px;
 		line-height: 1.45;
+		font-weight: 500;
 		color: var(--text);
+		letter-spacing: -0.011em;
 	}
 	.meta {
 		display: flex;
