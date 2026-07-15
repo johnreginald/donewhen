@@ -24,9 +24,12 @@
 	let selLabels = $state(new Set());
 	let saving = $state(false);
 	let firstInput = $state(null);
+	let editId = $state(''); // set when editing an existing project/epic
+	let confirmDel = $state(false);
 
 	// Raenil's Project entity is shown as "Epic"; its Initiative entity as "Project".
-	const TITLES = { issue: 'New issue', project: 'New epic', initiative: 'New project' };
+	const NOUN = { issue: 'issue', project: 'epic', initiative: 'project' };
+	const heading = $derived((editId ? 'Edit ' : 'New ') + NOUN[kind]);
 
 	function defaultStateId() {
 		const st = get(states);
@@ -38,15 +41,18 @@
 	$effect(() => {
 		const c = $composer;
 		if (!c) return;
+		const pf = c.prefill || {};
 		kind = c.kind;
+		editId = pf.id || '';
+		confirmDel = false;
 		title = '';
-		name = '';
-		desc = '';
+		name = pf.name || '';
+		desc = pf.description || pf.descriptionMd || '';
 		priority = 0;
 		selLabels = new Set();
-		initiativeId = '';
-		stateId = c.prefill?.stateId || defaultStateId();
-		projectId = c.prefill?.projectId || get(activeProject) || '';
+		initiativeId = pf.initiativeId || '';
+		stateId = pf.stateId || defaultStateId();
+		projectId = pf.projectId || get(activeProject) || '';
 		queueMicrotask(() => firstInput && firstInput.focus());
 	});
 
@@ -82,26 +88,52 @@
 					showToast('Name required', 'error');
 					return;
 				}
-				await api.saveProject({
-					name: name.trim(),
-					descriptionMd: desc,
-					initiativeId: initiativeId || null
-				});
-				await loadMeta();
-				showToast('Epic created');
+				const body = { name: name.trim(), descriptionMd: desc, initiativeId: initiativeId || null };
+				if (editId) await api.updateProject(editId, body);
+				else await api.saveProject(body);
+				await refreshAfterMeta();
+				showToast(editId ? 'Epic saved' : 'Epic created');
 				closeComposer();
 			} else if (kind === 'initiative') {
 				if (!name.trim()) {
 					showToast('Name required', 'error');
 					return;
 				}
-				await api.saveInitiative({ name: name.trim(), descriptionMd: desc });
-				await loadMeta();
-				showToast('Project created');
+				const body = { name: name.trim(), descriptionMd: desc };
+				if (editId) await api.updateInitiative(editId, body);
+				else await api.saveInitiative(body);
+				await refreshAfterMeta();
+				showToast(editId ? 'Project saved' : 'Project created');
 				closeComposer();
 			}
 		} catch (e) {
-			showToast(e.message || 'Failed to create', 'error');
+			showToast(e.message || 'Failed to save', 'error');
+		} finally {
+			saving = false;
+		}
+	}
+
+	// Reload metadata + the board (a rename/delete can change what's displayed).
+	async function refreshAfterMeta() {
+		await loadMeta();
+		await loadIssues();
+	}
+
+	async function del() {
+		if (!editId || saving) return;
+		if (!confirmDel) {
+			confirmDel = true;
+			return;
+		}
+		saving = true;
+		try {
+			if (kind === 'project') await api.deleteProject(editId);
+			else if (kind === 'initiative') await api.deleteInitiative(editId);
+			await refreshAfterMeta();
+			showToast(kind === 'project' ? 'Epic deleted' : 'Project deleted');
+			closeComposer();
+		} catch (e) {
+			showToast(e.message || 'Delete failed', 'error');
 		} finally {
 			saving = false;
 		}
@@ -123,7 +155,7 @@
 	<div class="modal" role="dialog" aria-modal="true" onkeydown={onKey}>
 		<div class="head">
 			<span class="dot" class:issue={kind === 'issue'} class:project={kind === 'project'}></span>
-			<span class="htitle">{TITLES[kind]}</span>
+			<span class="htitle">{heading}</span>
 		</div>
 
 		<div class="body">
@@ -193,11 +225,16 @@
 		</div>
 
 		<div class="foot">
-			<span class="hint faint">⌘↵ to create · Esc to cancel</span>
+			{#if editId}
+				<button class="btn danger" onclick={del} disabled={saving}>
+					{confirmDel ? 'Confirm delete' : 'Delete'}
+				</button>
+			{/if}
+			<span class="hint faint">⌘↵ to save · Esc to cancel</span>
 			<span class="spacer"></span>
 			<button class="btn ghost" onclick={closeComposer}>Cancel</button>
 			<button class="btn primary" onclick={save} disabled={saving}>
-				{saving ? 'Creating…' : 'Create'}
+				{saving ? 'Saving…' : editId ? 'Save' : 'Create'}
 			</button>
 		</div>
 	</div>
