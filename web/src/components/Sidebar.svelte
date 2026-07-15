@@ -181,8 +181,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		color: var(--text-dim);
-		padding: 7px 10px;
-		font-size: 13px;
+		padding: 8px 11px;
+		font-size: 14px;
 	}
 	kbd {
 		font-family: var(--mono);
@@ -288,8 +288,10 @@
 		border: none;
 		text-align: left;
 		color: var(--text-dim);
-		font-size: 11px;
-		padding: 8px 8px 3px;
+		font-size: 11.5px;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		padding: 9px 8px 4px;
 	}
 	.ini-toggle:hover {
 		color: var(--text);
@@ -347,7 +349,7 @@
 		gap: 9px;
 		padding: 7px 8px;
 		border-radius: 6px;
-		font-size: 13.5px;
+		font-size: 14.5px;
 		color: var(--text-dim);
 		background: none;
 		border: none;

@@ -4,13 +4,12 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Sidebar from '$components/Sidebar.svelte';
-	import IssuePanel from '$components/IssuePanel.svelte';
 	import CommandPalette from '$components/CommandPalette.svelte';
 	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, applyEvent, me } from '$lib/store.js';
-	import { paletteOpen, panelIssueId, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
+	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 
 	let { children } = $props();
@@ -67,11 +66,7 @@
 			paletteOpen.update((v) => !v);
 			return;
 		}
-		if (e.key === 'Escape') {
-			panelIssueId.set(null);
-			return;
-		}
-		if (e.key === 'c' && !isTyping(e) && !$paletteOpen && !$panelIssueId && !$composer) {
+		if (e.key === 'c' && !isTyping(e) && !$paletteOpen && !$composer) {
 			e.preventDefault();
 			openComposer('issue');
 		}
@@ -106,7 +101,6 @@
 			</div>
 		</main>
 	</div>
-	<IssuePanel />
 	<CommandPalette />
 	<Composer />
 {:else}
