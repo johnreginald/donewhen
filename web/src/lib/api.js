@@ -52,9 +52,13 @@ export const api = {
 	// initiatives / projects
 	initiatives: () => request('GET', '/initiatives'),
 	saveInitiative: (b) => request('POST', '/initiatives', b),
+	updateInitiative: (id, b) => request('PATCH', `/initiatives/${id}`, b),
+	deleteInitiative: (id) => request('DELETE', `/initiatives/${id}`),
 	projects: (initiative) =>
 		request('GET', '/projects' + (initiative ? `?initiative=${initiative}` : '')),
 	saveProject: (b) => request('POST', '/projects', b),
+	updateProject: (id, b) => request('PATCH', `/projects/${id}`, b),
+	deleteProject: (id) => request('DELETE', `/projects/${id}`),
 
 	// issues
 	issues: (q = {}) => {

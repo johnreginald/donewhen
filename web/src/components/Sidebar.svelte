@@ -11,6 +11,38 @@
 		openComposer(kind);
 	}
 
+	// Collapsed Project (initiative) groups, persisted across reloads.
+	function loadCollapsed() {
+		try {
+			return new Set(JSON.parse(localStorage.getItem('raenil.collapsed') || '[]'));
+		} catch {
+			return new Set();
+		}
+	}
+	let collapsed = $state(loadCollapsed());
+	function toggle(id) {
+		const n = new Set(collapsed);
+		n.has(id) ? n.delete(id) : n.add(id);
+		collapsed = n;
+		try {
+			localStorage.setItem('raenil.collapsed', JSON.stringify([...n]));
+		} catch {
+			/* ignore */
+		}
+	}
+	// Project = Raenil initiative; Epic = Raenil project.
+	function editProject(i) {
+		openComposer('initiative', { id: i.id, name: i.name, description: i.descriptionMd });
+	}
+	function editEpic(p) {
+		openComposer('project', {
+			id: p.id,
+			name: p.name,
+			description: p.descriptionMd,
+			initiativeId: p.initiativeId
+		});
+	}
+
 	function pick(id) {
 		activeProject.set(id);
 		loadIssues();
@@ -77,17 +109,32 @@
 			<span class="icon">◇</span>All issues
 		</button>
 		{#each grouped.groups as g (g.ini.id)}
-			<div class="ini">{g.ini.name}</div>
-			{#each g.projects as p (p.id)}
+			<div class="ini-head">
+				<button class="ini-toggle" onclick={() => toggle(g.ini.id)}>
+					<span class="chev" class:open={!collapsed.has(g.ini.id)}>▸</span>
+					<span class="ini-name">{g.ini.name}</span>
+					<span class="ini-count">{g.projects.length}</span>
+				</button>
+				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}>✎</button>
+			</div>
+			{#if !collapsed.has(g.ini.id)}
+				{#each g.projects as p (p.id)}
+					<div class="epic-row">
+						<button class="nav-item proj" class:active={$activeProject === p.id} onclick={() => pick(p.id)}>
+							<span class="icon">▸</span>{p.name}
+						</button>
+						<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}>✎</button>
+					</div>
+				{/each}
+			{/if}
+		{/each}
+		{#each grouped.orphan as p (p.id)}
+			<div class="epic-row">
 				<button class="nav-item proj" class:active={$activeProject === p.id} onclick={() => pick(p.id)}>
 					<span class="icon">▸</span>{p.name}
 				</button>
-			{/each}
-		{/each}
-		{#each grouped.orphan as p (p.id)}
-			<button class="nav-item proj" class:active={$activeProject === p.id} onclick={() => pick(p.id)}>
-				<span class="icon">▸</span>{p.name}
-			</button>
+				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}>✎</button>
+			</div>
 		{/each}
 	</div>
 </nav>
@@ -225,6 +272,74 @@
 		font-size: 11px;
 		color: var(--text-dim);
 		padding-top: 8px;
+	}
+	.ini-head {
+		display: flex;
+		align-items: center;
+		padding-right: 4px;
+	}
+	.ini-toggle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: none;
+		text-align: left;
+		color: var(--text-dim);
+		font-size: 11px;
+		padding: 8px 8px 3px;
+	}
+	.ini-toggle:hover {
+		color: var(--text);
+	}
+	.chev {
+		font-size: 9px;
+		color: var(--text-faint);
+		transition: transform 0.15s ease;
+		flex: none;
+	}
+	.chev.open {
+		transform: rotate(90deg);
+	}
+	.ini-name {
+		font-weight: 500;
+		letter-spacing: 0.01em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ini-count {
+		color: var(--text-faint);
+		font-size: 10px;
+		margin-left: auto;
+	}
+	.epic-row {
+		display: flex;
+		align-items: center;
+	}
+	.epic-row .nav-item {
+		flex: 1;
+		min-width: 0;
+	}
+	.row-edit {
+		opacity: 0;
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		font-size: 12px;
+		padding: 4px 6px;
+		border-radius: 5px;
+		flex: none;
+	}
+	.ini-head:hover .row-edit,
+	.epic-row:hover .row-edit {
+		opacity: 1;
+	}
+	.row-edit:hover {
+		background: var(--bg-hover);
+		color: var(--text);
 	}
 	.nav-item {
 		display: flex;

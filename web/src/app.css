@@ -127,6 +127,14 @@ select {
 	background: var(--bg-hover);
 	color: var(--text);
 }
+.btn.danger {
+	background: transparent;
+	border-color: transparent;
+	color: #f87171;
+}
+.btn.danger:hover {
+	background: color-mix(in srgb, #f87171 16%, transparent);
+}
 
 .pill {
 	display: inline-flex;
