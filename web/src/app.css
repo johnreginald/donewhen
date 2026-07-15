@@ -46,10 +46,11 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font);
-	font-size: 15px;
+	font-size: 14px;
 	line-height: 1.5;
-	letter-spacing: -0.006em;
+	letter-spacing: -0.01em;
 	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
 	overscroll-behavior: none;
 }
 

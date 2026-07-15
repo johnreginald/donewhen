@@ -1,4 +1,5 @@
 <script>
+	import '@fontsource-variable/inter';
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
