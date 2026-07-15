@@ -25,7 +25,8 @@
 	let saving = $state(false);
 	let firstInput = $state(null);
 
-	const TITLES = { issue: 'New issue', project: 'New project', initiative: 'New initiative' };
+	// Raenil's Project entity is shown as "Epic"; its Initiative entity as "Project".
+	const TITLES = { issue: 'New issue', project: 'New epic', initiative: 'New project' };
 
 	function defaultStateId() {
 		const st = get(states);
@@ -87,7 +88,7 @@
 					initiativeId: initiativeId || null
 				});
 				await loadMeta();
-				showToast('Project created');
+				showToast('Epic created');
 				closeComposer();
 			} else if (kind === 'initiative') {
 				if (!name.trim()) {
@@ -96,7 +97,7 @@
 				}
 				await api.saveInitiative({ name: name.trim(), descriptionMd: desc });
 				await loadMeta();
-				showToast('Initiative created');
+				showToast('Project created');
 				closeComposer();
 			}
 		} catch (e) {
@@ -144,7 +145,7 @@
 						</select>
 					</label>
 					<label class="field">
-						<span>Project</span>
+						<span>Epic</span>
 						<select bind:value={projectId}>
 							<option value="">— None —</option>
 							{#each $projects as p (p.id)}
@@ -175,11 +176,11 @@
 					</div>
 				{/if}
 			{:else}
-				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Project' : 'Initiative'} name" />
+				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
 				<textarea bind:value={desc} class="desc" placeholder="Description (optional)"></textarea>
 				{#if kind === 'project'}
 					<label class="field wide">
-						<span>Initiative</span>
+						<span>Project</span>
 						<select bind:value={initiativeId}>
 							<option value="">— None —</option>
 							{#each $initiatives as i (i.id)}

@@ -25,7 +25,7 @@
 				<th style="width:24px"></th>
 				<th>Title</th>
 				<th style="width:130px">Status</th>
-				<th style="width:130px">Project</th>
+				<th style="width:130px">Epic</th>
 				<th>Labels</th>
 			</tr>
 		</thead>

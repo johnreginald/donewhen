@@ -16,6 +16,7 @@ func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 		StateID:   q.Get("state"),
 		ProjectID: q.Get("project"),
 		Query:     q.Get("q"),
+		ParentKey: q.Get("parent"),
 		Limit:     limit,
 	})
 	if handleStoreErr(w, err) {
@@ -56,6 +57,7 @@ type issueCreateReq struct {
 	ProjectId     string   `json:"projectId"`
 	AssigneeId    string   `json:"assigneeId"`
 	Priority      int      `json:"priority"`
+	ParentKey     string   `json:"parentKey"`
 	LabelIds      []string `json:"labelIds"`
 	LabelNames    []string `json:"labelNames"`
 }
@@ -78,6 +80,7 @@ func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		ProjectID:     strPtr(req.ProjectId),
 		AssigneeID:    strPtr(req.AssigneeId),
 		Priority:      req.Priority,
+		ParentKey:     strPtr(req.ParentKey),
 		LabelIDs:      req.LabelIds,
 		LabelNames:    req.LabelNames,
 	}
@@ -97,6 +100,7 @@ type issueUpdateReq struct {
 	AssigneeId    *string  `json:"assigneeId"`
 	Priority      *int     `json:"priority"`
 	Position      *float64 `json:"position"`
+	ParentKey     *string  `json:"parentKey"`
 	LabelIds      []string `json:"labelIds"`
 	LabelNames    []string `json:"labelNames"`
 }
@@ -123,6 +127,10 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	if req.AssigneeId != nil {
 		p.SetAssignee = true
 		p.AssigneeID = strPtr(*req.AssigneeId)
+	}
+	if req.ParentKey != nil {
+		p.SetParent = true
+		p.ParentKey = strPtr(*req.ParentKey)
 	}
 	if req.LabelIds != nil || req.LabelNames != nil {
 		p.ReplaceLabels = true

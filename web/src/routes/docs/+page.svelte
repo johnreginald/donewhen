@@ -103,8 +103,8 @@
 	}
 
 	function attachOf(d) {
-		if (d.initiativeId) return { icon: '◈', label: $initiatives.find((i) => i.id === d.initiativeId)?.name ?? 'Initiative', kind: 'initiative' };
-		if (d.projectId) return { icon: '▢', label: $projects.find((p) => p.id === d.projectId)?.name ?? 'Project', kind: 'project' };
+		if (d.initiativeId) return { icon: '◈', label: $initiatives.find((i) => i.id === d.initiativeId)?.name ?? 'Project', kind: 'initiative' };
+		if (d.projectId) return { icon: '▢', label: $projects.find((p) => p.id === d.projectId)?.name ?? 'Epic', kind: 'project' };
 		if (d.issueId) {
 			const is = $issues.find((i) => i.id === d.issueId);
 			return { icon: '◦', label: is ? is.key : 'Issue', kind: 'issue', issue: is };
@@ -217,7 +217,7 @@
 								<button class="bd" aria-label="x" onclick={() => (attachOpen = false)}></button>
 								<div class="pop wide">
 									<button class="pi" onclick={() => setAttach('none', '')}>No attachment</button>
-									{#if $projects.length}<div class="ps">Projects</div>{/if}
+									{#if $projects.length}<div class="ps">Epics</div>{/if}
 									{#each $projects as p (p.id)}<button class="pi" onclick={() => setAttach('project', p.id)}><span class="dim">▢</span>{p.name}</button>{/each}
 									{#if $issues.length}<div class="ps">Issues</div>{/if}
 									{#each $issues.slice(0, 40) as is (is.id)}<button class="pi" onclick={() => setAttach('issue', is.id)}><span class="mono">{is.key}</span>{is.title}</button>{/each}

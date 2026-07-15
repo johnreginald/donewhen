@@ -32,6 +32,9 @@
 			<StateIcon category={state.category} color={state.color} />
 		{/if}
 		<span class="key">{issue.key}</span>
+		{#if issue.childCount > 0}
+			<span class="epic" title="{issue.childCount} sub-issues">↳ {issue.childCount}</span>
+		{/if}
 		{#if state?.category === 'completed' && !issue.docCount}
 			<span class="nodoc" title="No implementation doc yet">✦</span>
 		{/if}
@@ -93,6 +96,15 @@
 		font-size: 10px;
 		color: var(--text-faint);
 		opacity: 0.6;
+	}
+	.epic {
+		font-size: 10.5px;
+		font-family: var(--mono);
+		color: var(--accent2);
+		background: color-mix(in srgb, var(--accent2) 15%, transparent);
+		padding: 1px 6px;
+		border-radius: 10px;
+		letter-spacing: -0.02em;
 	}
 	.spacer {
 		flex: 1;

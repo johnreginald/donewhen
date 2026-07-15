@@ -64,12 +64,12 @@
 	<div class="section">
 		<div class="section-head">
 			<span class="section-title">Projects</span>
-			<button class="add-btn" title="Create project or initiative" onclick={() => (menuOpen = !menuOpen)}>+</button>
+			<button class="add-btn" title="Create project or epic" onclick={() => (menuOpen = !menuOpen)}>+</button>
 			{#if menuOpen}
 				<div class="menu-backdrop" role="presentation" onclick={() => (menuOpen = false)}></div>
 				<div class="add-menu">
-					<button onclick={() => choose('project')}><span class="mi">▸</span>New project</button>
-					<button onclick={() => choose('initiative')}><span class="mi">◇</span>New initiative</button>
+					<button onclick={() => choose('initiative')}><span class="mi">◇</span>New project</button>
+					<button onclick={() => choose('project')}><span class="mi">▸</span>New epic</button>
 				</div>
 			{/if}
 		</div>

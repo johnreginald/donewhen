@@ -2,13 +2,18 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { states, projects, labels as allLabels, PRIORITIES } from '$lib/store.js';
-	import { panelIssueId, closeIssue, showToast } from '$lib/ui.js';
+	import { panelIssueId, closeIssue, openIssue, showToast } from '$lib/ui.js';
 	import Markdown from './Markdown.svelte';
 	import LabelPill from './LabelPill.svelte';
+	import StateIcon from './StateIcon.svelte';
 
 	let issue = $state(null);
 	let comments = $state([]);
 	let docs = $state([]);
+	let children = $state([]); // sub-issues (this issue is their parent/epic)
+	let parent = $state(null); // the epic/parent this issue belongs to
+	const stOf = (c) => $states.find((s) => s.id === c.stateId);
+	const doneChildren = $derived(children.filter((c) => stOf(c)?.category === 'completed').length);
 	const stateCat = $derived($states.find((s) => s.id === issue?.stateId)?.category);
 	const DOC_ICON = { change: '⟳', feature: '◈', decision: '◆', overview: '◇', reference: '▤' };
 	let editingDesc = $state(false);
@@ -34,6 +39,8 @@
 			descDraft = issue.descriptionMd || '';
 			comments = (await api.comments(issue.id)) || [];
 			docs = (await api.documents({ issue: issue.id })) || [];
+			children = issue.childCount > 0 ? (await api.issues({ parent: issue.key })) || [] : [];
+			parent = issue.parentKey ? await api.issue(issue.parentKey).catch(() => null) : null;
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
 			closeIssue();
@@ -107,6 +114,14 @@
 				<button class="btn ghost" onclick={closeIssue} title="Close">✕</button>
 			</header>
 
+			{#if parent}
+				<button class="parent-crumb" onclick={() => openIssue(parent.key)} title="Open parent issue">
+					<span class="pc-ic">⤴</span>
+					<span class="pc-key">{parent.key}</span>
+					<span class="pc-title">{parent.title}</span>
+				</button>
+			{/if}
+
 			<input
 				class="title-input"
 				bind:value={titleDraft}
@@ -132,7 +147,7 @@
 					</select>
 				</div>
 				<div class="prop">
-					<label>Project</label>
+					<label>Epic</label>
 					<select class="input" value={issue.projectId || ''} onchange={setProject}>
 						<option value="">— none —</option>
 						{#each $projects as p (p.id)}
@@ -188,6 +203,20 @@
 					</div>
 				{/if}
 			</div>
+
+			{#if children.length}
+				<div class="subs-sec">
+					<label>Sub-issues <span class="sub-prog">{doneChildren}/{children.length}</span></label>
+					<div class="sub-bar"><span style="width:{(doneChildren / children.length) * 100}%"></span></div>
+					{#each children as c (c.id)}
+						<button class="sub-link" onclick={() => openIssue(c.key)}>
+							<StateIcon category={stOf(c)?.category} color={stOf(c)?.color} />
+							<span class="sub-key">{c.key}</span>
+							<span class="sub-title">{c.title}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 
 			<div class="docs-sec">
 				<label>Documents</label>
@@ -352,6 +381,87 @@
 	}
 	.desc-view {
 		min-height: 40px;
+	}
+	.parent-crumb {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 12px;
+		padding: 0 0 2px;
+		text-align: left;
+		width: 100%;
+	}
+	.parent-crumb:hover {
+		color: var(--text);
+	}
+	.pc-ic {
+		color: var(--accent2);
+		flex: none;
+	}
+	.pc-key {
+		font-family: var(--mono);
+		color: var(--text-faint);
+		flex: none;
+	}
+	.pc-title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.subs-sec {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.sub-prog {
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--text-faint);
+		margin-left: 4px;
+	}
+	.sub-bar {
+		height: 3px;
+		border-radius: 3px;
+		background: var(--border);
+		overflow: hidden;
+		margin: 1px 0 3px;
+	}
+	.sub-bar span {
+		display: block;
+		height: 100%;
+		background: var(--accent);
+		transition: width 0.3s ease;
+	}
+	.sub-link {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 7px;
+		padding: 6px 10px;
+		color: var(--text);
+		font-size: 12.5px;
+		text-align: left;
+	}
+	.sub-link:hover {
+		border-color: var(--border-strong);
+		background: var(--bg-elev2);
+	}
+	.sub-key {
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--text-faint);
+		flex: none;
+	}
+	.sub-title {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.docs-sec {
 		display: flex;
