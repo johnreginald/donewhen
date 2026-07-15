@@ -121,6 +121,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/documents/{id}", s.guard(s.handleDeleteDocument))
 
 	// Push.
+	// bulk import (external tracker → Raenil)
+	mux.HandleFunc("POST /api/import", s.guard(s.handleImport))
+
 	mux.HandleFunc("POST /api/push/subscribe", s.guard(s.handlePushSubscribe))
 	mux.HandleFunc("POST /api/push/unsubscribe", s.guard(s.handlePushUnsubscribe))
 
