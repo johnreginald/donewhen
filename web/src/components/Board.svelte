@@ -2,7 +2,7 @@
 	import { dndzone } from 'svelte-dnd-action';
 	import { states, issues } from '$lib/store.js';
 	import { api } from '$lib/api.js';
-	import { showToast } from '$lib/ui.js';
+	import { showToast, openComposer } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
 	import StateIcon from './StateIcon.svelte';
 
@@ -71,7 +71,7 @@
 				<span class="count">{col.items.length}</span>
 				<span class="spacer"></span>
 				<button class="ch-btn" title="Options">⋯</button>
-				<button class="ch-btn" title="New issue">+</button>
+				<button class="ch-btn" title="New issue in {col.name}" onclick={() => openComposer('issue', { stateId: col.id })}>+</button>
 			</div>
 			<div
 				class="col-body"
@@ -175,6 +175,32 @@
 		flex: 1;
 		min-height: 40px;
 		padding: 2px;
+		/* overlay-thin scrollbar, revealed on column hover — no layout shift
+		   because the 8px gutter is always reserved, only the thumb fades in */
+		scrollbar-color: transparent transparent;
+		transition: scrollbar-color 0.2s ease;
+	}
+	.col-body::-webkit-scrollbar-thumb {
+		background: transparent;
+		border-radius: 8px;
+		border: 2px solid transparent;
+		background-clip: padding-box;
+		transition: background 0.2s ease;
+	}
+	.column:hover .col-body,
+	.col-body:hover,
+	.col-body:focus-within {
+		scrollbar-color: var(--border-strong) transparent;
+	}
+	.column:hover .col-body::-webkit-scrollbar-thumb,
+	.col-body:hover::-webkit-scrollbar-thumb,
+	.col-body:focus-within::-webkit-scrollbar-thumb {
+		background: var(--border-strong);
+		background-clip: padding-box;
+	}
+	.col-body::-webkit-scrollbar-thumb:hover {
+		background: var(--text-faint);
+		background-clip: padding-box;
 	}
 	.card-wrap {
 		outline: none;

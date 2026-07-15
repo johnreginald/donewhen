@@ -6,10 +6,11 @@
 	import Sidebar from '$components/Sidebar.svelte';
 	import IssuePanel from '$components/IssuePanel.svelte';
 	import CommandPalette from '$components/CommandPalette.svelte';
+	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, applyEvent, me } from '$lib/store.js';
-	import { paletteOpen, panelIssueId, toast, showToast, flashIssue } from '$lib/ui.js';
+	import { paletteOpen, panelIssueId, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 
 	let { children } = $props();
@@ -70,9 +71,9 @@
 			panelIssueId.set(null);
 			return;
 		}
-		if (e.key === 'c' && !isTyping(e) && !$paletteOpen && !$panelIssueId) {
+		if (e.key === 'c' && !isTyping(e) && !$paletteOpen && !$panelIssueId && !$composer) {
 			e.preventDefault();
-			paletteOpen.set(true);
+			openComposer('issue');
 		}
 	}
 
@@ -96,7 +97,7 @@
 			<header class="topbar">
 				<button class="hamburger btn ghost" onclick={() => (mobileNav = !mobileNav)}>☰</button>
 				<div class="spacer"></div>
-				<button class="btn primary" onclick={() => paletteOpen.set(true)}>+ New issue</button>
+				<button class="btn primary" onclick={() => openComposer('issue')}>+ New issue</button>
 				<span class="email faint">{$me?.email}</span>
 				<button class="btn ghost" onclick={logout}>Logout</button>
 			</header>
@@ -107,6 +108,7 @@
 	</div>
 	<IssuePanel />
 	<CommandPalette />
+	<Composer />
 {:else}
 	<div class="booting">Loading Raenil…</div>
 {/if}
