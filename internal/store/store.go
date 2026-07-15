@@ -35,19 +35,22 @@ type IssueFilter struct {
 	StateID   string
 	ProjectID string
 	Query     string
+	ParentKey string // list sub-issues of this epic key
 	Limit     int
 }
 
 const issueCols = `i.id, i.number, i.key, i.title, i.description_md, i.state_id,
 	i.project_id, i.assignee_id, i.priority, i.position,
 	(SELECT count(*) FROM documents d WHERE d.issue_id = i.id) AS doc_count,
+	i.parent_key,
+	(SELECT count(*) FROM issues c WHERE c.parent_key = i.key) AS child_count,
 	i.created_at, i.updated_at`
 
 func scanIssue(row pgx.Row) (models.Issue, error) {
 	var is models.Issue
 	err := row.Scan(&is.ID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
 		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
-		&is.DocCount, &is.CreatedAt, &is.UpdatedAt)
+		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.CreatedAt, &is.UpdatedAt)
 	return is, err
 }
 
@@ -65,6 +68,9 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 	}
 	if f.ProjectID != "" {
 		add("i.project_id=", f.ProjectID)
+	}
+	if f.ParentKey != "" {
+		add("i.parent_key=", f.ParentKey)
 	}
 	if f.Query != "" {
 		n++
@@ -195,6 +201,7 @@ type IssueInput struct {
 	ProjectID     *string
 	AssigneeID    *string
 	Priority      int
+	ParentKey     *string  // epic key this issue belongs under
 	LabelIDs      []string // when non-nil, replaces the label set
 	LabelNames    []string // optional: resolve/attach labels by name (exclusive-group aware)
 }
@@ -219,9 +226,9 @@ func (s *Store) CreateIssue(ctx context.Context, in IssueInput) (models.Issue, e
 
 	var id string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO issues (number, key, title, description_md, state_id, project_id, assignee_id, priority, position)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-		number, key, in.Title, in.DescriptionMD, stateID, in.ProjectID, in.AssigneeID, in.Priority, float64(number),
+		INSERT INTO issues (number, key, title, description_md, state_id, project_id, assignee_id, priority, position, parent_key)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+		number, key, in.Title, in.DescriptionMD, stateID, in.ProjectID, in.AssigneeID, in.Priority, float64(number), in.ParentKey,
 	).Scan(&id)
 	if err != nil {
 		return models.Issue{}, err
@@ -252,6 +259,8 @@ type IssuePatch struct {
 	SetAssignee   bool
 	Priority      *int
 	Position      *float64
+	ParentKey     *string // epic key; nil pointer + SetParent clears it
+	SetParent     bool
 	LabelIDs      []string // when non-nil, replaces label set
 	LabelNames    []string
 	ReplaceLabels bool
@@ -295,6 +304,9 @@ func (s *Store) UpdateIssue(ctx context.Context, id string, p IssuePatch) (model
 	}
 	if p.SetProject {
 		set("project_id", p.ProjectID)
+	}
+	if p.SetParent {
+		set("parent_key", p.ParentKey)
 	}
 	if p.SetAssignee {
 		set("assignee_id", p.AssigneeID)

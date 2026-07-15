@@ -20,6 +20,7 @@ type ImportProject struct {
 	Name        string `json:"name"`
 	Summary     string `json:"summary"`
 	Description string `json:"description"`
+	Team        string `json:"team"` // Linear team → Raenil initiative
 }
 
 type ImportIssue struct {
@@ -33,6 +34,7 @@ type ImportIssue struct {
 	StatusType string    `json:"statusType"` // linear category, for fallback mapping
 	Labels     []string  `json:"labels"`
 	Project    string    `json:"project"` // project name ("" = none)
+	Team       string    `json:"team"`    // Linear team → initiative (groups the project)
 	ParentID   string    `json:"parentId"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
@@ -40,6 +42,7 @@ type ImportIssue struct {
 
 // ImportResult summarizes what an import did.
 type ImportResult struct {
+	Initiatives    int      `json:"initiatives"`    // initiatives created (from teams)
 	Projects       int      `json:"projects"`       // projects created
 	Issues         int      `json:"issues"`         // issues created
 	Labels         int      `json:"labels"`         // labels created
@@ -114,27 +117,71 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 		return defaultState
 	}
 
-	// --- projects: ensure by name, cache name -> id ---
-	projByName := map[string]string{}
-	ensureProject := func(name, desc string) (string, error) {
+	// --- initiatives from Linear teams: ensure by name, cache name -> id ---
+	iniByName := map[string]string{}
+	ensureInitiative := func(name string) (string, error) {
 		if name == "" {
 			return "", nil
 		}
-		if id, ok := projByName[name]; ok {
+		if id, ok := iniByName[name]; ok {
 			return id, nil
+		}
+		var id string
+		err := tx.QueryRow(ctx, `SELECT id FROM initiatives WHERE name=$1 LIMIT 1`, name).Scan(&id)
+		if err == pgx.ErrNoRows {
+			if err := tx.QueryRow(ctx,
+				`INSERT INTO initiatives (name) VALUES ($1) RETURNING id`, name).Scan(&id); err != nil {
+				return "", err
+			}
+			res.Initiatives++
+		} else if err != nil {
+			return "", err
+		}
+		iniByName[name] = id
+		return id, nil
+	}
+
+	// --- projects: ensure by name, grouped under their team's initiative ---
+	projByName := map[string]string{}
+	ensureProject := func(name, desc, team string) (string, error) {
+		if name == "" {
+			return "", nil
+		}
+		var iniID *string
+		if team != "" {
+			iid, err := ensureInitiative(team)
+			if err != nil {
+				return "", err
+			}
+			if iid != "" {
+				iniID = &iid
+			}
+		}
+		// Link an existing project to its initiative if it has none yet
+		// (idempotent enrichment for a re-run).
+		link := func(id string) error {
+			if iniID == nil {
+				return nil
+			}
+			_, err := tx.Exec(ctx,
+				`UPDATE projects SET initiative_id=$1 WHERE id=$2 AND initiative_id IS NULL`, *iniID, id)
+			return err
+		}
+		if id, ok := projByName[name]; ok {
+			return id, link(id)
 		}
 		var id string
 		err := tx.QueryRow(ctx, `SELECT id FROM projects WHERE name=$1 LIMIT 1`, name).Scan(&id)
 		if err == nil {
 			projByName[name] = id
-			return id, nil
+			return id, link(id)
 		}
 		if err != pgx.ErrNoRows {
 			return "", err
 		}
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO projects (name, description_md) VALUES ($1,$2) RETURNING id`,
-			name, desc).Scan(&id); err != nil {
+			`INSERT INTO projects (name, description_md, initiative_id) VALUES ($1,$2,$3) RETURNING id`,
+			name, desc, iniID).Scan(&id); err != nil {
 			return "", err
 		}
 		projByName[name] = id
@@ -146,7 +193,7 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 		if desc == "" {
 			desc = p.Summary
 		}
-		if _, err := ensureProject(p.Name, desc); err != nil {
+		if _, err := ensureProject(p.Name, desc, p.Team); err != nil {
 			return res, err
 		}
 	}
@@ -190,7 +237,7 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 
 		var projectID *string
 		if is.Project != "" {
-			pid, err := ensureProject(is.Project, "")
+			pid, err := ensureProject(is.Project, "", is.Team)
 			if err != nil {
 				return res, err
 			}

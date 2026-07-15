@@ -73,7 +73,9 @@ type Issue struct {
 	Priority      int       `json:"priority"` // 0 none,1 urgent,2 high,3 medium,4 low
 	Position      float64   `json:"position"` // ordering within a state column
 	Labels        []Label   `json:"labels"`
-	DocCount      int       `json:"docCount"` // attached documents (implementation coverage)
+	DocCount      int       `json:"docCount"`     // attached documents (implementation coverage)
+	ParentKey     *string   `json:"parentKey"`    // epic this issue belongs to (nil = top-level)
+	ChildCount    int       `json:"childCount"`   // sub-issues (>0 ⇒ this is an epic)
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
