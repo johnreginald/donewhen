@@ -2,9 +2,14 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { initiatives, projects, activeProject, loadIssues } from '$lib/store.js';
-	import { paletteOpen } from '$lib/ui.js';
+	import { paletteOpen, openComposer } from '$lib/ui.js';
 
 	let { onnavigate = () => {} } = $props();
+	let menuOpen = $state(false);
+	function choose(kind) {
+		menuOpen = false;
+		openComposer(kind);
+	}
 
 	function pick(id) {
 		activeProject.set(id);
@@ -57,7 +62,17 @@
 	</div>
 
 	<div class="section">
-		<div class="section-title">Projects</div>
+		<div class="section-head">
+			<span class="section-title">Projects</span>
+			<button class="add-btn" title="Create project or initiative" onclick={() => (menuOpen = !menuOpen)}>+</button>
+			{#if menuOpen}
+				<div class="menu-backdrop" role="presentation" onclick={() => (menuOpen = false)}></div>
+				<div class="add-menu">
+					<button onclick={() => choose('project')}><span class="mi">▸</span>New project</button>
+					<button onclick={() => choose('initiative')}><span class="mi">◇</span>New initiative</button>
+				</div>
+			{/if}
+		</div>
 		<button class="nav-item proj" class:active={$activeProject === ''} onclick={() => pick('')}>
 			<span class="icon">◇</span>All issues
 		</button>
@@ -141,6 +156,69 @@
 		letter-spacing: 0.04em;
 		color: var(--text-faint);
 		padding: 6px 8px 2px;
+	}
+	.section-head {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding-right: 4px;
+	}
+	.add-btn {
+		width: 20px;
+		height: 20px;
+		border-radius: 5px;
+		border: none;
+		background: none;
+		color: var(--text-faint);
+		font-size: 15px;
+		line-height: 1;
+		display: grid;
+		place-items: center;
+	}
+	.add-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+	}
+	.add-menu {
+		position: absolute;
+		top: 24px;
+		right: 4px;
+		z-index: 31;
+		background: var(--bg-elev2);
+		border: 1px solid var(--border-strong);
+		border-radius: 8px;
+		box-shadow: var(--shadow);
+		padding: 4px;
+		min-width: 150px;
+		display: flex;
+		flex-direction: column;
+	}
+	.add-menu button {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: none;
+		border: none;
+		color: var(--text);
+		text-align: left;
+		padding: 7px 9px;
+		border-radius: 6px;
+		font-size: 13px;
+	}
+	.add-menu button:hover {
+		background: var(--bg-hover);
+	}
+	.add-menu .mi {
+		color: var(--text-faint);
+		font-size: 11px;
+		width: 12px;
+		text-align: center;
 	}
 	.ini {
 		text-transform: none;
