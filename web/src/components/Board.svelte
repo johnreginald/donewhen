@@ -138,10 +138,12 @@
 	}
 	.col-name {
 		color: var(--text);
+		font-size: 14px;
+		font-weight: 500;
 	}
 	.count {
 		color: var(--text-faint);
-		font-size: 12px;
+		font-size: 12.5px;
 	}
 	.col-head .spacer {
 		flex: 1;

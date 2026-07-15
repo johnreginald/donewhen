@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
+import { goto } from '$app/navigation';
 
-export const panelIssueId = writable(null); // id/key of issue open in the drawer
 export const paletteOpen = writable(false);
 export const composer = writable(null); // { kind: 'issue'|'project'|'initiative', prefill }
 export const toast = writable(null);
@@ -29,9 +29,10 @@ export function showToast(message, kind = 'info') {
 	toastTimer = setTimeout(() => toast.set(null), 3500);
 }
 
+// openIssue navigates to the full detail page (replaces the old right-side drawer).
 export function openIssue(idOrKey) {
-	panelIssueId.set(idOrKey);
+	goto('/issue/' + encodeURIComponent(idOrKey));
 }
 export function closeIssue() {
-	panelIssueId.set(null);
+	goto('/');
 }

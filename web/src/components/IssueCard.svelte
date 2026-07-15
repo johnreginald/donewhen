@@ -65,8 +65,8 @@
 	.card {
 		background: var(--bg-elev);
 		border: 1px solid var(--border);
-		border-radius: 10px;
-		padding: 10px 11px 9px;
+		border-radius: 8px;
+		padding: 11px 12px 10px;
 		display: flex;
 		flex-direction: column;
 		gap: 7px;
@@ -87,7 +87,7 @@
 		gap: 7px;
 	}
 	.key {
-		font-size: 12px;
+		font-size: 12.5px;
 		color: var(--text-faint);
 		font-family: var(--mono);
 		letter-spacing: -0.02em;
@@ -121,8 +121,8 @@
 		background: linear-gradient(145deg, #4a4f64, #2a2f3d);
 	}
 	.title {
-		font-size: 13px;
-		line-height: 1.4;
+		font-size: 14px;
+		line-height: 1.45;
 		color: var(--text);
 	}
 	.meta {
@@ -140,7 +140,7 @@
 		color: var(--text-faint);
 	}
 	.foot {
-		font-size: 11px;
+		font-size: 12px;
 		color: var(--text-faint);
 		margin-top: 1px;
 	}

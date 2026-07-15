@@ -1,34 +1,36 @@
 :root {
-	/* Raenil dark system (from the Claude Design canvas) */
-	--bg: #0b0c10;
-	--bg-elev: #161a24;
-	--bg-elev2: #1c212d;
-	--bg-hover: #222839;
-	--border: #20242f;
-	--border-strong: #2c3140;
-	--text: #e7e9f0;
-	--text-dim: #9aa0af;
-	--text-faint: #646a7b;
-	--accent: #6e7bf6;
-	--accent2: #8b7bff;
-	--accent-soft: rgba(110, 123, 246, 0.16);
-	--accent-dim: #3b3f66;
+	/* Linear-calibrated dark system (blue-tinted neutrals, hue ~272) */
+	--bg: #08090b;
+	--bg-elev: #0f1116;
+	--bg-elev2: #16181d;
+	--bg-hover: #1c1e24;
+	--border: #1c1d23;
+	--border-strong: #2a2c34;
+	--text: #f7f8f8;
+	--text-dim: #868a94;
+	--text-faint: #595c65;
+	--accent: #5e6ad2;
+	--accent2: #7c85e8;
+	--accent-soft: rgba(94, 106, 210, 0.16);
+	--accent-dim: #363a5c;
 	--accent-grad: linear-gradient(145deg, var(--accent), var(--accent2));
-	--radius: 9px;
-	--radius-lg: 12px;
-	--shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
-	--font: -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
-	--disp: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+	--radius: 8px;
+	--radius-lg: 10px;
+	--shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+	--font:
+		'Inter Variable', 'Inter', -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+	--disp:
+		'Inter Variable', 'Inter', -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
 	--mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
 
 	/* workflow state + priority hues */
-	--st-triage: #8a8f9c;
-	--st-backlog: #7c8698;
+	--st-triage: #9aa0ab;
+	--st-backlog: #858b98;
 	--st-aligning: #a78bfa;
-	--st-ready: #38bdf8;
-	--st-progress: #fbbf24;
+	--st-ready: #4ea7fc;
+	--st-progress: #f2c94c;
 	--st-review: #fb923c;
-	--st-done: #34d399;
+	--st-done: #4cb782;
 	--st-canceled: #6b7280;
 }
 
@@ -44,7 +46,9 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font);
-	font-size: 14px;
+	font-size: 15px;
+	line-height: 1.5;
+	letter-spacing: -0.006em;
 	-webkit-font-smoothing: antialiased;
 	overscroll-behavior: none;
 }
