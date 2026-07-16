@@ -128,7 +128,7 @@
 
 <div class="docs">
 	<aside class="index">
-		<div class="ihead"><span class="it">Documents</span><span class="isub">{docs.length}</span></div>
+		<div class="ihead"><span class="it">Artifacts</span><span class="isub">{docs.length}</span></div>
 		<input class="search" placeholder="Search…" bind:value={query} />
 		<div class="chips">
 			<button class="fc" class:on={typeFilter === ''} onclick={() => (typeFilter = '')}>All</button>
@@ -154,7 +154,7 @@
 					</div>
 				</button>
 			{:else}
-				<div class="empty faint">{query || typeFilter || aiOnly ? 'No matches.' : 'No documents yet — Claude writes them as it works.'}</div>
+				<div class="empty faint">{query || typeFilter || aiOnly ? 'No matches.' : 'No artifacts yet — Claude writes them as it works.'}</div>
 			{/each}
 		</div>
 	</aside>
@@ -164,7 +164,7 @@
 			{@const at = attachOf(sel)}
 			<div class="topbar">
 				<div class="crumb">
-					<span class="ci">▤</span>Documents
+					<span class="ci">▤</span>Artifacts
 					{#if at}<span class="sepp">›</span><button class="crumb-lnk" onclick={() => at.kind === 'issue' && at.issue && openIssue(at.issue.key)}>{at.icon} {at.label}</button>{/if}
 				</div>
 				<div class="grow"></div>

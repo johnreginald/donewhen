@@ -7,6 +7,7 @@
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
+	import PriorityMenu from '$components/PriorityMenu.svelte';
 
 	let issue = $state(null);
 	let comments = $state([]);
@@ -173,7 +174,7 @@
 
 				{#if docs.length}
 					<section class="block">
-						<div class="rh">Documents</div>
+						<div class="rh">Artifacts</div>
 						{#each docs as d (d.id)}
 							<button class="doc-link" onclick={() => goto(`/docs?doc=${d.id}`)}>
 								<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
@@ -212,9 +213,7 @@
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Priority</span>
-					<select value={issue.priority} onchange={setPriority}>
-						{#each PRIORITIES as p}<option value={p.value}>{p.label}</option>{/each}
-					</select>
+					<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Epic</span>
