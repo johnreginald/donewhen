@@ -297,18 +297,17 @@
 	.dbody {
 		flex: 1;
 		display: flex;
+		justify-content: center;
 		min-height: 0;
 		overflow: hidden;
 	}
 	.dmain {
-		flex: 1;
+		flex: 0 1 760px;
 		min-width: 0;
 		overflow-y: auto;
 	}
 	.dmain-inner {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 26px clamp(20px, 5vw, 56px);
+		padding: 28px clamp(20px, 4vw, 48px);
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
@@ -493,10 +492,9 @@
 		resize: vertical;
 	}
 	.drail {
-		width: 268px;
-		flex-shrink: 0;
+		flex: 0 0 300px;
 		border-left: 1px solid var(--border);
-		padding: 26px 20px;
+		padding: 28px 22px;
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;

@@ -19,6 +19,7 @@
 	let disconnect;
 
 	const isLogin = $derived($page.url.pathname === '/login');
+	const showView = $derived(['/', '/list'].includes($page.url.pathname));
 
 	onMount(() => {
 		registerServiceWorker();
@@ -92,6 +93,12 @@
 		<main>
 			<header class="topbar">
 				<button class="hamburger btn ghost" onclick={() => (mobileNav = !mobileNav)}>☰</button>
+				{#if showView}
+					<div class="vtoggle">
+						<a href="/" class="vt" class:on={$page.url.pathname === '/'}>▦ Board</a>
+						<a href="/list" class="vt" class:on={$page.url.pathname === '/list'}>☰ List</a>
+					</div>
+				{/if}
 				<div class="spacer"></div>
 				<button class="btn primary" onclick={() => openComposer('issue')}>+ New issue</button>
 				<span class="email faint">{$me?.email}</span>
@@ -136,6 +143,30 @@
 	}
 	.spacer {
 		flex: 1;
+	}
+	.vtoggle {
+		display: flex;
+		gap: 2px;
+		background: var(--bg-elev);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 2px;
+	}
+	.vt {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 11px;
+		border-radius: 6px;
+		font-size: 13px;
+		color: var(--text-dim);
+	}
+	.vt:hover {
+		color: var(--text);
+	}
+	.vt.on {
+		background: var(--bg-hover);
+		color: var(--text);
 	}
 	.email {
 		font-size: 12px;

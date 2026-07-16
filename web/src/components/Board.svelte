@@ -118,15 +118,15 @@
 		padding: 12px;
 	}
 	.column {
-		flex: 0 0 300px;
+		flex: 0 0 320px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		/* subtle per-status tinted lane, Linear-style */
-		background: color-mix(in srgb, var(--col-color, var(--border)) 7%, var(--bg));
-		border: 1px solid color-mix(in srgb, var(--col-color, var(--border)) 11%, var(--border));
+		/* neutral lane — status color lives only on the icon + header */
+		background: transparent;
+		border: none;
 		border-radius: 12px;
-		padding: 8px 8px 4px;
+		padding: 8px 6px 4px;
 	}
 	.col-head {
 		display: flex;
