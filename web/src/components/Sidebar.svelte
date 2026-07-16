@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { initiatives, projects, activeProject, loadIssues, issues } from '$lib/store.js';
+	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues } from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
 
 	// Full issue set (filter-independent) for the per-Project totals in the badge.
@@ -25,43 +25,19 @@
 		openComposer(kind);
 	}
 
-	// Expanded Project (initiative) groups, persisted. Default: all collapsed —
-	// the sidebar shows only Project names; click one to reveal its Epics.
-	function loadExpanded() {
-		try {
-			return new Set(JSON.parse(localStorage.getItem('raenil.expanded') || '[]'));
-		} catch {
-			return new Set();
-		}
-	}
-	let expanded = $state(loadExpanded());
-	function toggle(id) {
-		const n = new Set(expanded);
-		n.has(id) ? n.delete(id) : n.add(id);
-		expanded = n;
-		try {
-			localStorage.setItem('raenil.expanded', JSON.stringify([...n]));
-		} catch {
-			/* ignore */
-		}
-	}
 	// Project = Raenil initiative; Epic = Raenil project.
 	function editProject(i) {
 		openComposer('initiative', { id: i.id, name: i.name, description: i.descriptionMd });
 	}
-	function editEpic(p) {
-		openComposer('project', {
-			id: p.id,
-			name: p.name,
-			description: p.descriptionMd,
-			initiativeId: p.initiativeId
-		});
-	}
 
-	function pick(id) {
-		activeProject.set(id);
+	// Click a Project to filter every view to it (Epics + tickets show grouped in
+	// the List/Board). '' = All issues.
+	function pick(initiativeId) {
+		activeInitiative.set(initiativeId);
+		activeProject.set('');
 		loadIssues();
-		if ($page.url.pathname !== '/') goto('/');
+		const p = $page.url.pathname;
+		if (p !== '/' && p !== '/list') goto('/');
 		onnavigate();
 	}
 
@@ -83,10 +59,9 @@
 	}
 
 	const nav = [
-		{ label: 'Board', to: '/', icon: '▦' },
-		{ label: 'List', to: '/list', icon: '☰' },
-		{ label: 'Documents', to: '/docs', icon: '📄' },
-		{ label: 'Settings', to: '/settings', icon: '⚙' }
+		{ label: 'Board', to: '/', icon: '▦', hue: 'var(--accent)' },
+		{ label: 'List', to: '/list', icon: '≣', hue: 'var(--st-ready)' },
+		{ label: 'Documents', to: '/docs', icon: '❏', hue: 'var(--st-done)' }
 	];
 </script>
 
@@ -109,7 +84,7 @@
 				class:active={$page.url.pathname === n.to}
 				onclick={onnavigate}
 			>
-				<span class="icon">{n.icon}</span>{n.label}
+				<span class="icon nav-ic" style:color={n.hue}>{n.icon}</span>{n.label}
 			</a>
 		{/each}
 	</div>
@@ -126,35 +101,20 @@
 				</div>
 			{/if}
 		</div>
-		<button class="nav-item proj" class:active={$activeProject === ''} onclick={() => pick('')}>
+		<button
+			class="nav-item proj"
+			class:active={!$activeInitiative}
+			onclick={() => pick('')}
+		>
 			<span class="icon">◇</span>All issues
 		</button>
 		{#each grouped.groups as g (g.ini.id)}
-			<div class="ini-head">
-				<button class="ini-toggle" onclick={() => toggle(g.ini.id)}>
-					<span class="chev" class:open={expanded.has(g.ini.id)}>▸</span>
-					<span class="ini-name">{g.ini.name}</span>
+			<div class="proj-row">
+				<button class="nav-item proj" class:active={$activeInitiative === g.ini.id} onclick={() => pick(g.ini.id)}>
+					<span class="icon">▢</span><span class="pname">{g.ini.name}</span>
 					<span class="ini-count">{g.count}</span>
 				</button>
 				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}>✎</button>
-			</div>
-			{#if expanded.has(g.ini.id)}
-				{#each g.projects as p (p.id)}
-					<div class="epic-row">
-						<button class="nav-item proj" class:active={$activeProject === p.id} onclick={() => pick(p.id)}>
-							<span class="icon">▸</span>{p.name}
-						</button>
-						<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}>✎</button>
-					</div>
-				{/each}
-			{/if}
-		{/each}
-		{#each grouped.orphan as p (p.id)}
-			<div class="epic-row">
-				<button class="nav-item proj" class:active={$activeProject === p.id} onclick={() => pick(p.id)}>
-					<span class="icon">▸</span>{p.name}
-				</button>
-				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}>✎</button>
 			</div>
 		{/each}
 	</div>
@@ -347,13 +307,22 @@
 	.ini-head:hover .ini-count {
 		color: var(--text);
 	}
-	.epic-row {
+	.epic-row,
+	.proj-row {
 		display: flex;
 		align-items: center;
 	}
-	.epic-row .nav-item {
+	.epic-row .nav-item,
+	.proj-row .nav-item {
 		flex: 1;
 		min-width: 0;
+	}
+	.pname {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.row-edit {
 		opacity: 0;
@@ -366,7 +335,8 @@
 		flex: none;
 	}
 	.ini-head:hover .row-edit,
-	.epic-row:hover .row-edit {
+	.epic-row:hover .row-edit,
+	.proj-row:hover .row-edit {
 		opacity: 1;
 	}
 	.row-edit:hover {
@@ -397,9 +367,14 @@
 	.icon {
 		width: 16px;
 		text-align: center;
-		opacity: 0.8;
+		color: var(--text-dim);
+		flex: none;
+	}
+	.nav-ic {
+		font-size: 14px;
 	}
 	.proj .icon {
 		font-size: 10px;
+		color: var(--text-faint);
 	}
 </style>

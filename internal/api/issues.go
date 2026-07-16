@@ -13,11 +13,12 @@ func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	issues, err := s.store.ListIssues(r.Context(), store.IssueFilter{
-		StateID:   q.Get("state"),
-		ProjectID: q.Get("project"),
-		Query:     q.Get("q"),
-		ParentKey: q.Get("parent"),
-		Limit:     limit,
+		StateID:      q.Get("state"),
+		ProjectID:    q.Get("project"),
+		InitiativeID: q.Get("initiative"),
+		Query:        q.Get("q"),
+		ParentKey:    q.Get("parent"),
+		Limit:        limit,
 	})
 	if handleStoreErr(w, err) {
 		return

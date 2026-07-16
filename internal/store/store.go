@@ -32,11 +32,12 @@ func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 // ---- Issues ----
 
 type IssueFilter struct {
-	StateID   string
-	ProjectID string
-	Query     string
-	ParentKey string // list sub-issues of this epic key
-	Limit     int
+	StateID      string
+	ProjectID    string
+	InitiativeID string // all issues whose epic belongs to this Project (initiative)
+	Query        string
+	ParentKey    string // list sub-issues of this epic key
+	Limit        int
 }
 
 const issueCols = `i.id, i.number, i.key, i.title, i.description_md, i.state_id,
@@ -68,6 +69,11 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 	}
 	if f.ProjectID != "" {
 		add("i.project_id=", f.ProjectID)
+	}
+	if f.InitiativeID != "" {
+		n++
+		q += fmt.Sprintf(" AND i.project_id IN (SELECT id FROM projects WHERE initiative_id=$%d)", n)
+		args = append(args, f.InitiativeID)
 	}
 	if f.ParentKey != "" {
 		add("i.parent_key=", f.ParentKey)
