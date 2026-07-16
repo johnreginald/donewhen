@@ -24,3 +24,20 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, res)
 }
+
+// handleUpdateDescriptions backfills full issue descriptions by key
+// ({"PP-80":"full markdown", ...}). Used after an import whose source
+// (Linear list_issues) truncated long bodies.
+func (s *Server) handleUpdateDescriptions(w http.ResponseWriter, r *http.Request) {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20))
+	var byKey map[string]string
+	if err := dec.Decode(&byKey); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid payload: "+err.Error())
+		return
+	}
+	n, err := s.store.UpdateDescriptions(r.Context(), byKey)
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"updated": n})
+}

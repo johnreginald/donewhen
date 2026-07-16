@@ -123,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	// Push.
 	// bulk import (external tracker → Raenil)
 	mux.HandleFunc("POST /api/import", s.guard(s.handleImport))
+	mux.HandleFunc("POST /api/import/descriptions", s.guard(s.handleUpdateDescriptions))
 
 	mux.HandleFunc("POST /api/push/subscribe", s.guard(s.handlePushSubscribe))
 	mux.HandleFunc("POST /api/push/unsubscribe", s.guard(s.handlePushUnsubscribe))

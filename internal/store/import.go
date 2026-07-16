@@ -51,6 +51,30 @@ type ImportResult struct {
 	UnmappedStates []string `json:"unmappedStates"` // statuses that fell back to the default state
 }
 
+// UpdateDescriptions overwrites description_md for the given issue keys (used to
+// backfill full bodies after an import that carried truncated descriptions).
+// One transaction, no events. Returns how many rows were updated.
+func (s *Store) UpdateDescriptions(ctx context.Context, byKey map[string]string) (int, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	n := 0
+	for key, desc := range byKey {
+		ct, err := tx.Exec(ctx,
+			`UPDATE issues SET description_md=$1, updated_at=now() WHERE key=$2`, desc, key)
+		if err != nil {
+			return n, err
+		}
+		n += int(ct.RowsAffected())
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return n, err
+	}
+	return n, nil
+}
+
 // linearTypeToState maps a Linear workflow-state category to a Raenil state name,
 // used when an issue's status name has no exact match.
 var linearTypeToState = map[string]string{
