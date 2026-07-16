@@ -303,19 +303,20 @@
 	}
 	.desc {
 		width: 100%;
-		min-height: 84px;
-		resize: vertical;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 8px;
+		min-height: 72px;
+		resize: none;
+		background: transparent;
+		border: none;
 		color: var(--text);
-		padding: 10px 12px;
-		font-size: 13.5px;
+		padding: 2px 0;
+		font-size: 14.5px;
+		line-height: 1.55;
 		font-family: inherit;
 		outline: none;
+		field-sizing: content;
 	}
-	.desc:focus {
-		border-color: var(--border-strong);
+	.desc::placeholder {
+		color: var(--text-faint);
 	}
 	.meta {
 		display: flex;

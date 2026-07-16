@@ -101,6 +101,9 @@
 		}
 	}
 	const fmtDate = (s) => new Date(s).toLocaleString();
+	function autofocus(node) {
+		node.focus();
+	}
 </script>
 
 {#if issue}
@@ -135,20 +138,20 @@
 				></textarea>
 
 				<div class="desc">
-					<div class="desc-head">
-						<span class="rh">Description</span>
-						<button class="btn ghost sm" onclick={() => (editingDesc = !editingDesc)}>
-							{editingDesc ? 'preview' : 'edit'}
-						</button>
-					</div>
 					{#if editingDesc}
-						<textarea class="desc-area" bind:value={descDraft} onblur={saveDesc}></textarea>
+						<textarea class="desc-area" bind:value={descDraft} onblur={saveDesc} use:autofocus></textarea>
 					{:else}
-						<div class="desc-view" role="button" tabindex="0" ondblclick={() => (editingDesc = true)}>
+						<div
+							class="desc-view"
+							role="button"
+							tabindex="0"
+							onclick={() => (editingDesc = true)}
+							onkeydown={(e) => e.key === 'Enter' && (editingDesc = true)}
+						>
 							{#if issue.descriptionMd}
 								<Markdown source={issue.descriptionMd} />
 							{:else}
-								<span class="faint">No description. Double-click to add.</span>
+								<span class="faint">Add description…</span>
 							{/if}
 						</div>
 					{/if}
@@ -373,23 +376,31 @@
 	}
 	.desc-area {
 		width: 100%;
-		min-height: 200px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: 8px;
+		min-height: 120px;
+		background: transparent;
+		border: none;
 		color: var(--text);
-		padding: 14px;
+		padding: 6px 8px;
+		margin: -6px -8px;
 		font-size: 14.5px;
 		font-family: inherit;
-		line-height: 1.6;
+		line-height: 1.65;
 		outline: none;
-		resize: vertical;
+		resize: none;
+		field-sizing: content;
 	}
 	.desc-view {
 		font-size: 14.5px;
 		line-height: 1.65;
 		color: var(--text);
 		min-height: 32px;
+		cursor: text;
+		padding: 6px 8px;
+		margin: -6px -8px;
+		border-radius: 6px;
+	}
+	.desc-view:hover {
+		background: color-mix(in srgb, var(--bg-elev) 45%, transparent);
 	}
 	.block {
 		display: flex;
