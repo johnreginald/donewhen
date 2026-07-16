@@ -59,7 +59,7 @@
 		return { groups: [...byIni.values()].filter((g) => g.projects.length), orphan };
 	}
 
-	const nav = [{ label: 'Artifacts', to: '/docs', comp: FileText }];
+	const nav = [{ label: 'Artifacts', to: '/artifacts', comp: FileText }];
 </script>
 
 <nav class="sidebar">

@@ -14,6 +14,8 @@
 	} from '$lib/store.js';
 	import { composer, closeComposer, showToast, openIssue } from '$lib/ui.js';
 	import PriorityMenu from './PriorityMenu.svelte';
+	import StatusMenu from './StatusMenu.svelte';
+	import EpicMenu from './EpicMenu.svelte';
 
 	// Epics shown when creating an issue: scoped to the active Project if one is
 	// selected, otherwise all.
@@ -176,23 +178,14 @@
 				/>
 				<textarea bind:value={desc} class="desc" placeholder="Description (markdown, mermaid…)"></textarea>
 				<div class="meta">
-					<label class="field">
+					<div class="field">
 						<span>Status</span>
-						<select bind:value={stateId}>
-							{#each $states as s (s.id)}
-								<option value={s.id}>{s.name}</option>
-							{/each}
-						</select>
-					</label>
-					<label class="field">
+						<StatusMenu value={stateId} onchange={(v) => (stateId = v)} />
+					</div>
+					<div class="field">
 						<span>Epic</span>
-						<select bind:value={projectId}>
-							<option value="">— None —</option>
-							{#each epicOptions as p (p.id)}
-								<option value={p.id}>{p.name}</option>
-							{/each}
-						</select>
-					</label>
+						<EpicMenu value={projectId} options={epicOptions} onchange={(v) => (projectId = v)} />
+					</div>
 					<div class="field">
 						<span>Priority</span>
 						<PriorityMenu value={priority} onchange={(v) => (priority = v)} />

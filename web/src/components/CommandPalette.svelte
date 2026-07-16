@@ -39,7 +39,7 @@
 		const nav = [
 			{ label: 'Go to Board', to: '/' },
 			{ label: 'Go to List', to: '/list' },
-			{ label: 'Go to Documents', to: '/docs' },
+			{ label: 'Go to Artifacts', to: '/artifacts' },
 			{ label: 'Go to Settings', to: '/settings' }
 		];
 		for (const n of nav) {
