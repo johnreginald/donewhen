@@ -101,7 +101,7 @@
 	.list {
 		height: 100%;
 		overflow-y: auto;
-		padding: 6px 0 40px;
+		padding: 0 0 40px;
 	}
 	.proj-group {
 		margin-bottom: 6px;
@@ -110,26 +110,32 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 14px 20px 6px;
+		height: 38px;
+		padding: 0 20px;
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--text);
 		position: sticky;
 		top: 0;
 		background: var(--bg);
-		z-index: 2;
+		border-bottom: 1px solid var(--border);
+		z-index: 4;
 	}
 	.epic-head {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		width: 100%;
-		background: none;
+		height: 32px;
+		background: var(--bg);
 		border: none;
 		text-align: left;
-		padding: 6px 20px;
+		padding: 0 20px;
 		color: var(--text-dim);
 		font-size: 12.5px;
+		position: sticky;
+		top: 38px;
+		z-index: 3;
 	}
 	.epic-head:hover {
 		color: var(--text);
