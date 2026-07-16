@@ -11,6 +11,25 @@
 	let mobileCol = $state(1);
 	let mobileInit = false;
 
+	// Click-drag to pan the board horizontally (like Linear). Ignores presses on
+	// cards/controls so card clicks + dnd reordering still work.
+	let boardEl = $state(null);
+	let pan = null;
+	function panDown(e) {
+		if (e.button !== 0) return;
+		if (e.target.closest('.card, button, a, input, select, textarea, [role="button"]')) return;
+		pan = { x: e.clientX, left: boardEl.scrollLeft };
+		boardEl.setPointerCapture?.(e.pointerId);
+		boardEl.classList.add('grabbing');
+	}
+	function panMove(e) {
+		if (pan) boardEl.scrollLeft = pan.left - (e.clientX - pan.x);
+	}
+	function panEnd() {
+		pan = null;
+		boardEl?.classList.remove('grabbing');
+	}
+
 	// Default the mobile tab to the first column that has issues.
 	$effect(() => {
 		if (mobileInit || !cols.length) return;
@@ -62,7 +81,14 @@
 </script>
 
 <!-- Desktop: horizontal drag-and-drop columns -->
-<div class="board desktop">
+<div
+	class="board desktop"
+	bind:this={boardEl}
+	onpointerdown={panDown}
+	onpointermove={panMove}
+	onpointerup={panEnd}
+	onpointercancel={panEnd}
+>
 	{#each cols as col, i (col.id)}
 		<div class="column" style:--col-color={col.color}>
 			<div class="col-head">
@@ -117,16 +143,20 @@
 		overflow-x: auto;
 		padding: 12px;
 	}
+	.board.desktop.grabbing {
+		cursor: grabbing;
+		user-select: none;
+	}
 	.column {
 		flex: 0 0 320px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		/* neutral lane — status color lives only on the icon + header */
-		background: transparent;
-		border: none;
+		/* neutral lane (Linear-style) — status color lives only on the icon + header */
+		background: color-mix(in srgb, var(--bg-elev) 30%, var(--bg));
+		border: 1px solid var(--border);
 		border-radius: 12px;
-		padding: 8px 6px 4px;
+		padding: 8px 8px 4px;
 	}
 	.col-head {
 		display: flex;
