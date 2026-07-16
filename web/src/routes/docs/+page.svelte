@@ -29,10 +29,8 @@
 	onMount(async () => {
 		await load();
 		const wanted = $page.url.searchParams.get('doc');
-		if (wanted) {
-			const d = docs.find((x) => x.id === wanted);
-			if (d) open(d);
-		}
+		const d = (wanted && docs.find((x) => x.id === wanted)) || docs[0];
+		if (d) open(d);
 	});
 	async function load() {
 		docs = (await api.documents()) || [];
@@ -49,7 +47,7 @@
 
 	async function open(d) {
 		sel = await api.document(d.id);
-		attachOpen = typeOpen = labelPickerOpen = false;
+		attachOpen = typeOpen = labelPickerOpen = confirmDel = false;
 	}
 
 	const toc = $derived(extractToc(sel?.bodyMd || ''));
@@ -95,10 +93,16 @@
 			: [...sel.labels.map((l) => l.id), id];
 		persist({ labelIds: ids });
 	}
+	let confirmDel = $state(false);
 	async function del() {
-		if (!sel || !confirm('Delete this document?')) return;
+		if (!sel) return;
+		if (!confirmDel) {
+			confirmDel = true;
+			return;
+		}
 		await api.deleteDocument(sel.id);
 		sel = null;
+		confirmDel = false;
 		await load();
 	}
 
@@ -176,7 +180,9 @@
 						</div>
 					{/if}
 				</div>
-				<button class="btn ghost" onclick={del} title="Delete">🗑</button>
+				<button class="btn" class:danger={confirmDel} class:ghost={!confirmDel} onclick={del} title="Delete document">
+					{confirmDel ? 'Confirm delete' : '🗑'}
+				</button>
 			</div>
 
 			<div class="body">
