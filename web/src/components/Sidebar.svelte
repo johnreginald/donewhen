@@ -11,21 +11,22 @@
 		openComposer(kind);
 	}
 
-	// Collapsed Project (initiative) groups, persisted across reloads.
-	function loadCollapsed() {
+	// Expanded Project (initiative) groups, persisted. Default: all collapsed —
+	// the sidebar shows only Project names; click one to reveal its Epics.
+	function loadExpanded() {
 		try {
-			return new Set(JSON.parse(localStorage.getItem('raenil.collapsed') || '[]'));
+			return new Set(JSON.parse(localStorage.getItem('raenil.expanded') || '[]'));
 		} catch {
 			return new Set();
 		}
 	}
-	let collapsed = $state(loadCollapsed());
+	let expanded = $state(loadExpanded());
 	function toggle(id) {
-		const n = new Set(collapsed);
+		const n = new Set(expanded);
 		n.has(id) ? n.delete(id) : n.add(id);
-		collapsed = n;
+		expanded = n;
 		try {
-			localStorage.setItem('raenil.collapsed', JSON.stringify([...n]));
+			localStorage.setItem('raenil.expanded', JSON.stringify([...n]));
 		} catch {
 			/* ignore */
 		}
@@ -111,13 +112,13 @@
 		{#each grouped.groups as g (g.ini.id)}
 			<div class="ini-head">
 				<button class="ini-toggle" onclick={() => toggle(g.ini.id)}>
-					<span class="chev" class:open={!collapsed.has(g.ini.id)}>▸</span>
+					<span class="chev" class:open={expanded.has(g.ini.id)}>▸</span>
 					<span class="ini-name">{g.ini.name}</span>
 					<span class="ini-count">{g.projects.length}</span>
 				</button>
 				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}>✎</button>
 			</div>
-			{#if !collapsed.has(g.ini.id)}
+			{#if expanded.has(g.ini.id)}
 				{#each g.projects as p (p.id)}
 					<div class="epic-row">
 						<button class="nav-item proj" class:active={$activeProject === p.id} onclick={() => pick(p.id)}>
@@ -313,9 +314,18 @@
 		white-space: nowrap;
 	}
 	.ini-count {
-		color: var(--text-faint);
-		font-size: 10px;
 		margin-left: auto;
+		min-width: 18px;
+		text-align: center;
+		color: var(--text-dim);
+		font-size: 11px;
+		font-variant-numeric: tabular-nums;
+		background: var(--bg-elev2);
+		border-radius: 9px;
+		padding: 1px 6px;
+	}
+	.ini-head:hover .ini-count {
+		color: var(--text);
 	}
 	.epic-row {
 		display: flex;
