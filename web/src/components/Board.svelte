@@ -5,6 +5,7 @@
 	import { showToast, openComposer } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
 	import StateIcon from './StateIcon.svelte';
+	import { MoreHorizontal, Plus } from '@lucide/svelte';
 
 	let cols = $state([]);
 	let dragging = false;
@@ -96,8 +97,8 @@
 				<span class="col-name">{col.name}</span>
 				<span class="count">{col.items.length}</span>
 				<span class="spacer"></span>
-				<button class="ch-btn" title="Options">⋯</button>
-				<button class="ch-btn" title="New issue in {col.name}" onclick={() => openComposer('issue', { stateId: col.id })}>+</button>
+				<button class="ch-btn" title="Options"><MoreHorizontal size={15} strokeWidth={2} /></button>
+				<button class="ch-btn" title="New issue in {col.name}" onclick={() => openComposer('issue', { stateId: col.id })}><Plus size={15} strokeWidth={2} /></button>
 			</div>
 			<div
 				class="col-body"
