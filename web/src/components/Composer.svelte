@@ -7,11 +7,19 @@
 		initiatives,
 		labels,
 		activeProject,
+		activeInitiative,
 		loadIssues,
 		loadMeta,
 		PRIORITIES
 	} from '$lib/store.js';
 	import { composer, closeComposer, showToast, openIssue } from '$lib/ui.js';
+	import PriorityMenu from './PriorityMenu.svelte';
+
+	// Epics shown when creating an issue: scoped to the active Project if one is
+	// selected, otherwise all.
+	const epicOptions = $derived(
+		$activeInitiative ? $projects.filter((p) => p.initiativeId === $activeInitiative) : $projects
+	);
 
 	let kind = $state('issue');
 	let title = $state('');
@@ -180,19 +188,15 @@
 						<span>Epic</span>
 						<select bind:value={projectId}>
 							<option value="">— None —</option>
-							{#each $projects as p (p.id)}
+							{#each epicOptions as p (p.id)}
 								<option value={p.id}>{p.name}</option>
 							{/each}
 						</select>
 					</label>
-					<label class="field">
+					<div class="field">
 						<span>Priority</span>
-						<select bind:value={priority}>
-							{#each PRIORITIES as pr (pr.value)}
-								<option value={pr.value}>{pr.label}</option>
-							{/each}
-						</select>
-					</label>
+						<PriorityMenu value={priority} onchange={(v) => (priority = v)} />
+					</div>
 				</div>
 				{#if $labels.length}
 					<div class="labels">

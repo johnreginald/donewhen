@@ -5,7 +5,7 @@
 	import { api } from '$lib/api.js';
 	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues } from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { Columns3, List, FileText, Box, Layers, Plus, Search, Pencil } from '@lucide/svelte';
+	import { FileText, Box, Layers, Plus, Search, Pencil } from '@lucide/svelte';
 
 	// Full issue set (filter-independent) for the per-Project totals in the badge.
 	let allIssues = $state([]);
@@ -59,11 +59,7 @@
 		return { groups: [...byIni.values()].filter((g) => g.projects.length), orphan };
 	}
 
-	const nav = [
-		{ label: 'Board', to: '/', comp: Columns3 },
-		{ label: 'List', to: '/list', comp: List },
-		{ label: 'Documents', to: '/docs', comp: FileText }
-	];
+	const nav = [{ label: 'Artifacts', to: '/docs', comp: FileText }];
 </script>
 
 <nav class="sidebar">
