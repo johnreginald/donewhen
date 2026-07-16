@@ -16,7 +16,10 @@
 	let { children } = $props();
 	let ready = $state(false);
 	let mobileNav = $state(false);
+	let userOpen = $state(false);
 	let disconnect;
+
+	const initials = $derived(($me?.email || '?').slice(0, 2).toUpperCase());
 
 	const isLogin = $derived($page.url.pathname === '/login');
 	const showView = $derived(['/', '/list'].includes($page.url.pathname));
@@ -101,8 +104,19 @@
 				{/if}
 				<div class="spacer"></div>
 				<button class="btn primary" onclick={() => openComposer('issue')}>+ New issue</button>
-				<span class="email faint">{$me?.email}</span>
-				<button class="btn ghost" onclick={logout}>Logout</button>
+				<div class="usermenu">
+					<button class="avatar" title={$me?.email} onclick={() => (userOpen = !userOpen)}>{initials}</button>
+					{#if userOpen}
+						<div class="umbd" role="presentation" onclick={() => (userOpen = false)}></div>
+						<div class="umenu">
+							<div class="umhead">{$me?.email}</div>
+							<a href="/settings" class="umitem" onclick={() => (userOpen = false)}>
+								<span class="umi">⚙</span>Settings
+							</a>
+							<button class="umitem danger" onclick={logout}><span class="umi">⎋</span>Log out</button>
+						</div>
+					{/if}
+				</div>
 			</header>
 			<div class="content">
 				{@render children()}
@@ -168,8 +182,79 @@
 		background: var(--bg-hover);
 		color: var(--text);
 	}
-	.email {
+	.usermenu {
+		position: relative;
+	}
+	.avatar {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		border: none;
+		background: var(--accent-grad);
+		color: #fff;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		display: grid;
+		place-items: center;
+	}
+	.avatar:hover {
+		filter: brightness(1.1);
+	}
+	.umbd {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+	}
+	.umenu {
+		position: absolute;
+		top: 36px;
+		right: 0;
+		z-index: 41;
+		min-width: 200px;
+		background: var(--bg-elev);
+		border: 1px solid var(--border-strong);
+		border-radius: 10px;
+		box-shadow: var(--shadow);
+		padding: 5px;
+		display: flex;
+		flex-direction: column;
+	}
+	.umhead {
 		font-size: 12px;
+		color: var(--text-faint);
+		padding: 7px 9px 6px;
+		border-bottom: 1px solid var(--border);
+		margin-bottom: 4px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.umitem {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		background: none;
+		border: none;
+		color: var(--text);
+		text-align: left;
+		padding: 8px 9px;
+		border-radius: 6px;
+		font-size: 13.5px;
+	}
+	.umitem:hover {
+		background: var(--bg-hover);
+	}
+	.umitem.danger {
+		color: #f87171;
+	}
+	.umi {
+		width: 15px;
+		text-align: center;
+		color: var(--text-faint);
+	}
+	.umitem.danger .umi {
+		color: #f87171;
 	}
 	.hamburger {
 		display: none;
