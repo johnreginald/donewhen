@@ -8,6 +8,8 @@
 	import LabelPill from '$components/LabelPill.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityMenu from '$components/PriorityMenu.svelte';
+	import StatusMenu from '$components/StatusMenu.svelte';
+	import EpicMenu from '$components/EpicMenu.svelte';
 
 	let issue = $state(null);
 	let comments = $state([]);
@@ -176,7 +178,7 @@
 					<section class="block">
 						<div class="rh">Artifacts</div>
 						{#each docs as d (d.id)}
-							<button class="doc-link" onclick={() => goto(`/docs?doc=${d.id}`)}>
+							<button class="doc-link" onclick={() => goto(`/artifacts?doc=${d.id}`)}>
 								<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
 								<span class="dl-t">{d.title}</span>
 								{#if d.author === 'ai'}<span class="dl-ai">✦ AI</span>{/if}
@@ -207,9 +209,7 @@
 			<aside class="drail">
 				<div class="rail-prop">
 					<span class="rl">Status</span>
-					<select value={issue.stateId} onchange={setState}>
-						{#each $states as s (s.id)}<option value={s.id}>{s.name}</option>{/each}
-					</select>
+					<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Priority</span>
@@ -217,10 +217,7 @@
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Epic</span>
-					<select value={issue.projectId || ''} onchange={setProject}>
-						<option value="">— none —</option>
-						{#each $projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-					</select>
+					<EpicMenu value={issue.projectId || ''} options={$projects} onchange={(v) => patch({ projectId: v })} />
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Labels</span>

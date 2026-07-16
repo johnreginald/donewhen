@@ -143,6 +143,78 @@ select {
 	background: color-mix(in srgb, #f87171 16%, transparent);
 }
 
+/* shared custom-dropdown chrome (Priority / Status / Epic menus) */
+.dd {
+	position: relative;
+}
+.dd-btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	color: var(--text);
+	padding: 7px 9px;
+	font-size: 13.5px;
+	text-align: left;
+}
+.dd-btn:hover {
+	border-color: var(--border-strong);
+}
+.dd-label {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.dd-chev {
+	color: var(--text-faint);
+	flex: none;
+}
+.dd-bd {
+	position: fixed;
+	inset: 0;
+	z-index: 30;
+}
+.dd-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	z-index: 31;
+	min-width: 180px;
+	background: var(--bg-elev);
+	border: 1px solid var(--border-strong);
+	border-radius: 8px;
+	box-shadow: var(--shadow);
+	padding: 4px;
+	display: flex;
+	flex-direction: column;
+	max-height: 300px;
+	overflow-y: auto;
+}
+.dd-item {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	background: none;
+	border: none;
+	color: var(--text-dim);
+	text-align: left;
+	padding: 7px 9px;
+	border-radius: 6px;
+	font-size: 13.5px;
+}
+.dd-item:hover {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+.dd-item.on {
+	color: var(--text);
+}
+
 .pill {
 	display: inline-flex;
 	align-items: center;

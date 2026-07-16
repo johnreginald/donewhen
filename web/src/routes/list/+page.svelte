@@ -1,5 +1,5 @@
 <script>
-	import { issues, states, projects, initiatives } from '$lib/store.js';
+	import { issues, states, projects, initiatives, activeInitiative } from '$lib/store.js';
 	import { openIssue } from '$lib/ui.js';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
@@ -27,15 +27,19 @@
 	}
 
 	// Group issues by Epic (project), then Epics by Project (initiative).
-	const groups = $derived(build($issues, $projects, $initiatives, $states));
-	function build(iss, projs, inis, sts) {
+	const groups = $derived(build($issues, $projects, $initiatives, $states, $activeInitiative));
+	function build(iss, projs, inis, sts, activeIni) {
 		const projById = new Map(projs.map((p) => [p.id, p]));
 		const iniById = new Map(inis.map((i) => [i.id, i]));
 		const stPos = (i) => sts.find((s) => s.id === i.stateId)?.position ?? 99;
 		const sortIss = (a, b) => stPos(a) - stPos(b) || a.position - b.position;
 		const last = (name, tag) => (name === tag ? 1 : 0);
 
+		// Seed every epic (scoped to the active Project) so newly-created / empty
+		// epics still show as headers, then drop issues into them.
+		const shownEpics = activeIni ? projs.filter((p) => p.initiativeId === activeIni) : projs;
 		const byEpic = new Map();
+		for (const p of shownEpics) byEpic.set(p.id, []);
 		for (const i of iss) {
 			const k = i.projectId || '__none__';
 			if (!byEpic.has(k)) byEpic.set(k, []);
