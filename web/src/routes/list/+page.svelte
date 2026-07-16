@@ -1,99 +1,200 @@
 <script>
-	import { issues, states, projects } from '$lib/store.js';
+	import { issues, states, projects, initiatives } from '$lib/store.js';
 	import { openIssue } from '$lib/ui.js';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
+	import StateIcon from '$components/StateIcon.svelte';
 
-	const stateName = (id) => $states.find((s) => s.id === id)?.name ?? '';
-	const stateColor = (id) => $states.find((s) => s.id === id)?.color ?? '#888';
-	const projName = (id) => $projects.find((p) => p.id === id)?.name ?? '';
+	const stOf = (id) => $states.find((s) => s.id === id);
 
-	const sorted = $derived(
-		[...$issues].sort((a, b) => {
-			const sa = $states.find((s) => s.id === a.stateId)?.position ?? 0;
-			const sb = $states.find((s) => s.id === b.stateId)?.position ?? 0;
-			return sa - sb || a.position - b.position;
-		})
-	);
+	function loadCollapsed() {
+		try {
+			return new Set(JSON.parse(localStorage.getItem('raenil.list.collapsed') || '[]'));
+		} catch {
+			return new Set();
+		}
+	}
+	let collapsed = $state(loadCollapsed());
+	function toggle(id) {
+		const n = new Set(collapsed);
+		n.has(id) ? n.delete(id) : n.add(id);
+		collapsed = n;
+		try {
+			localStorage.setItem('raenil.list.collapsed', JSON.stringify([...n]));
+		} catch {
+			/* ignore */
+		}
+	}
+
+	// Group issues by Epic (project), then Epics by Project (initiative).
+	const groups = $derived(build($issues, $projects, $initiatives, $states));
+	function build(iss, projs, inis, sts) {
+		const projById = new Map(projs.map((p) => [p.id, p]));
+		const iniById = new Map(inis.map((i) => [i.id, i]));
+		const stPos = (i) => sts.find((s) => s.id === i.stateId)?.position ?? 99;
+		const sortIss = (a, b) => stPos(a) - stPos(b) || a.position - b.position;
+		const last = (name, tag) => (name === tag ? 1 : 0);
+
+		const byEpic = new Map();
+		for (const i of iss) {
+			const k = i.projectId || '__none__';
+			if (!byEpic.has(k)) byEpic.set(k, []);
+			byEpic.get(k).push(i);
+		}
+		const byProj = new Map();
+		for (const [epicId, list] of byEpic) {
+			const epic = epicId === '__none__' ? null : projById.get(epicId);
+			const iniId = epic?.initiativeId || '__none__';
+			if (!byProj.has(iniId)) byProj.set(iniId, []);
+			byProj.get(iniId).push({ id: epicId, name: epic?.name || 'No epic', issues: [...list].sort(sortIss) });
+		}
+		const res = [];
+		for (const [iniId, epics] of byProj) {
+			const ini = iniId === '__none__' ? null : iniById.get(iniId);
+			res.push({
+				id: iniId,
+				name: ini?.name || 'No project',
+				count: epics.reduce((n, e) => n + e.issues.length, 0),
+				epics: epics.sort((a, b) => last(a.name, 'No epic') - last(b.name, 'No epic') || a.name.localeCompare(b.name))
+			});
+		}
+		return res.sort((a, b) => last(a.name, 'No project') - last(b.name, 'No project') || a.name.localeCompare(b.name));
+	}
 </script>
 
-<div class="list-wrap">
-	<table>
-		<thead>
-			<tr>
-				<th style="width:70px">Key</th>
-				<th style="width:24px"></th>
-				<th>Title</th>
-				<th style="width:130px">Status</th>
-				<th style="width:130px">Epic</th>
-				<th>Labels</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each sorted as i (i.id)}
-				<tr onclick={() => openIssue(i.key)}>
-					<td class="key">{i.key}</td>
-					<td><PriorityIcon priority={i.priority} /></td>
-					<td class="title">{i.title}</td>
-					<td>
-						<span class="pill"><span class="dot" style:background={stateColor(i.stateId)}></span>{stateName(i.stateId)}</span>
-					</td>
-					<td class="faint">{projName(i.projectId)}</td>
-					<td>
-						<div class="labels">
-							{#each i.labels as l (l.id)}<LabelPill label={l} />{/each}
-						</div>
-					</td>
-				</tr>
+<div class="list">
+	{#each groups as g (g.id)}
+		<div class="proj-group">
+			<div class="proj-head">
+				<span class="pn">{g.name}</span>
+				<span class="c">{g.count}</span>
+			</div>
+			{#each g.epics as e (e.id)}
+				<div class="epic-group">
+					<button class="epic-head" onclick={() => toggle(g.id + e.id)}>
+						<span class="chev" class:open={!collapsed.has(g.id + e.id)}>▸</span>
+						<span class="en">{e.name}</span>
+						<span class="c">{e.issues.length}</span>
+					</button>
+					{#if !collapsed.has(g.id + e.id)}
+						{#each e.issues as i (i.id)}
+							<button class="row" onclick={() => openIssue(i.key)}>
+								<StateIcon category={stOf(i.stateId)?.category} color={stOf(i.stateId)?.color} />
+								<span class="rkey">{i.key}</span>
+								{#if i.childCount > 0}<span class="epic-badge">↳{i.childCount}</span>{/if}
+								<span class="rtitle">{i.title}</span>
+								<span class="rlabels">{#each i.labels as l (l.id)}<LabelPill label={l} />{/each}</span>
+								<PriorityIcon priority={i.priority} />
+							</button>
+						{/each}
+					{/if}
+				</div>
 			{/each}
-		</tbody>
-	</table>
-	{#if sorted.length === 0}
+		</div>
+	{/each}
+	{#if !groups.length}
 		<div class="empty faint">No issues yet. Press ⌘K to create one.</div>
 	{/if}
 </div>
 
 <style>
-	.list-wrap {
+	.list {
 		height: 100%;
-		overflow: auto;
-		padding: 8px 4px;
+		overflow-y: auto;
+		padding: 6px 0 40px;
 	}
-	table {
+	.proj-group {
+		margin-bottom: 6px;
+	}
+	.proj-head {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 14px 20px 6px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text);
+		position: sticky;
+		top: 0;
+		background: var(--bg);
+		z-index: 2;
+	}
+	.epic-head {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		width: 100%;
-		border-collapse: collapse;
+		background: none;
+		border: none;
+		text-align: left;
+		padding: 6px 20px;
+		color: var(--text-dim);
+		font-size: 12.5px;
+	}
+	.epic-head:hover {
+		color: var(--text);
+	}
+	.chev {
+		font-size: 9px;
+		color: var(--text-faint);
+		transition: transform 0.15s ease;
+	}
+	.chev.open {
+		transform: rotate(90deg);
+	}
+	.en {
+		font-weight: 500;
+	}
+	.c {
+		color: var(--text-faint);
+		font-size: 11.5px;
+		font-family: var(--mono);
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		background: none;
+		border: none;
+		border-top: 1px solid var(--border);
+		text-align: left;
+		padding: 8px 20px 8px 40px;
+		color: var(--text);
 		font-size: 13.5px;
 	}
-	th {
-		text-align: left;
-		font-weight: 500;
-		color: var(--text-faint);
-		font-size: 11px;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		padding: 8px 12px;
-		border-bottom: 1px solid var(--border);
-	}
-	td {
-		padding: 9px 12px;
-		border-bottom: 1px solid var(--border);
-		vertical-align: middle;
-	}
-	tr {
-		cursor: pointer;
-	}
-	tbody tr:hover {
+	.row:hover {
 		background: var(--bg-elev);
 	}
-	.key {
+	.rkey {
 		font-family: var(--mono);
-		color: var(--text-faint);
 		font-size: 12px;
+		color: var(--text-faint);
+		flex: none;
+		width: 62px;
 	}
-	.labels {
+	.epic-badge {
+		font-size: 10.5px;
+		font-family: var(--mono);
+		color: var(--accent2);
+		background: color-mix(in srgb, var(--accent2) 15%, transparent);
+		padding: 1px 6px;
+		border-radius: 10px;
+		flex: none;
+	}
+	.rtitle {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.rlabels {
 		display: flex;
-		flex-wrap: wrap;
 		gap: 4px;
+		flex: none;
+		max-width: 40%;
+		overflow: hidden;
 	}
 	.empty {
 		padding: 40px;

@@ -1,14 +1,14 @@
 :root {
-	/* Linear-calibrated dark system (blue-tinted neutrals, hue ~272) */
-	--bg: #08090b;
-	--bg-elev: #0f1116;
-	--bg-elev2: #16181d;
-	--bg-hover: #1c1e24;
-	--border: #1c1d23;
-	--border-strong: #2a2c34;
-	--text: #f7f8f8;
-	--text-dim: #868a94;
-	--text-faint: #595c65;
+	/* Colors copied from Linear's live dark theme (lch → rgb) */
+	--bg: #0f1010;
+	--bg-elev: #191a1c;
+	--bg-elev2: #1e1f23;
+	--bg-hover: #232428;
+	--border: #202123;
+	--border-strong: #2c2d30;
+	--text: #eff0f1;
+	--text-dim: #949496;
+	--text-faint: #6b6c70;
 	--accent: #5e6ad2;
 	--accent2: #7c85e8;
 	--accent-soft: rgba(94, 106, 210, 0.16);
@@ -51,7 +51,9 @@ body {
 	letter-spacing: -0.01em;
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
-	overscroll-behavior: none;
+	/* only damp vertical bounce — keep horizontal so the macOS two-finger
+	   swipe-back gesture still works */
+	overscroll-behavior-y: none;
 }
 
 #app {
