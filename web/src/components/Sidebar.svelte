@@ -1,8 +1,22 @@
 <script>
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { initiatives, projects, activeProject, loadIssues } from '$lib/store.js';
+	import { api } from '$lib/api.js';
+	import { initiatives, projects, activeProject, loadIssues, issues } from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
+
+	// Full issue set (filter-independent) for the per-Project totals in the badge.
+	let allIssues = $state([]);
+	async function refreshCounts() {
+		allIssues = (await api.issues()) || [];
+	}
+	onMount(refreshCounts);
+	// re-pull when issues change (create / move / delete via the board or SSE)
+	$effect(() => {
+		$issues;
+		refreshCounts();
+	});
 
 	let { onnavigate = () => {} } = $props();
 	let menuOpen = $state(false);
@@ -51,13 +65,19 @@
 		onnavigate();
 	}
 
-	const grouped = $derived(groupProjects($initiatives, $projects));
-	function groupProjects(inis, projs) {
-		const byIni = new Map(inis.map((i) => [i.id, { ini: i, projects: [] }]));
+	const grouped = $derived(groupProjects($initiatives, $projects, allIssues));
+	function groupProjects(inis, projs, iss) {
+		const byIni = new Map(inis.map((i) => [i.id, { ini: i, projects: [], count: 0 }]));
 		const orphan = [];
+		const projToIni = new Map(projs.map((p) => [p.id, p.initiativeId]));
 		for (const p of projs) {
 			if (p.initiativeId && byIni.has(p.initiativeId)) byIni.get(p.initiativeId).projects.push(p);
 			else orphan.push(p);
+		}
+		// total issues per Project (across all its Epics)
+		for (const is of iss) {
+			const iniId = is.projectId ? projToIni.get(is.projectId) : null;
+			if (iniId && byIni.has(iniId)) byIni.get(iniId).count++;
 		}
 		return { groups: [...byIni.values()].filter((g) => g.projects.length), orphan };
 	}
@@ -114,7 +134,7 @@
 				<button class="ini-toggle" onclick={() => toggle(g.ini.id)}>
 					<span class="chev" class:open={expanded.has(g.ini.id)}>▸</span>
 					<span class="ini-name">{g.ini.name}</span>
-					<span class="ini-count">{g.projects.length}</span>
+					<span class="ini-count">{g.count}</span>
 				</button>
 				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}>✎</button>
 			</div>
