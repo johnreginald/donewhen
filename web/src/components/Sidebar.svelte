@@ -5,6 +5,7 @@
 	import { api } from '$lib/api.js';
 	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues } from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
+	import { Columns3, List, FileText, Box, Layers, Plus, Search, Pencil } from '@lucide/svelte';
 
 	// Full issue set (filter-independent) for the per-Project totals in the badge.
 	let allIssues = $state([]);
@@ -59,9 +60,9 @@
 	}
 
 	const nav = [
-		{ label: 'Board', to: '/', icon: '▦', hue: 'var(--accent)' },
-		{ label: 'List', to: '/list', icon: '≣', hue: 'var(--st-ready)' },
-		{ label: 'Documents', to: '/docs', icon: '❏', hue: 'var(--st-done)' }
+		{ label: 'Board', to: '/', comp: Columns3 },
+		{ label: 'List', to: '/list', comp: List },
+		{ label: 'Documents', to: '/docs', comp: FileText }
 	];
 </script>
 
@@ -72,19 +73,20 @@
 	</div>
 
 	<button class="cmdk" onclick={() => paletteOpen.set(true)}>
-		<span>Search…</span>
+		<span class="cmdk-l"><Search size={14} strokeWidth={2} /> Search…</span>
 		<kbd>⌘K</kbd>
 	</button>
 
 	<div class="section">
 		{#each nav as n}
+			{@const Icon = n.comp}
 			<a
 				href={n.to}
 				class="nav-item"
 				class:active={$page.url.pathname === n.to}
 				onclick={onnavigate}
 			>
-				<span class="icon nav-ic" style:color={n.hue}>{n.icon}</span>{n.label}
+				<span class="icon"><Icon size={16} strokeWidth={2} /></span>{n.label}
 			</a>
 		{/each}
 	</div>
@@ -92,12 +94,12 @@
 	<div class="section">
 		<div class="section-head">
 			<span class="section-title">Projects</span>
-			<button class="add-btn" title="Create project or epic" onclick={() => (menuOpen = !menuOpen)}>+</button>
+			<button class="add-btn" title="Create project or epic" onclick={() => (menuOpen = !menuOpen)}><Plus size={15} strokeWidth={2.2} /></button>
 			{#if menuOpen}
 				<div class="menu-backdrop" role="presentation" onclick={() => (menuOpen = false)}></div>
 				<div class="add-menu">
-					<button onclick={() => choose('initiative')}><span class="mi">◇</span>New project</button>
-					<button onclick={() => choose('project')}><span class="mi">▸</span>New epic</button>
+					<button onclick={() => choose('initiative')}><Box size={14} strokeWidth={2} />New project</button>
+					<button onclick={() => choose('project')}><Layers size={14} strokeWidth={2} />New epic</button>
 				</div>
 			{/if}
 		</div>
@@ -106,15 +108,15 @@
 			class:active={!$activeInitiative}
 			onclick={() => pick('')}
 		>
-			<span class="icon">◇</span>All issues
+			<span class="icon"><Layers size={15} strokeWidth={2} /></span>All issues
 		</button>
 		{#each grouped.groups as g (g.ini.id)}
 			<div class="proj-row">
 				<button class="nav-item proj" class:active={$activeInitiative === g.ini.id} onclick={() => pick(g.ini.id)}>
-					<span class="icon">▢</span><span class="pname">{g.ini.name}</span>
+					<span class="icon"><Box size={14} strokeWidth={2} /></span><span class="pname">{g.ini.name}</span>
 					<span class="ini-count">{g.count}</span>
 				</button>
-				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}>✎</button>
+				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}><Pencil size={13} strokeWidth={2} /></button>
 			</div>
 		{/each}
 	</div>
@@ -164,6 +166,11 @@
 		color: var(--text-dim);
 		padding: 8px 11px;
 		font-size: 14px;
+	}
+	.cmdk-l {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
 	}
 	kbd {
 		font-family: var(--mono);
@@ -326,10 +333,12 @@
 	}
 	.row-edit {
 		opacity: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		background: none;
 		border: none;
 		color: var(--text-faint);
-		font-size: 12px;
 		padding: 4px 6px;
 		border-radius: 5px;
 		flex: none;
@@ -366,15 +375,16 @@
 	}
 	.icon {
 		width: 16px;
-		text-align: center;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		color: var(--text-dim);
 		flex: none;
 	}
-	.nav-ic {
-		font-size: 14px;
-	}
 	.proj .icon {
-		font-size: 10px;
 		color: var(--text-faint);
+	}
+	.nav-item.active .icon {
+		color: var(--text);
 	}
 </style>

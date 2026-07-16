@@ -6,6 +6,7 @@
 	import { showToast, openIssue } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
+	import { Trash2 } from '@lucide/svelte';
 
 	const TYPES = {
 		change: { label: 'Change', icon: '⟳', color: 'var(--accent)' },
@@ -181,7 +182,7 @@
 					{/if}
 				</div>
 				<button class="btn" class:danger={confirmDel} class:ghost={!confirmDel} onclick={del} title="Delete document">
-					{confirmDel ? 'Confirm delete' : '🗑'}
+					{#if confirmDel}Confirm delete{:else}<Trash2 size={15} strokeWidth={2} />{/if}
 				</button>
 			</div>
 

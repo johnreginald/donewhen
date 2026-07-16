@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "@lucide/svelte": "^1.24.0",
     "marked": "^14.1.0",
     "mermaid": "^11.4.0",
     "svelte-dnd-action": "^0.9.52"
