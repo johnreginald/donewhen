@@ -25,6 +25,7 @@ type Initiative struct {
 	DescriptionMD string    `json:"descriptionMd"`
 	Status        string    `json:"status"`
 	Position      int       `json:"position"`
+	RepoURL       *string   `json:"repoUrl"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -36,6 +37,7 @@ type Project struct {
 	DescriptionMD string     `json:"descriptionMd"`
 	Status        string     `json:"status"`
 	Position      int        `json:"position"`
+	RepoURL       *string    `json:"repoUrl"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }

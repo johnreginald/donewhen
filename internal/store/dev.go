@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -23,9 +24,40 @@ func (s *Store) SetIssueDev(ctx context.Context, issueID string, branch, prURL *
 	return s.GetIssue(ctx, issueID)
 }
 
+// IssueRepo returns the default repo for an issue — its Epic's repo_url, else
+// its Project's (initiative's) repo_url, else "".
+func (s *Store) IssueRepo(ctx context.Context, issueID string) string {
+	var repo *string
+	err := s.pool.QueryRow(ctx, `
+		SELECT coalesce(p.repo_url, i.repo_url)
+		FROM issues iss
+		LEFT JOIN projects p ON p.id = iss.project_id
+		LEFT JOIN initiatives i ON i.id = p.initiative_id
+		WHERE iss.id = $1`, issueID).Scan(&repo)
+	if err != nil || repo == nil {
+		return ""
+	}
+	return *repo
+}
+
+// commitURL builds a GitHub-style commit link from a repo URL + sha.
+func commitURL(repo, sha string) string {
+	if repo == "" || sha == "" {
+		return ""
+	}
+	repo = strings.TrimSuffix(strings.TrimSuffix(repo, "/"), ".git")
+	return repo + "/commit/" + sha
+}
+
 // ---- commits ----
 
 func (s *Store) AddCommit(ctx context.Context, issueID, sha, message string, url *string) (models.IssueCommit, error) {
+	// No explicit URL? Build one from the issue's default repo (Epic/Project).
+	if url == nil || *url == "" {
+		if built := commitURL(s.IssueRepo(ctx, issueID), sha); built != "" {
+			url = &built
+		}
+	}
 	var c models.IssueCommit
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO issue_commits (issue_id, sha, message, url) VALUES ($1,$2,$3,$4)
