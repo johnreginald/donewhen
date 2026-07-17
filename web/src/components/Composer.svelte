@@ -304,7 +304,7 @@
 	}
 	.desc {
 		width: 100%;
-		min-height: 72px;
+		min-height: 150px;
 		resize: none;
 		background: transparent;
 		border: none;

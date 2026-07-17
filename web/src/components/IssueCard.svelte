@@ -47,7 +47,7 @@
 	<div class="meta">
 		<PriorityIcon priority={issue.priority} />
 		{#if project}
-			<span class="pill proj"><span class="pglyph">▢</span>{project.name}</span>
+			<span class="epictag"><span class="epicdot"></span>{project.name}</span>
 		{/if}
 		{#each issue.labels ?? [] as l (l.id)}
 			<LabelPill label={l} />
@@ -129,13 +129,26 @@
 		gap: 6px;
 		flex-wrap: wrap;
 	}
-	.proj {
+	.epictag {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 9px;
+		border-radius: 6px;
+		font-size: 12.5px;
+		font-weight: 500;
+		line-height: 1.3;
 		color: var(--text-dim);
-		gap: 5px;
+		background: var(--bg-elev2);
+		border: 1px solid var(--border);
+		white-space: nowrap;
 	}
-	.pglyph {
-		font-size: 9px;
-		color: var(--text-faint);
+	.epicdot {
+		width: 7px;
+		height: 7px;
+		border-radius: 2px;
+		background: var(--text-faint);
+		flex-shrink: 0;
 	}
 	.foot {
 		font-size: 12px;
