@@ -65,9 +65,10 @@
 	}
 
 	const nav = [
-		{ label: 'Log', to: '/log', comp: History },
-		{ label: 'Artifacts', to: '/artifacts', comp: FileText }
+		{ label: 'Artifacts', to: '/artifacts', comp: FileText },
+		{ label: 'Activities', to: '/log', comp: History }
 	];
+	const onIssues = $derived($page.url.pathname === '/' || $page.url.pathname === '/list');
 </script>
 
 <nav class="sidebar">
@@ -82,6 +83,9 @@
 	</button>
 
 	<div class="section">
+		<button class="nav-item" class:active={onIssues && !$activeInitiative} onclick={() => pick('')}>
+			<span class="icon"><Layers size={16} strokeWidth={2} /></span>All Issues
+		</button>
 		{#each nav as n}
 			{@const Icon = n.comp}
 			<a
@@ -107,13 +111,6 @@
 				</div>
 			{/if}
 		</div>
-		<button
-			class="nav-item proj"
-			class:active={!$activeInitiative}
-			onclick={() => pick('')}
-		>
-			<span class="icon"><Layers size={15} strokeWidth={2} /></span>All issues
-		</button>
 		{#each grouped.groups as g (g.ini.id)}
 			<div class="proj-row">
 				<button class="nav-item proj" class:active={$activeInitiative === g.ini.id} onclick={() => pick(g.ini.id)}>
