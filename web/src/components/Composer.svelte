@@ -298,6 +298,10 @@
 		font-weight: 500;
 		padding: 4px 0;
 	}
+	.big::placeholder {
+		color: var(--text-faint);
+		font-weight: 500;
+	}
 	.desc {
 		width: 100%;
 		min-height: 72px;
@@ -354,15 +358,16 @@
 		padding: 2px;
 	}
 	.chip {
-		font-size: 12px;
-		padding: 3px 9px;
-		border-radius: 20px;
+		font-size: 13px;
+		padding: 4px 11px;
+		border-radius: 7px;
 		border: 1px solid var(--border);
-		background: var(--bg);
-		color: var(--text-dim);
+		background: var(--bg-elev);
+		color: var(--text);
+		font-weight: 500;
 		display: inline-flex;
 		align-items: center;
-		gap: 5px;
+		gap: 6px;
 	}
 	.chip::before {
 		content: '';
