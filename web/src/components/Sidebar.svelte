@@ -3,14 +3,20 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues } from '$lib/store.js';
+	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues, inboxCount } from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { FileText, Box, Layers, Plus, Search, Pencil, History } from '@lucide/svelte';
+	import { FileText, Box, Layers, Plus, Search, Pencil, History, Inbox } from '@lucide/svelte';
 
 	// Full issue set (filter-independent) for the per-Project totals in the badge.
 	let allIssues = $state([]);
 	async function refreshCounts() {
 		allIssues = (await api.issues()) || [];
+		try {
+			const r = await api.inbox();
+			inboxCount.set((r?.needsReview || []).length);
+		} catch {
+			/* not logged in yet / offline — leave badge as-is */
+		}
 	}
 	onMount(refreshCounts);
 	// re-pull when issues change (create / move / delete via the board or SSE)
@@ -83,6 +89,15 @@
 	</button>
 
 	<div class="section">
+		<a
+			href="/inbox"
+			class="nav-item"
+			class:active={$page.url.pathname === '/inbox'}
+			onclick={onnavigate}
+		>
+			<span class="icon"><Inbox size={16} strokeWidth={2} /></span>Inbox
+			{#if $inboxCount > 0}<span class="badge">{$inboxCount}</span>{/if}
+		</a>
 		<button class="nav-item" class:active={onIssues && !$activeInitiative} onclick={() => pick('')}>
 			<span class="icon"><Layers size={16} strokeWidth={2} /></span>All Issues
 		</button>
@@ -373,6 +388,19 @@
 	.nav-item.active {
 		background: var(--bg-hover);
 		color: var(--text);
+	}
+	.badge {
+		margin-left: auto;
+		min-width: 18px;
+		text-align: center;
+		font-size: 11px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		color: #fff;
+		background: var(--accent);
+		border-radius: 9px;
+		padding: 1px 6px;
+		line-height: 1.4;
 	}
 	.icon {
 		width: 16px;

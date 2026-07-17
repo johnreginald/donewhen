@@ -89,6 +89,9 @@ export const api = {
 	deleteCriterion: (id) => request('DELETE', `/criteria/${id}`),
 	// coverage
 	missingDocs: () => request('GET', '/issues/missing-docs'),
+	// inbox — review queue + recent AI activity
+	inbox: () => request('GET', '/inbox'),
+	inboxSeen: () => request('POST', '/inbox/seen', {}),
 
 	// documents
 	documents: (filter = {}) => {
