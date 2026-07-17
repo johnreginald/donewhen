@@ -28,7 +28,12 @@
 
 	// Project = Raenil initiative; Epic = Raenil project.
 	function editProject(i) {
-		openComposer('initiative', { id: i.id, name: i.name, description: i.descriptionMd });
+		openComposer('initiative', {
+			id: i.id,
+			name: i.name,
+			description: i.descriptionMd,
+			repoUrl: i.repoUrl
+		});
 	}
 
 	// Click a Project to filter every view to it (Epics + tickets show grouped in

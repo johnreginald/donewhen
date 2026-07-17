@@ -207,7 +207,7 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, ids, names []s
 
 func (s *Store) ListInitiatives(ctx context.Context) ([]models.Initiative, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, description_md, status, position, created_at, updated_at
+		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at
 		 FROM initiatives ORDER BY position, created_at`)
 	if err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func (s *Store) ListInitiatives(ctx context.Context) ([]models.Initiative, error
 	var out []models.Initiative
 	for rows.Next() {
 		var i models.Initiative
-		if err := rows.Scan(&i.ID, &i.Name, &i.DescriptionMD, &i.Status, &i.Position, &i.CreatedAt, &i.UpdatedAt); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.DescriptionMD, &i.Status, &i.Position, &i.RepoURL, &i.CreatedAt, &i.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, i)
@@ -227,8 +227,8 @@ func (s *Store) ListInitiatives(ctx context.Context) ([]models.Initiative, error
 func (s *Store) GetInitiative(ctx context.Context, id string) (models.Initiative, error) {
 	var i models.Initiative
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, description_md, status, position, created_at, updated_at FROM initiatives WHERE id=$1`, id).
-		Scan(&i.ID, &i.Name, &i.DescriptionMD, &i.Status, &i.Position, &i.CreatedAt, &i.UpdatedAt)
+		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at FROM initiatives WHERE id=$1`, id).
+		Scan(&i.ID, &i.Name, &i.DescriptionMD, &i.Status, &i.Position, &i.RepoURL, &i.CreatedAt, &i.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return i, ErrNotFound
 	}
@@ -241,14 +241,14 @@ func (s *Store) SaveInitiative(ctx context.Context, i models.Initiative) (models
 	}
 	if i.ID == "" {
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO initiatives (name, description_md, status, position)
-			 VALUES ($1,$2,$3,$4) RETURNING id, created_at, updated_at`,
-			i.Name, i.DescriptionMD, i.Status, i.Position).Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
+			`INSERT INTO initiatives (name, description_md, status, position, repo_url)
+			 VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at, updated_at`,
+			i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL).Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
 		return i, err
 	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE initiatives SET name=$2, description_md=$3, status=$4, position=$5, updated_at=now() WHERE id=$1`,
-		i.ID, i.Name, i.DescriptionMD, i.Status, i.Position)
+		`UPDATE initiatives SET name=$2, description_md=$3, status=$4, position=$5, repo_url=$6, updated_at=now() WHERE id=$1`,
+		i.ID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL)
 	if err != nil {
 		return i, err
 	}
@@ -272,7 +272,7 @@ func (s *Store) DeleteInitiative(ctx context.Context, id string) error {
 // ---- Projects ----
 
 func (s *Store) ListProjects(ctx context.Context, initiativeID string) ([]models.Project, error) {
-	q := `SELECT id, initiative_id, name, description_md, status, position, created_at, updated_at FROM projects`
+	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at FROM projects`
 	args := []any{}
 	if initiativeID != "" {
 		q += ` WHERE initiative_id=$1`
@@ -287,7 +287,7 @@ func (s *Store) ListProjects(ctx context.Context, initiativeID string) ([]models
 	var out []models.Project
 	for rows.Next() {
 		var p models.Project
-		if err := rows.Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -298,8 +298,8 @@ func (s *Store) ListProjects(ctx context.Context, initiativeID string) ([]models
 func (s *Store) GetProject(ctx context.Context, id string) (models.Project, error) {
 	var p models.Project
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, initiative_id, name, description_md, status, position, created_at, updated_at FROM projects WHERE id=$1`, id).
-		Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.CreatedAt, &p.UpdatedAt)
+		`SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at FROM projects WHERE id=$1`, id).
+		Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -312,14 +312,14 @@ func (s *Store) SaveProject(ctx context.Context, p models.Project) (models.Proje
 	}
 	if p.ID == "" {
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO projects (initiative_id, name, description_md, status, position)
-			 VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at, updated_at`,
-			p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+			`INSERT INTO projects (initiative_id, name, description_md, status, position, repo_url)
+			 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at, updated_at`,
+			p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 		return p, err
 	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE projects SET initiative_id=$2, name=$3, description_md=$4, status=$5, position=$6, updated_at=now() WHERE id=$1`,
-		p.ID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position)
+		`UPDATE projects SET initiative_id=$2, name=$3, description_md=$4, status=$5, position=$6, repo_url=$7, updated_at=now() WHERE id=$1`,
+		p.ID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL)
 	if err != nil {
 		return p, err
 	}

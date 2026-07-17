@@ -32,6 +32,7 @@
 	let projectId = $state('');
 	let initiativeId = $state('');
 	let priority = $state(0);
+	let repoUrl = $state('');
 	let selLabels = $state(new Set());
 	let saving = $state(false);
 	let firstInput = $state(null);
@@ -62,6 +63,7 @@
 		priority = 0;
 		selLabels = new Set();
 		initiativeId = pf.initiativeId || '';
+		repoUrl = pf.repoUrl || '';
 		stateId = pf.stateId || defaultStateId();
 		projectId = pf.projectId || get(activeProject) || '';
 		queueMicrotask(() => firstInput && firstInput.focus());
@@ -99,7 +101,12 @@
 					showToast('Name required', 'error');
 					return;
 				}
-				const body = { name: name.trim(), descriptionMd: desc, initiativeId: initiativeId || null };
+				const body = {
+					name: name.trim(),
+					descriptionMd: desc,
+					initiativeId: initiativeId || null,
+					repoUrl: repoUrl.trim() || null
+				};
 				if (editId) await api.updateProject(editId, body);
 				else await api.saveProject(body);
 				await refreshAfterMeta();
@@ -110,7 +117,7 @@
 					showToast('Name required', 'error');
 					return;
 				}
-				const body = { name: name.trim(), descriptionMd: desc };
+				const body = { name: name.trim(), descriptionMd: desc, repoUrl: repoUrl.trim() || null };
 				if (editId) await api.updateInitiative(editId, body);
 				else await api.saveInitiative(body);
 				await refreshAfterMeta();
@@ -199,6 +206,10 @@
 			{:else}
 				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
 				<textarea bind:value={desc} class="desc" placeholder="Description (optional)"></textarea>
+				<label class="field wide">
+					<span>Repository {kind === 'project' ? '(overrides Project)' : '(default for its Epics)'}</span>
+					<input class="rin" bind:value={repoUrl} placeholder="https://github.com/org/repo" />
+				</label>
 				{#if kind === 'project'}
 					<label class="field wide">
 						<span>Project</span>
@@ -333,7 +344,8 @@
 		letter-spacing: 0.04em;
 		color: var(--text-faint);
 	}
-	.field select {
+	.field select,
+	.rin {
 		background: var(--bg);
 		border: 1px solid var(--border);
 		border-radius: 7px;
@@ -341,6 +353,13 @@
 		padding: 7px 9px;
 		font-size: 13px;
 		outline: none;
+		font-family: inherit;
+	}
+	.rin:focus {
+		border-color: var(--border-strong);
+	}
+	.rin::placeholder {
+		color: var(--text-faint);
 	}
 	.labels {
 		display: flex;

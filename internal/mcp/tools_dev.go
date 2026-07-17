@@ -15,12 +15,15 @@ import (
 func (d *deps) registerDev(s *server.MCPServer) {
 	// ---- link_commit ----
 	s.AddTool(mcp.NewTool("link_commit",
-		mcp.WithDescription("Link a commit to an issue — the record of HOW it was done. "+
-			"Call this when you finish work so the issue points at the actual code."),
+		mcp.WithDescription("Link a commit to an issue — the record of HOW it was done. Call this "+
+			"when you finish work, reusing the repo you committed in: get sha from `git rev-parse "+
+			"HEAD` and the commit URL from `git remote get-url origin` (→ <repo>/commit/<sha>). "+
+			"If url is omitted, it's auto-built from the issue's Epic/Project default repo. Pass the "+
+			"full url for cross-repo work."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key (e.g. R-8)")),
-		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA")),
+		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA (git rev-parse HEAD)")),
 		mcp.WithString("message", mcp.Description("Commit subject line")),
-		mcp.WithString("url", mcp.Description("Link to the commit (optional)")),
+		mcp.WithString("url", mcp.Description("Full commit URL; omit to auto-build from the project repo")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
 		if err != nil {
