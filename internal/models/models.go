@@ -76,8 +76,30 @@ type Issue struct {
 	DocCount      int       `json:"docCount"`     // attached documents (implementation coverage)
 	ParentKey     *string   `json:"parentKey"`    // epic this issue belongs to (nil = top-level)
 	ChildCount    int       `json:"childCount"`   // sub-issues (>0 ⇒ this is an epic)
+	GitBranch     *string   `json:"gitBranch"`    // the branch that implemented this
+	PRURL         *string   `json:"prUrl"`        // the pull request
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+// IssueCommit links an issue to a commit that implemented it (the record of how).
+type IssueCommit struct {
+	ID        string    `json:"id"`
+	IssueID   string    `json:"issueId"`
+	SHA       string    `json:"sha"`
+	Message   string    `json:"message"`
+	URL       *string   `json:"url"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// Criterion is one done-when acceptance item.
+type Criterion struct {
+	ID        string    `json:"id"`
+	IssueID   string    `json:"issueId"`
+	Body      string    `json:"body"`
+	Done      bool      `json:"done"`
+	Position  int       `json:"position"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type Comment struct {
@@ -107,4 +129,20 @@ type PushSubscription struct {
 	Endpoint string `json:"endpoint"`
 	P256dh   string `json:"p256dh"`
 	Auth     string `json:"auth"`
+}
+
+// Activity is one persisted record in the timeline — who (human/ai) did what,
+// when. issueKey/issueTitle are snapshots so the log survives issue deletion.
+type Activity struct {
+	ID         string    `json:"id"`
+	IssueID    *string   `json:"issueId"`
+	IssueKey   string    `json:"issueKey"`
+	IssueTitle string    `json:"issueTitle"`
+	Actor      string    `json:"actor"` // human | ai
+	Kind       string    `json:"kind"`
+	Field      string    `json:"field,omitempty"`
+	FromVal    string    `json:"from,omitempty"`
+	ToVal      string    `json:"to,omitempty"`
+	Detail     string    `json:"detail,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
 }

@@ -157,6 +157,15 @@ func (s *Store) SaveDocument(ctx context.Context, d models.Document) (models.Doc
 		if err != nil {
 			return d, err
 		}
+		// Timeline: an artifact was written for this issue.
+		if d.IssueID != nil {
+			if is, e := s.GetIssue(ctx, *d.IssueID); e == nil {
+				_ = s.RecordActivity(ctx, models.Activity{
+					IssueID: d.IssueID, IssueKey: is.Key, IssueTitle: is.Title,
+					Actor: d.Author, Kind: "artifact_written", Detail: d.Title,
+				})
+			}
+		}
 		return s.GetDocument(ctx, d.ID)
 	}
 	// Update leaves author (provenance) immutable.

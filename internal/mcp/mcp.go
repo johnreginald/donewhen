@@ -185,6 +185,7 @@ func (d *deps) register(s *server.MCPServer) {
 
 	d.registerMeta(s)
 	d.registerContent(s)
+	d.registerDev(s)
 }
 
 func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -11,12 +11,19 @@
 	import StatusMenu from '$components/StatusMenu.svelte';
 	import EpicMenu from '$components/EpicMenu.svelte';
 	import LabelPicker from '$components/LabelPicker.svelte';
+	import ActivityFeed from '$components/ActivityFeed.svelte';
+	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
 
 	let issue = $state(null);
 	let comments = $state([]);
 	let docs = $state([]);
 	let children = $state([]);
 	let parent = $state(null);
+	let activity = $state([]);
+	let criteria = $state([]);
+	let commits = $state([]);
+	let newCrit = $state('');
+	const doneCrit = $derived(criteria.filter((c) => c.done).length);
 	let loading = $state(false);
 	let editingDesc = $state(false);
 	let descDraft = $state('');
@@ -48,6 +55,9 @@
 			docs = (await api.documents({ issue: issue.id })) || [];
 			children = issue.childCount > 0 ? (await api.issues({ parent: issue.key })) || [] : [];
 			parent = issue.parentKey ? await api.issue(issue.parentKey).catch(() => null) : null;
+			activity = (await api.issueActivity(issue.id)) || [];
+			criteria = (await api.criteria(issue.id)) || [];
+			commits = (await api.commits(issue.id)) || [];
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
 			goto('/');
@@ -59,6 +69,7 @@
 	async function patch(body) {
 		try {
 			issue = await api.updateIssue(issue.id, body);
+			activity = (await api.issueActivity(issue.id)) || [];
 		} catch (e) {
 			showToast('Update failed: ' + e.message, 'error');
 		}
@@ -87,6 +98,7 @@
 			const c = await api.addComment(issue.id, newComment.trim());
 			comments = [...comments, c];
 			newComment = '';
+			activity = (await api.issueActivity(issue.id)) || [];
 		} catch (e) {
 			showToast('Comment failed: ' + e.message, 'error');
 		}
@@ -108,6 +120,33 @@
 	function autofocus(node) {
 		node.focus();
 	}
+	async function addCrit() {
+		if (!newCrit.trim()) return;
+		try {
+			const c = await api.addCriterion(issue.id, newCrit.trim());
+			criteria = [...criteria, c];
+			newCrit = '';
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+	async function toggleCrit(c) {
+		try {
+			const u = await api.updateCriterion(c.id, { done: !c.done });
+			criteria = criteria.map((x) => (x.id === c.id ? u : x));
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+	async function delCrit(c) {
+		try {
+			await api.deleteCriterion(c.id);
+			criteria = criteria.filter((x) => x.id !== c.id);
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+	const shortSha = (s) => (s || '').slice(0, 7);
 </script>
 
 {#if issue}
@@ -161,6 +200,30 @@
 					{/if}
 				</div>
 
+				<section class="block">
+					<div class="rh">
+						Done-when{#if criteria.length}<span class="prog">{doneCrit}/{criteria.length}</span>{/if}
+					</div>
+					{#if criteria.length}
+						<div class="sub-bar"><span style="width:{(doneCrit / criteria.length) * 100}%"></span></div>
+					{/if}
+					{#each criteria as c (c.id)}
+						<div class="crit">
+							<button class="crit-box" class:on={c.done} onclick={() => toggleCrit(c)} aria-label="toggle">
+								{#if c.done}✓{/if}
+							</button>
+							<span class="crit-text" class:done={c.done}>{c.body}</span>
+							<button class="crit-del" onclick={() => delCrit(c)} title="Remove">✕</button>
+						</div>
+					{/each}
+					<input
+						class="crit-add"
+						bind:value={newCrit}
+						placeholder="Add acceptance criterion…"
+						onkeydown={(e) => e.key === 'Enter' && addCrit()}
+					/>
+				</section>
+
 				{#if children.length}
 					<section class="block">
 						<div class="rh">Sub-issues <span class="prog">{doneChildren}/{children.length}</span></div>
@@ -171,6 +234,31 @@
 								<span class="sub-key">{c.key}</span>
 								<span class="sub-title">{c.title}</span>
 							</button>
+						{/each}
+					</section>
+				{/if}
+
+				{#if issue.gitBranch || issue.prUrl || commits.length}
+					<section class="block">
+						<div class="rh">Development</div>
+						{#if issue.gitBranch}
+							<div class="dev-row"><GitBranch size={14} strokeWidth={2} /><span class="mono">{issue.gitBranch}</span></div>
+						{/if}
+						{#if issue.prUrl}
+							<a class="dev-row link" href={issue.prUrl} target="_blank" rel="noreferrer">
+								<GitPullRequestArrow size={14} strokeWidth={2} />Pull request
+							</a>
+						{/if}
+						{#each commits as c (c.id)}
+							{#if c.url}
+								<a class="dev-row link" href={c.url} target="_blank" rel="noreferrer">
+									<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
+								</a>
+							{:else}
+								<div class="dev-row">
+									<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
+								</div>
+							{/if}
 						{/each}
 					</section>
 				{/if}
@@ -204,6 +292,13 @@
 						<button class="btn primary sm" onclick={addComment} disabled={!newComment.trim()}>Comment</button>
 					</div>
 				</section>
+
+				{#if activity.length}
+					<section class="block">
+						<div class="rh">Activity</div>
+						<ActivityFeed items={activity} />
+					</section>
+				{/if}
 				</div>
 			</main>
 
@@ -400,6 +495,88 @@
 		height: 100%;
 		background: var(--accent);
 		transition: width 0.3s ease;
+	}
+	.crit {
+		display: flex;
+		align-items: flex-start;
+		gap: 9px;
+		padding: 3px 0;
+	}
+	.crit-box {
+		width: 18px;
+		height: 18px;
+		border-radius: 5px;
+		border: 1.5px solid var(--border-strong);
+		background: var(--bg);
+		color: #fff;
+		display: grid;
+		place-items: center;
+		font-size: 11px;
+		flex: none;
+		margin-top: 1px;
+	}
+	.crit-box.on {
+		background: var(--st-done);
+		border-color: var(--st-done);
+	}
+	.crit-text {
+		flex: 1;
+		font-size: 14px;
+		line-height: 1.45;
+	}
+	.crit-text.done {
+		color: var(--text-faint);
+		text-decoration: line-through;
+	}
+	.crit-del {
+		opacity: 0;
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		font-size: 11px;
+		flex: none;
+	}
+	.crit:hover .crit-del {
+		opacity: 1;
+	}
+	.crit-del:hover {
+		color: #f87171;
+	}
+	.crit-add {
+		width: 100%;
+		background: transparent;
+		border: none;
+		border-top: 1px dashed var(--border);
+		color: var(--text);
+		padding: 9px 0 2px;
+		font-size: 13.5px;
+		outline: none;
+		margin-top: 4px;
+	}
+	.crit-add::placeholder {
+		color: var(--text-faint);
+	}
+	.dev-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13.5px;
+		color: var(--text-dim);
+		padding: 3px 0;
+	}
+	.dev-row.link:hover {
+		color: var(--text);
+	}
+	.dev-row .mono {
+		font-family: var(--mono);
+		font-size: 12.5px;
+		color: var(--text-faint);
+	}
+	.cmsg {
+		color: var(--text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.sub-link,
 	.doc-link {

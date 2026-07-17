@@ -28,8 +28,11 @@
 	let labelPickerOpen = $state(false);
 	let contentEl = $state(null);
 
+	let missing = $state([]);
+	let showGaps = $state(false);
 	onMount(async () => {
 		await load();
+		missing = (await api.missingDocs().catch(() => [])) || [];
 		const wanted = $page.url.searchParams.get('doc');
 		const d = (wanted && docs.find((x) => x.id === wanted)) || docs[0];
 		if (d) open(d);
@@ -130,6 +133,20 @@
 <div class="docs">
 	<aside class="index">
 		<div class="ihead"><span class="it">Artifacts</span><span class="isub">{docs.length}</span></div>
+		{#if missing.length}
+			<button class="cov" class:open={showGaps} onclick={() => (showGaps = !showGaps)}>
+				<span class="cov-dot"></span>{missing.length} done {missing.length === 1 ? 'issue has' : 'issues have'} no artifact
+			</button>
+			{#if showGaps}
+				<div class="cov-list">
+					{#each missing as m (m.id)}
+						<button class="cov-item" onclick={() => openIssue(m.key)}>
+							<span class="mono">{m.key}</span><span class="cov-t">{m.title}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
+		{/if}
 		<input class="search" placeholder="Search…" bind:value={query} />
 		<div class="filters">
 			<div class="dd tflt">
@@ -277,6 +294,14 @@
 	.it { font: 600 15px/1 var(--disp); }
 	.isub { font-size: 12px; color: var(--text-faint); }
 	.search { margin: 0 12px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; outline: none; }
+	.cov { display: flex; align-items: center; gap: 7px; margin: 0 12px 8px; background: color-mix(in srgb, var(--st-progress) 12%, var(--bg)); border: 1px solid color-mix(in srgb, var(--st-progress) 30%, var(--border)); border-radius: 8px; color: var(--text); padding: 7px 10px; font-size: 12.5px; text-align: left; }
+	.cov:hover { border-color: color-mix(in srgb, var(--st-progress) 50%, var(--border)); }
+	.cov-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-progress); flex: none; }
+	.cov-list { margin: 0 12px 8px; display: flex; flex-direction: column; gap: 1px; max-height: 200px; overflow-y: auto; }
+	.cov-item { display: flex; align-items: center; gap: 8px; background: none; border: none; color: var(--text-dim); text-align: left; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; }
+	.cov-item:hover { background: var(--bg-hover); color: var(--text); }
+	.cov-item .mono { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); flex: none; }
+	.cov-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.search:focus { border-color: var(--accent); }
 	.filters { display: flex; gap: 6px; padding: 0 12px 10px; border-bottom: 1px solid var(--border); }
 	.tflt { flex: 1; }
