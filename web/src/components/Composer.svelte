@@ -16,6 +16,7 @@
 	import PriorityMenu from './PriorityMenu.svelte';
 	import StatusMenu from './StatusMenu.svelte';
 	import EpicMenu from './EpicMenu.svelte';
+	import LabelPicker from './LabelPicker.svelte';
 
 	// Epics shown when creating an issue: scoped to the active Project if one is
 	// selected, otherwise all.
@@ -191,19 +192,10 @@
 						<PriorityMenu value={priority} onchange={(v) => (priority = v)} />
 					</div>
 				</div>
-				{#if $labels.length}
-					<div class="labels">
-						{#each $labels as l (l.id)}
-							<button
-								type="button"
-								class="chip"
-								class:on={selLabels.has(l.id)}
-								style="--lc:{l.color}"
-								onclick={() => toggleLabel(l.id)}>{l.name}</button
-							>
-						{/each}
-					</div>
-				{/if}
+				<div class="field wide">
+					<span>Labels</span>
+					<LabelPicker selected={[...selLabels]} onchange={(ids) => (selLabels = new Set(ids))} />
+				</div>
 			{:else}
 				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
 				<textarea bind:value={desc} class="desc" placeholder="Description (optional)"></textarea>
@@ -246,10 +238,11 @@
 	}
 	.modal {
 		position: fixed;
-		top: 12vh;
+		top: 8vh;
 		left: 50%;
 		transform: translateX(-50%);
-		width: min(600px, 94vw);
+		width: min(760px, 94vw);
+		height: min(680px, 84vh);
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: 14px;
@@ -257,7 +250,6 @@
 		z-index: 71;
 		display: flex;
 		flex-direction: column;
-		max-height: 80vh;
 	}
 	.head {
 		display: flex;
@@ -282,11 +274,12 @@
 		font-size: 14px;
 	}
 	.body {
-		padding: 4px 18px 8px;
+		flex: 1;
+		padding: 6px 22px 10px;
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 14px;
 	}
 	.big {
 		width: 100%;
@@ -304,6 +297,7 @@
 	}
 	.desc {
 		width: 100%;
+		flex: 1;
 		min-height: 150px;
 		resize: none;
 		background: transparent;
@@ -314,7 +308,6 @@
 		line-height: 1.55;
 		font-family: inherit;
 		outline: none;
-		field-sizing: content;
 	}
 	.desc::placeholder {
 		color: var(--text-faint);

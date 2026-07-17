@@ -35,6 +35,7 @@ type IssueFilter struct {
 	StateID      string
 	ProjectID    string
 	InitiativeID string // all issues whose epic belongs to this Project (initiative)
+	LabelID      string // all issues carrying this label
 	Query        string
 	ParentKey    string // list sub-issues of this epic key
 	Limit        int
@@ -74,6 +75,11 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 		n++
 		q += fmt.Sprintf(" AND i.project_id IN (SELECT id FROM projects WHERE initiative_id=$%d)", n)
 		args = append(args, f.InitiativeID)
+	}
+	if f.LabelID != "" {
+		n++
+		q += fmt.Sprintf(" AND i.id IN (SELECT issue_id FROM issue_labels WHERE label_id=$%d)", n)
+		args = append(args, f.LabelID)
 	}
 	if f.ParentKey != "" {
 		add("i.parent_key=", f.ParentKey)

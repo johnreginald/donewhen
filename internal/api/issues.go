@@ -16,6 +16,7 @@ func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 		StateID:      q.Get("state"),
 		ProjectID:    q.Get("project"),
 		InitiativeID: q.Get("initiative"),
+		LabelID:      q.Get("label"),
 		Query:        q.Get("q"),
 		ParentKey:    q.Get("parent"),
 		Limit:        limit,

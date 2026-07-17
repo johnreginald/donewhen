@@ -13,6 +13,7 @@
 	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 	import { Columns3, List, Plus, Settings, LogOut, Menu } from '@lucide/svelte';
+	import LabelFilter from '$components/LabelFilter.svelte';
 
 	let { children } = $props();
 	let ready = $state(false);
@@ -102,6 +103,7 @@
 						<a href="/" class="vt" class:on={$page.url.pathname === '/'}><Columns3 size={15} strokeWidth={2} />Board</a>
 						<a href="/list" class="vt" class:on={$page.url.pathname === '/list'}><List size={15} strokeWidth={2} />List</a>
 					</div>
+					<LabelFilter />
 				{/if}
 				<div class="spacer"></div>
 				<button class="btn primary np" onclick={() => openComposer('issue')}><Plus size={16} strokeWidth={2.4} />New issue</button>
