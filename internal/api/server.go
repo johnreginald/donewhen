@@ -114,6 +114,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/issues/{id}/activity", s.guard(s.handleIssueActivity))
 	mux.HandleFunc("GET /api/activity", s.guard(s.handleActivity))
 
+	// inbox — the human's review queue (AI moved to In Review) + recent AI activity
+	mux.HandleFunc("GET /api/inbox", s.guard(s.handleInbox))
+	mux.HandleFunc("POST /api/inbox/seen", s.guard(s.handleInboxSeen))
+
 	// dev links (branch / PR / commits) + done-when criteria
 	mux.HandleFunc("GET /api/issues/{id}/commits", s.guard(s.handleListCommits))
 	mux.HandleFunc("POST /api/issues/{id}/commits", s.guard(s.handleAddCommit))

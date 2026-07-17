@@ -84,6 +84,14 @@ type Issue struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
+// InboxItem is a "needs review" entry — an issue the AI moved to In Review —
+// with a small summary for the review card.
+type InboxItem struct {
+	Issue
+	CommitCount     int        `json:"commitCount"`
+	EnteredReviewAt *time.Time `json:"enteredReviewAt"` // when the AI moved it to In Review
+}
+
 // IssueCommit links an issue to a commit that implemented it (the record of how).
 type IssueCommit struct {
 	ID        string    `json:"id"`

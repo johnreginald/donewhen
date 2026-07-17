@@ -11,6 +11,7 @@ export const me = writable(null);
 export const activeProject = writable(''); // '' = all (epic-level filter)
 export const activeInitiative = writable(''); // '' = all (Project-level filter)
 export const activeLabel = writable(''); // '' = all (label filter)
+export const inboxCount = writable(0); // needs-review queue size (sidebar badge)
 
 export async function loadMeta() {
 	const [st, pr, ini, lb, cfg] = await Promise.all([
