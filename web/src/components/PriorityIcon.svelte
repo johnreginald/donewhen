@@ -8,15 +8,23 @@
 		3: [5, 8, 8],
 		4: [5, 5, 5]
 	};
+	const colors = {
+		0: 'var(--text-dim)',
+		1: '#f87171', // urgent — red
+		2: '#fb923c', // high — orange
+		3: '#f2c94c', // medium — yellow
+		4: '#6ea8fe' // low — blue
+	};
 	const bars = $derived(heights[priority] ?? heights[0]);
+	const col = $derived(colors[priority] ?? colors[0]);
 </script>
 
-<span class="prio" class:urgent={priority === 1} title="priority {priority}">
+<span class="prio" title="priority {priority}" style:--pc={col}>
 	{#each bars as h, i}
 		<span
 			class="bar"
 			style:height="{h}px"
-			style:opacity={priority === 0 ? 0.35 : priority !== 1 && i >= priority - 1 ? 0.3 : 1}
+			style:opacity={priority === 0 ? 0.4 : priority !== 1 && i >= priority - 1 ? 0.35 : 1}
 		></span>
 	{/each}
 </span>
@@ -30,10 +38,7 @@
 	}
 	.bar {
 		width: 3px;
-		background: var(--text-dim);
+		background: var(--pc, var(--text-dim));
 		border-radius: 1px;
-	}
-	.urgent .bar {
-		background: #f87171;
 	}
 </style>

@@ -72,6 +72,23 @@ export const api = {
 	deleteIssue: (id) => request('DELETE', `/issues/${id}`),
 	comments: (id) => request('GET', `/issues/${id}/comments`),
 	addComment: (id, bodyMd) => request('POST', `/issues/${id}/comments`, { bodyMd }),
+	issueActivity: (id) => request('GET', `/issues/${id}/activity`),
+	activity: (q = {}) => {
+		const p = new URLSearchParams(Object.entries(q).filter(([, v]) => v));
+		const s = p.toString();
+		return request('GET', '/activity' + (s ? `?${s}` : ''));
+	},
+	// dev links + commits
+	commits: (id) => request('GET', `/issues/${id}/commits`),
+	addCommit: (id, b) => request('POST', `/issues/${id}/commits`, b),
+	setDev: (id, b) => request('PATCH', `/issues/${id}/dev`, b),
+	// done-when criteria
+	criteria: (id) => request('GET', `/issues/${id}/criteria`),
+	addCriterion: (id, body) => request('POST', `/issues/${id}/criteria`, { body }),
+	updateCriterion: (id, b) => request('PATCH', `/criteria/${id}`, b),
+	deleteCriterion: (id) => request('DELETE', `/criteria/${id}`),
+	// coverage
+	missingDocs: () => request('GET', '/issues/missing-docs'),
 
 	// documents
 	documents: (filter = {}) => {

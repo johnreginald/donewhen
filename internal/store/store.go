@@ -46,13 +46,15 @@ const issueCols = `i.id, i.number, i.key, i.title, i.description_md, i.state_id,
 	(SELECT count(*) FROM documents d WHERE d.issue_id = i.id) AS doc_count,
 	i.parent_key,
 	(SELECT count(*) FROM issues c WHERE c.parent_key = i.key) AS child_count,
+	i.git_branch, i.pr_url,
 	i.created_at, i.updated_at`
 
 func scanIssue(row pgx.Row) (models.Issue, error) {
 	var is models.Issue
 	err := row.Scan(&is.ID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
 		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
-		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.CreatedAt, &is.UpdatedAt)
+		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.GitBranch, &is.PRURL,
+		&is.CreatedAt, &is.UpdatedAt)
 	return is, err
 }
 

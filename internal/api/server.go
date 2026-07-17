@@ -105,11 +105,23 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/projects/{id}", s.guard(s.handleDeleteProject))
 
 	// Issues.
+	mux.HandleFunc("GET /api/issues/missing-docs", s.guard(s.handleMissingDocs))
 	mux.HandleFunc("GET /api/issues", s.guard(s.handleListIssues))
 	mux.HandleFunc("POST /api/issues", s.guard(s.handleCreateIssue))
 	mux.HandleFunc("GET /api/issues/{id}", s.guard(s.handleGetIssue))
 	mux.HandleFunc("PATCH /api/issues/{id}", s.guard(s.handleUpdateIssue))
 	mux.HandleFunc("DELETE /api/issues/{id}", s.guard(s.handleDeleteIssue))
+	mux.HandleFunc("GET /api/issues/{id}/activity", s.guard(s.handleIssueActivity))
+	mux.HandleFunc("GET /api/activity", s.guard(s.handleActivity))
+
+	// dev links (branch / PR / commits) + done-when criteria
+	mux.HandleFunc("GET /api/issues/{id}/commits", s.guard(s.handleListCommits))
+	mux.HandleFunc("POST /api/issues/{id}/commits", s.guard(s.handleAddCommit))
+	mux.HandleFunc("PATCH /api/issues/{id}/dev", s.guard(s.handleSetDev))
+	mux.HandleFunc("GET /api/issues/{id}/criteria", s.guard(s.handleListCriteria))
+	mux.HandleFunc("POST /api/issues/{id}/criteria", s.guard(s.handleAddCriterion))
+	mux.HandleFunc("PATCH /api/criteria/{id}", s.guard(s.handleUpdateCriterion))
+	mux.HandleFunc("DELETE /api/criteria/{id}", s.guard(s.handleDeleteCriterion))
 	mux.HandleFunc("GET /api/issues/{id}/comments", s.guard(s.handleListComments))
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.guard(s.handleAddComment))
 
