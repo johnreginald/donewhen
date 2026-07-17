@@ -10,6 +10,7 @@ export const appConfig = writable({});
 export const me = writable(null);
 export const activeProject = writable(''); // '' = all (epic-level filter)
 export const activeInitiative = writable(''); // '' = all (Project-level filter)
+export const activeLabel = writable(''); // '' = all (label filter)
 
 export async function loadMeta() {
 	const [st, pr, ini, lb, cfg] = await Promise.all([
@@ -29,7 +30,11 @@ export async function loadMeta() {
 export async function loadIssues() {
 	const initiative = get(activeInitiative);
 	const project = get(activeProject);
-	const f = initiative ? { initiative } : project ? { project } : {};
+	const label = get(activeLabel);
+	const f = {};
+	if (initiative) f.initiative = initiative;
+	else if (project) f.project = project;
+	if (label) f.label = label;
 	const list = await api.issues(f);
 	issues.set(list || []);
 }

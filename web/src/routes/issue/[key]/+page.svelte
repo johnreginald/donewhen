@@ -10,6 +10,7 @@
 	import PriorityMenu from '$components/PriorityMenu.svelte';
 	import StatusMenu from '$components/StatusMenu.svelte';
 	import EpicMenu from '$components/EpicMenu.svelte';
+	import LabelPicker from '$components/LabelPicker.svelte';
 
 	let issue = $state(null);
 	let comments = $state([]);
@@ -221,27 +222,10 @@
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Labels</span>
-					<div class="rail-labels">
-						{#each issue.labels as l (l.id)}
-							<button class="pill-btn" onclick={() => toggleLabel(l.id)}>
-								<LabelPill label={l} /><span class="x">✕</span>
-							</button>
-						{/each}
-						<button class="btn ghost sm" onclick={() => (labelPickerOpen = !labelPickerOpen)}>+ label</button>
-					</div>
-					{#if labelPickerOpen}
-						<div class="label-picker">
-							{#each $allLabels as l (l.id)}
-								<button
-									class="picker-item"
-									class:on={issue.labels.some((x) => x.id === l.id)}
-									onclick={() => toggleLabel(l.id)}
-								>
-									<span class="dot" style:background={l.color}></span>{l.name}
-								</button>
-							{/each}
-						</div>
-					{/if}
+					<LabelPicker
+						selected={issue.labels.map((l) => l.id)}
+						onchange={(ids) => patch({ labelIds: ids })}
+					/>
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Created</span>
