@@ -34,9 +34,15 @@
 		await load();
 		missing = (await api.missingDocs().catch(() => [])) || [];
 		const wanted = $page.url.searchParams.get('doc');
-		const d = (wanted && docs.find((x) => x.id === wanted)) || docs[0];
+		// On mobile, show the list first (single-pane); auto-open only on desktop or a deep link.
+		const d =
+			(wanted && docs.find((x) => x.id === wanted)) || (window.innerWidth > 720 ? docs[0] : null);
 		if (d) open(d);
 	});
+
+	function back() {
+		sel = null;
+	}
 	async function load() {
 		docs = (await api.documents()) || [];
 	}
@@ -130,7 +136,7 @@
 	}
 </script>
 
-<div class="docs">
+<div class="docs" class:reading={sel}>
 	<aside class="index">
 		<div class="ihead"><span class="it">Artifacts</span><span class="isub">{docs.length}</span></div>
 		{#if missing.length}
@@ -193,6 +199,7 @@
 		{#if sel}
 			{@const at = attachOf(sel)}
 			<div class="topbar">
+				<button class="mback" onclick={back} aria-label="Back to artifacts list">←</button>
 				<div class="crumb">
 					<span class="ci">▤</span>Artifacts
 					{#if at}<span class="sepp">›</span><button class="crumb-lnk" onclick={() => at.kind === 'issue' && at.issue && openIssue(at.issue.key)}>{at.icon} {at.label}</button>{/if}
@@ -373,9 +380,30 @@
 	.ph-t { font: 600 17px/1 var(--disp); }
 	.ph .faint { max-width: 420px; line-height: 1.6; font-size: 13.5px; }
 
+	.mback { display: none; }
+
 	@media (max-width: 720px) {
-		.index { width: 150px; }
+		/* single-pane: list full-width, tap opens the reader full-width */
+		.index { width: 100%; border-right: none; }
+		.view { display: none; }
+		.docs.reading .index { display: none; }
+		.docs.reading .view { display: flex; }
 		.rail { display: none; }
 		.doc { padding: 18px 16px 60px; }
+		.topbar { padding: 10px 14px; }
+		.mback {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 32px;
+			height: 32px;
+			border-radius: 8px;
+			border: 1px solid var(--border);
+			background: var(--bg-elev);
+			color: var(--text-dim);
+			font-size: 18px;
+			flex: none;
+		}
+		.mback:hover { color: var(--text); }
 	}
 </style>

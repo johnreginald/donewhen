@@ -210,4 +210,13 @@
 		padding: 40px;
 		text-align: center;
 	}
+	/* mobile: title wins — drop the label pills, tighten the key */
+	@media (max-width: 600px) {
+		.rlabels {
+			display: none;
+		}
+		.rkey {
+			width: 52px;
+		}
+	}
 </style>

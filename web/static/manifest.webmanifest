@@ -2,7 +2,7 @@
 	"name": "Raenil",
 	"short_name": "Raenil",
 	"description": "Self-hosted issue tracker",
-	"start_url": "/",
+	"start_url": "/inbox",
 	"scope": "/",
 	"display": "standalone",
 	"orientation": "portrait-primary",

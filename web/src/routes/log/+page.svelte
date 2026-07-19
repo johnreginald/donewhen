@@ -28,7 +28,7 @@
 <div class="log">
 	<div class="log-head">
 		<div class="lh-left">
-			<span class="lh-title">Log</span>
+			<span class="lh-title">Activities</span>
 			<span class="lh-scope">{scope}</span>
 		</div>
 		<div class="seg">
