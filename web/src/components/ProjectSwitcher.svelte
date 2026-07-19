@@ -123,6 +123,13 @@
 	}
 	.item .nm {
 		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.item :global(svg) {
+		flex: none;
 	}
 	.item:active {
 		background: var(--bg-hover);

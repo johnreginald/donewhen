@@ -60,6 +60,17 @@ body {
 	height: 100%;
 }
 
+/* Mobile: never let the page scroll/shift horizontally (overlays, sheets, wide
+   rows). Desktop keeps horizontal scroll so the trackpad swipe-back still works. */
+@media (max-width: 720px) {
+	html,
+	body,
+	#app {
+		overflow-x: hidden;
+		max-width: 100%;
+	}
+}
+
 a {
 	color: inherit;
 	text-decoration: none;
