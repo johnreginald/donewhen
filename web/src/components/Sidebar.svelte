@@ -49,6 +49,16 @@
 			repoUrl: i.repoUrl
 		});
 	}
+	// Edit / delete an Epic (Raenil "project").
+	function editEpic(p) {
+		openComposer('project', {
+			id: p.id,
+			name: p.name,
+			description: p.descriptionMd,
+			initiativeId: p.initiativeId,
+			repoUrl: p.repoUrl
+		});
+	}
 
 	// Click a Project to filter every view to it (Epics + tickets show grouped in
 	// the List/Board). '' = All issues.
@@ -163,9 +173,12 @@
 			</div>
 			{#if isOpen}
 				{#each g.projects as p (p.id)}
-					<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
-						<span class="icon epic-ic"><Box size={12} strokeWidth={2} /></span><span class="pname">{p.name}</span>
-					</button>
+					<div class="epic-row">
+						<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
+							<span class="icon epic-ic"><Box size={12} strokeWidth={2} /></span><span class="pname">{p.name}</span>
+						</button>
+						<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
+					</div>
 				{/each}
 			{/if}
 		{/each}
