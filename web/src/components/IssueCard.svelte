@@ -2,13 +2,23 @@
 	import LabelPill from './LabelPill.svelte';
 	import PriorityIcon from './PriorityIcon.svelte';
 	import StateIcon from './StateIcon.svelte';
+	import { Box } from '@lucide/svelte';
 	import { openIssue, flashIssueId } from '$lib/ui.js';
-	import { states, projects } from '$lib/store.js';
+	import { states, projects, activeProject, activeInitiative, activeLabel, loadIssues } from '$lib/store.js';
 
 	let { issue } = $props();
 	const flashing = $derived($flashIssueId === issue.id);
 	const state = $derived($states.find((s) => s.id === issue.stateId));
 	const project = $derived($projects.find((p) => p.id === issue.projectId));
+
+	// Click the epic tag → filter the board to that epic.
+	function filterEpic(e) {
+		e.stopPropagation();
+		activeProject.set(issue.projectId);
+		activeInitiative.set('');
+		activeLabel.set('');
+		loadIssues();
+	}
 
 	function shortDate(s) {
 		try {
@@ -47,7 +57,9 @@
 	<div class="meta">
 		<PriorityIcon priority={issue.priority} />
 		{#if project}
-			<span class="epictag"><span class="epicdot"></span>{project.name}</span>
+			<button class="epictag" onclick={filterEpic} title="Show all issues in {project.name}">
+				<Box size={12} strokeWidth={2.2} />{project.name}
+			</button>
 		{/if}
 		{#each issue.labels ?? [] as l (l.id)}
 			<LabelPill label={l} />
@@ -129,26 +141,29 @@
 		gap: 6px;
 		flex-wrap: wrap;
 	}
+	/* Epic = structural (accent2 tint + box icon) → visually distinct from labels */
 	.epictag {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		padding: 3px 9px;
+		gap: 5px;
+		padding: 3px 9px 3px 7px;
 		border-radius: 6px;
 		font-size: 12.5px;
 		font-weight: 500;
 		line-height: 1.3;
-		color: var(--text-dim);
-		background: var(--bg-elev2);
-		border: 1px solid var(--border);
+		color: color-mix(in srgb, var(--accent2) 55%, var(--text));
+		background: color-mix(in srgb, var(--accent2) 13%, var(--bg-elev));
+		border: 1px solid color-mix(in srgb, var(--accent2) 32%, var(--border));
 		white-space: nowrap;
+		cursor: pointer;
 	}
-	.epicdot {
-		width: 7px;
-		height: 7px;
-		border-radius: 2px;
-		background: var(--text-faint);
-		flex-shrink: 0;
+	.epictag :global(svg) {
+		color: var(--accent2);
+		flex: none;
+	}
+	.epictag:hover {
+		background: color-mix(in srgb, var(--accent2) 22%, var(--bg-elev));
+		border-color: var(--accent2);
 	}
 	.foot {
 		font-size: 12px;
