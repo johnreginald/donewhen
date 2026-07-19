@@ -109,8 +109,8 @@
 				<ProjectSwitcher />
 				{#if showView}
 					<div class="vtoggle">
-						<a href="/" class="vt" class:on={$page.url.pathname === '/'}><Columns3 size={15} strokeWidth={2} />Board</a>
-						<a href="/list" class="vt" class:on={$page.url.pathname === '/list'}><List size={15} strokeWidth={2} />List</a>
+						<a href="/" class="vt" class:on={$page.url.pathname === '/'} aria-label="Board"><Columns3 size={15} strokeWidth={2} /><span class="vt-txt">Board</span></a>
+						<a href="/list" class="vt" class:on={$page.url.pathname === '/list'} aria-label="List"><List size={15} strokeWidth={2} /><span class="vt-txt">List</span></a>
 					</div>
 					<LabelFilter />
 				{/if}
@@ -363,6 +363,13 @@
 		.np {
 			padding-left: 10px;
 			padding-right: 10px;
+		}
+		/* board/list toggle → icon-only, so the topbar fits */
+		.vt-txt {
+			display: none;
+		}
+		.vt {
+			padding: 5px 9px;
 		}
 		.nav-col {
 			position: fixed;
