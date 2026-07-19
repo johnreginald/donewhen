@@ -33,7 +33,7 @@
 			<X size={13} strokeWidth={2.4} />
 		</button>
 	{:else}
-		<button class="lf-btn" onclick={openMenu}><ListFilter size={15} strokeWidth={2} />Filter</button>
+		<button class="lf-btn" onclick={openMenu}><ListFilter size={15} strokeWidth={2} /><span class="lf-txt">Filter</span></button>
 	{/if}
 	{#if open}
 		<div class="lf-bd" role="presentation" onclick={() => (open = false)}></div>
@@ -136,5 +136,52 @@
 		padding: 10px;
 		color: var(--text-faint);
 		font-size: 12.5px;
+	}
+
+	/* mobile: icon-only trigger + bottom-sheet menu (no horizontal overflow → no page shift) */
+	@media (max-width: 720px) {
+		.lf-txt {
+			display: none;
+		}
+		.lf-btn,
+		.lf-chip {
+			padding: 7px 9px;
+		}
+		.lf-bd {
+			background: rgba(0, 0, 0, 0.45);
+			z-index: 60;
+		}
+		.lf-menu {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			top: auto;
+			width: auto;
+			z-index: 61;
+			border: none;
+			border-top: 1px solid var(--border-strong);
+			border-radius: 16px 16px 0 0;
+			padding: 12px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+			box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
+			animation: lfup 0.18s ease;
+		}
+		@keyframes lfup {
+			from {
+				transform: translateY(100%);
+			}
+		}
+		.lf-input {
+			font-size: 16px;
+			padding: 11px 12px;
+			margin-bottom: 8px;
+		}
+		.lf-list {
+			max-height: 46vh;
+		}
+		.lf-item {
+			padding: 12px 10px;
+			font-size: 15.5px;
+		}
 	}
 </style>
