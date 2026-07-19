@@ -106,7 +106,7 @@
 					<LabelFilter />
 				{/if}
 				<div class="spacer"></div>
-				<button class="btn primary np" onclick={() => openComposer('issue')}><Plus size={16} strokeWidth={2.4} />New issue</button>
+				<button class="btn primary np" onclick={() => openComposer('issue')}><Plus size={16} strokeWidth={2.4} /><span class="np-label">New issue</span></button>
 				<div class="usermenu">
 					<button class="avatar" title={$me?.email} onclick={() => (userOpen = !userOpen)}>{initials}</button>
 					{#if userOpen}
@@ -155,6 +155,10 @@
 		align-items: center;
 		gap: 10px;
 		padding: 8px 14px;
+		/* PWA / notch: fill the safe area, keep controls below the status bar */
+		padding-top: calc(8px + env(safe-area-inset-top, 0px));
+		padding-left: calc(14px + env(safe-area-inset-left, 0px));
+		padding-right: calc(14px + env(safe-area-inset-right, 0px));
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
 	}
@@ -297,6 +301,16 @@
 	@media (max-width: 720px) {
 		.hamburger {
 			display: inline-flex;
+		}
+		.topbar {
+			gap: 6px;
+		}
+		.np-label {
+			display: none;
+		}
+		.np {
+			padding-left: 10px;
+			padding-right: 10px;
 		}
 		.nav-col {
 			position: fixed;
