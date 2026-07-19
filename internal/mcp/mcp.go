@@ -98,6 +98,42 @@ func stringSlice(req mcp.CallToolRequest, key string) []string {
 	return out
 }
 
+// criterionItem is one done-when line parsed from a set_criteria request.
+type criterionItem struct {
+	text string
+	done bool
+}
+
+// criteriaItems parses the "items" arg, accepting either objects {text, done}
+// or bare strings (treated as not-done). Blank text is skipped.
+func criteriaItems(req mcp.CallToolRequest) []criterionItem {
+	raw, ok := req.GetArguments()["items"]
+	if !ok || raw == nil {
+		return nil
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]criterionItem, 0, len(arr))
+	for _, v := range arr {
+		switch t := v.(type) {
+		case string:
+			if t != "" {
+				out = append(out, criterionItem{text: t})
+			}
+		case map[string]any:
+			text, _ := t["text"].(string)
+			if text == "" {
+				continue
+			}
+			done, _ := t["done"].(bool)
+			out = append(out, criterionItem{text: text, done: done})
+		}
+	}
+	return out
+}
+
 // resolveIssueRef accepts a uuid or a human key (K-42) and returns the issue.
 func (d *deps) resolveIssueRef(ctx context.Context, ref string) (models.Issue, error) {
 	if strings.Contains(ref, "-") && !strings.Contains(ref, "0000-") {
