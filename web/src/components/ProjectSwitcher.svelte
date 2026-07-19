@@ -1,8 +1,14 @@
 <script>
 	import { initiatives, projects, activeInitiative, activeProject, activeLabel, loadIssues } from '$lib/store.js';
-	import { ChevronDown, Check, Layers, Box, Hexagon } from '@lucide/svelte';
+	import { ChevronDown, ChevronRight, Check, Layers, Box, Hexagon } from '@lucide/svelte';
 
 	let open = $state(false);
+	let ex = $state(new Set()); // expanded initiatives
+	function toggle(id) {
+		const n = new Set(ex);
+		n.has(id) ? n.delete(id) : n.add(id);
+		ex = n;
+	}
 
 	const label = $derived(
 		$activeProject
@@ -54,16 +60,25 @@
 				{#if !$activeInitiative && !$activeProject}<Check size={16} strokeWidth={2.5} />{/if}
 			</button>
 			{#each $initiatives as i (i.id)}
-				<button class="item ini" class:on={$activeInitiative === i.id} onclick={() => pickInitiative(i.id)}>
-					<Hexagon size={16} strokeWidth={2} /><span class="nm">{i.name}</span>
-					{#if $activeInitiative === i.id}<Check size={16} strokeWidth={2.5} />{/if}
-				</button>
-				{#each epicsOf(i.id) as p (p.id)}
-					<button class="item epic" class:on={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
-						<Box size={15} strokeWidth={2} /><span class="nm">{p.name}</span>
-						{#if $activeProject === p.id}<Check size={15} strokeWidth={2.5} />{/if}
+				{@const eps = epicsOf(i.id)}
+				{@const isOpen = ex.has(i.id) || eps.some((p) => p.id === $activeProject)}
+				<div class="row">
+					<button class="cx" class:open={isOpen} class:empty={eps.length === 0} onclick={() => toggle(i.id)} aria-label="Expand epics">
+						<ChevronRight size={16} strokeWidth={2.5} />
 					</button>
-				{/each}
+					<button class="item ini" class:on={$activeInitiative === i.id} onclick={() => pickInitiative(i.id)}>
+						<Hexagon size={16} strokeWidth={2} /><span class="nm">{i.name}</span>
+						{#if $activeInitiative === i.id}<Check size={16} strokeWidth={2.5} />{/if}
+					</button>
+				</div>
+				{#if isOpen}
+					{#each eps as p (p.id)}
+						<button class="item epic" class:on={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
+							<Box size={15} strokeWidth={2} /><span class="nm">{p.name}</span>
+							{#if $activeProject === p.id}<Check size={15} strokeWidth={2.5} />{/if}
+						</button>
+					{/each}
+				{/if}
 			{/each}
 		</div>
 	</div>
@@ -185,6 +200,34 @@
 	}
 	.item.epic.on :global(svg:first-child) {
 		color: var(--accent2);
+	}
+	.row {
+		display: flex;
+		align-items: center;
+	}
+	.row .item.ini {
+		flex: 1;
+	}
+	.cx {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 44px;
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		flex: none;
+	}
+	.cx :global(svg) {
+		transition: transform 0.15s ease;
+	}
+	.cx.open :global(svg) {
+		transform: rotate(90deg);
+	}
+	.cx.empty {
+		visibility: hidden;
+		pointer-events: none;
 	}
 
 	@media (max-width: 720px) {

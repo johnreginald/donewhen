@@ -5,7 +5,15 @@
 	import { api } from '$lib/api.js';
 	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues, inboxCount } from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon } from '@lucide/svelte';
+	import { FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight } from '@lucide/svelte';
+
+	// Collapsible initiative groups — so a big epic list stays manageable.
+	let expanded = $state(new Set());
+	function toggleExpand(id) {
+		const n = new Set(expanded);
+		n.has(id) ? n.delete(id) : n.add(id);
+		expanded = n;
+	}
 
 	// Full issue set (filter-independent) for the per-Project totals in the badge.
 	let allIssues = $state([]);
@@ -136,18 +144,30 @@
 			{/if}
 		</div>
 		{#each grouped.groups as g (g.ini.id)}
+			{@const isOpen = expanded.has(g.ini.id) || g.projects.some((p) => p.id === $activeProject)}
 			<div class="proj-row">
+				<button
+					class="caret"
+					class:open={isOpen}
+					class:empty={g.projects.length === 0}
+					onclick={() => toggleExpand(g.ini.id)}
+					aria-label="Expand epics"
+				>
+					<ChevronRight size={13} strokeWidth={2.5} />
+				</button>
 				<button class="nav-item proj" class:active={$activeInitiative === g.ini.id} onclick={() => pick(g.ini.id)}>
 					<span class="icon"><Hexagon size={14} strokeWidth={2} /></span><span class="pname">{g.ini.name}</span>
 					<span class="ini-count">{g.count}</span>
 				</button>
 				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}><Pencil size={13} strokeWidth={2} /></button>
 			</div>
-			{#each g.projects as p (p.id)}
-				<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
-					<span class="icon epic-ic"><Box size={12} strokeWidth={2} /></span><span class="pname">{p.name}</span>
-				</button>
-			{/each}
+			{#if isOpen}
+				{#each g.projects as p (p.id)}
+					<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
+						<span class="icon epic-ic"><Box size={12} strokeWidth={2} /></span><span class="pname">{p.name}</span>
+					</button>
+				{/each}
+			{/if}
 		{/each}
 	</div>
 </nav>
@@ -361,8 +381,33 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.caret {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 28px;
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		cursor: pointer;
+		flex: none;
+	}
+	.caret:hover {
+		color: var(--text);
+	}
+	.caret :global(svg) {
+		transition: transform 0.15s ease;
+	}
+	.caret.open :global(svg) {
+		transform: rotate(90deg);
+	}
+	.caret.empty {
+		visibility: hidden;
+		pointer-events: none;
+	}
 	.epic-sub {
-		padding-left: 30px;
+		padding-left: 34px;
 		font-size: 13px;
 		color: var(--text-faint);
 	}
