@@ -111,16 +111,22 @@ func (d *deps) resolveIssueRef(ctx context.Context, ref string) (models.Issue, e
 func (d *deps) register(s *server.MCPServer) {
 	// ---- list_issues ----
 	s.AddTool(mcp.NewTool("list_issues",
-		mcp.WithDescription("List issues, optionally filtered by state name, project id, or a text query."),
+		mcp.WithDescription("List issues, optionally filtered by state name, project (epic) id, initiative id, label id, parent issue key, and/or a text query."),
 		mcp.WithString("state", mcp.Description("Workflow state name, e.g. 'In Review'")),
-		mcp.WithString("project", mcp.Description("Project id")),
+		mcp.WithString("project", mcp.Description("Project (epic) id — issues in this epic")),
+		mcp.WithString("initiative", mcp.Description("Initiative id — all issues whose epic belongs to this initiative")),
+		mcp.WithString("label", mcp.Description("Label id — issues carrying this label")),
+		mcp.WithString("parent", mcp.Description("Parent issue key (e.g. R-8) — its sub-issues")),
 		mcp.WithString("query", mcp.Description("Text search over title/key")),
 		mcp.WithNumber("limit", mcp.Description("Max results")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		f := store.IssueFilter{
-			ProjectID: req.GetString("project", ""),
-			Query:     req.GetString("query", ""),
-			Limit:     req.GetInt("limit", 0),
+			ProjectID:    req.GetString("project", ""),
+			InitiativeID: req.GetString("initiative", ""),
+			LabelID:      req.GetString("label", ""),
+			ParentKey:    req.GetString("parent", ""),
+			Query:        req.GetString("query", ""),
+			Limit:        req.GetInt("limit", 0),
 		}
 		if name := req.GetString("state", ""); name != "" {
 			if id, err := d.stateID(ctx, name); err == nil {
