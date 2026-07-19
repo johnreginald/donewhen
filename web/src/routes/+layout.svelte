@@ -12,8 +12,16 @@
 	import { loadMeta, loadIssues, applyEvent, me } from '$lib/store.js';
 	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
-	import { Columns3, List, Plus, Settings, LogOut, Menu } from '@lucide/svelte';
+	import { Columns3, List, Plus, Settings, LogOut, Menu, Inbox, Activity, FileText } from '@lucide/svelte';
 	import LabelFilter from '$components/LabelFilter.svelte';
+
+	// Mobile bottom-tab nav — surfaces the record surfaces (review / work / history / artifacts).
+	const tabs = [
+		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
+		{ label: 'Board', href: '/', icon: Columns3, match: (p) => p === '/' || p === '/list' },
+		{ label: 'Activity', href: '/log', icon: Activity, match: (p) => p === '/log' },
+		{ label: 'Artifacts', href: '/artifacts', icon: FileText, match: (p) => p.startsWith('/artifacts') }
+	];
 
 	let { children } = $props();
 	let ready = $state(false);
@@ -126,6 +134,15 @@
 			</div>
 		</main>
 	</div>
+	<nav class="btabs" aria-label="Mobile">
+		{#each tabs as t (t.href)}
+			{@const Icon = t.icon}
+			<a href={t.href} class="btab" class:on={t.match($page.url.pathname)} aria-label={t.label}>
+				<Icon size={20} strokeWidth={2} />
+				<span>{t.label}</span>
+			</a>
+		{/each}
+	</nav>
 	<CommandPalette />
 	<Composer />
 {:else}
@@ -298,9 +315,43 @@
 		border-color: #f87171;
 		color: #fca5a5;
 	}
+	.btabs {
+		display: none;
+	}
+
 	@media (max-width: 720px) {
 		.hamburger {
 			display: inline-flex;
+		}
+		/* reserve room for the fixed bottom tab bar */
+		main {
+			padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
+		}
+		.btabs {
+			display: flex;
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: 46;
+			background: color-mix(in srgb, var(--bg) 92%, transparent);
+			backdrop-filter: saturate(1.4) blur(10px);
+			border-top: 1px solid var(--border);
+			padding-bottom: env(safe-area-inset-bottom, 0px);
+		}
+		.btab {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 3px;
+			padding: 8px 0 7px;
+			color: var(--text-faint);
+			font-size: 10.5px;
+			font-weight: 500;
+		}
+		.btab.on {
+			color: var(--accent);
 		}
 		.topbar {
 			gap: 6px;
