@@ -47,8 +47,8 @@
 		color: var(--text);
 		font-size: 15px;
 		font-weight: 600;
-		padding: 4px 4px;
-		max-width: 46vw;
+		padding: 4px 2px;
+		max-width: 34vw;
 	}
 	.psw-name {
 		overflow: hidden;
