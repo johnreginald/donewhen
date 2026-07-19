@@ -58,13 +58,44 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		return jsonResult(upd)
 	})
 
+	// ---- get_criteria ----
+	s.AddTool(mcp.NewTool("get_criteria",
+		mcp.WithDescription("Get an issue's done-when acceptance checklist with each item's done state. "+
+			"Read this before moving an issue toward Done — every criterion must be done:true."),
+		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		items, err := d.store.ListCriteria(ctx, is.ID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		if items == nil {
+			items = []models.Criterion{}
+		}
+		return jsonResult(items)
+	})
+
 	// ---- set_criteria ----
 	s.AddTool(mcp.NewTool("set_criteria",
-		mcp.WithDescription("Set an issue's done-when acceptance checklist (replaces the list). "+
-			"Use during Aligning to lock what 'done' means."),
+		mcp.WithDescription("Set an issue's done-when acceptance checklist. Declarative: re-send the FULL "+
+			"list every call (it replaces what's stored). Define the criteria during Aligning; then as each "+
+			"one is met, re-send the same list with that item's done:true. Don't move an issue to Done until "+
+			"every item is done:true."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
-		mcp.WithArray("items", mcp.Required(), mcp.Description("Acceptance criteria, one per item"),
-			mcp.Items(map[string]any{"type": "string"})),
+		mcp.WithArray("items", mcp.Required(),
+			mcp.Description("Ordered checklist. Each item is {text, done}; done defaults false. "+
+				"Plain strings also accepted (treated as not-done)."),
+			mcp.Items(map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"text": map[string]any{"type": "string", "description": "Criterion text"},
+					"done": map[string]any{"type": "boolean", "description": "Met yet? default false"},
+				},
+				"required": []any{"text"},
+			})),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
 		if err != nil {
@@ -75,10 +106,16 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			_ = d.store.DeleteCriterion(ctx, c.ID)
 		}
 		out := []models.Criterion{}
-		for _, body := range stringSlice(req, "items") {
-			c, err := d.store.AddCriterion(ctx, is.ID, body)
+		for _, it := range criteriaItems(req) {
+			c, err := d.store.AddCriterion(ctx, is.ID, it.text)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if it.done {
+				done := true
+				if c, err = d.store.UpdateCriterion(ctx, c.ID, nil, &done); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
 			}
 			out = append(out, c)
 		}
