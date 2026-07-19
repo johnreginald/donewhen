@@ -58,6 +58,21 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	})
 
 	// ---- initiatives ----
+	s.AddTool(mcp.NewTool("get_initiative",
+		mcp.WithDescription("Get an initiative by id."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Initiative id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		it, err := d.store.GetInitiative(ctx, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return jsonResult(it)
+	})
+
 	s.AddTool(mcp.NewTool("list_initiatives",
 		mcp.WithDescription("List initiatives (top-level grouping of projects)."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
