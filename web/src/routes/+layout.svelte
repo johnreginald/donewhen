@@ -12,8 +12,9 @@
 	import { loadMeta, loadIssues, applyEvent, me } from '$lib/store.js';
 	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
-	import { Columns3, List, Plus, Settings, LogOut, Menu, Inbox, Activity, FileText } from '@lucide/svelte';
+	import { Columns3, List, Plus, Settings, LogOut, Inbox, Activity, FileText } from '@lucide/svelte';
 	import LabelFilter from '$components/LabelFilter.svelte';
+	import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
 
 	// Mobile bottom-tab nav — surfaces the record surfaces (review / work / history / artifacts).
 	const tabs = [
@@ -105,7 +106,7 @@
 		{/if}
 		<main>
 			<header class="topbar">
-				<button class="hamburger btn ghost" onclick={() => (mobileNav = !mobileNav)}><Menu size={18} /></button>
+				<ProjectSwitcher />
 				{#if showView}
 					<div class="vtoggle">
 						<a href="/" class="vt" class:on={$page.url.pathname === '/'}><Columns3 size={15} strokeWidth={2} />Board</a>
