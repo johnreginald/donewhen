@@ -153,7 +153,7 @@
 					onclick={() => toggleExpand(g.ini.id)}
 					aria-label="Expand epics"
 				>
-					<ChevronRight size={13} strokeWidth={2.5} />
+					<ChevronRight size={17} strokeWidth={2.5} />
 				</button>
 				<button class="nav-item proj" class:active={$activeInitiative === g.ini.id} onclick={() => pick(g.ini.id)}>
 					<span class="icon"><Hexagon size={14} strokeWidth={2} /></span><span class="pname">{g.ini.name}</span>
@@ -385,11 +385,11 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 16px;
-		height: 28px;
+		width: 22px;
+		height: 30px;
 		background: none;
 		border: none;
-		color: var(--text-faint);
+		color: var(--text-dim);
 		cursor: pointer;
 		flex: none;
 	}
