@@ -66,7 +66,7 @@
 		applyEvent(ev);
 		if (ev.issue) flashIssue(ev.issue.id);
 		if (ev.type === 'issue.state_changed' && ev.issue && ev.to) {
-			const who = ev.actor === 'ai' ? 'AI' : 'you';
+			const who = ev.actor === 'ai' ? 'Clanker' : 'you';
 			showToast(`${ev.issue.key} → ${ev.to.name} (by ${who})`);
 		}
 	}

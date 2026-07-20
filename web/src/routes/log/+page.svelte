@@ -34,7 +34,7 @@
 		<div class="seg">
 			<button class="sg" class:on={actor === ''} onclick={() => (actor = '')}>All</button>
 			<button class="sg" class:on={actor === 'human'} onclick={() => (actor = 'human')}>You</button>
-			<button class="sg" class:on={actor === 'ai'} onclick={() => (actor = 'ai')}>✦ AI</button>
+			<button class="sg" class:on={actor === 'ai'} onclick={() => (actor = 'ai')}>✦ Clanker</button>
 		</div>
 	</div>
 	<div class="log-body">

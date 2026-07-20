@@ -270,7 +270,7 @@
 							<button class="doc-link" onclick={() => goto(`/artifacts?doc=${d.id}`)}>
 								<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
 								<span class="dl-t">{d.title}</span>
-								{#if d.author === 'ai'}<span class="dl-ai">✦ AI</span>{/if}
+								{#if d.author === 'ai'}<span class="dl-ai">✦ Clanker</span>{/if}
 							</button>
 						{/each}
 					</section>
@@ -281,7 +281,7 @@
 					{#each comments as c (c.id)}
 						<div class="comment">
 							<div class="comment-meta">
-								<span class="actor" class:ai={c.actor === 'ai'}>{c.actor}</span>
+								<span class="actor" class:ai={c.actor === 'ai'}>{c.actor === 'ai' ? 'Clanker' : c.actor}</span>
 								<span class="faint">{fmtDate(c.createdAt)}</span>
 							</div>
 							<div class="comment-body"><Markdown source={c.bodyMd} /></div>
