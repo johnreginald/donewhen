@@ -42,8 +42,16 @@
 				if (r.ok) {
 					pushOn = true;
 					showToast('Push enabled');
-				} else showToast('Push: ' + r.reason, 'error');
+				} else if (r.reason === 'blocked') {
+					showToast('Notifications are blocked for this site. Allow them in the browser menu (site permissions), then retry.', 'error');
+				} else if (r.reason === 'unsupported') {
+					showToast('This browser can’t do Web Push here.', 'error');
+				} else {
+					showToast('Push failed: ' + r.reason, 'error');
+				}
 			}
+		} catch (e) {
+			showToast('Push failed: ' + (e?.message || e), 'error');
 		} finally {
 			pushBusy = false;
 		}
