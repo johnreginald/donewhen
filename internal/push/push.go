@@ -6,8 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
@@ -127,12 +130,29 @@ func (n *Notifier) broadcast(ctx context.Context, p payload) {
 			log.Printf("push: send: %v", err)
 			continue
 		}
+		// A non-2xx from the push service is silent otherwise (webpush-go only
+		// returns err on transport failure) — log status + body so a rejected
+		// push (bad VAPID, expired, quota) is diagnosable.
+		if resp.StatusCode >= 300 {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			log.Printf("push: %d from %s: %s", resp.StatusCode, endpointHost(s.Endpoint), strings.TrimSpace(string(b)))
+		}
 		// Drop subscriptions the push service has retired.
 		if resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound {
 			_ = n.store.DeletePushSubscriptionByEndpoint(ctx, s.Endpoint)
 		}
 		resp.Body.Close()
 	}
+}
+
+// endpointHost returns just the host of a push endpoint for log lines
+// (fcm.googleapis.com, updates.push.services.mozilla.com, …) without leaking
+// the full per-device token.
+func endpointHost(endpoint string) string {
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return "?"
 }
 
 // GenerateVAPIDKeys returns a fresh (private, public) VAPID keypair.
