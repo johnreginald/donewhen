@@ -7,10 +7,14 @@ import (
 	"raenil/internal/models"
 )
 
-// browserSubscription matches the JSON produced by PushManager.subscribe().
+// browserSubscription matches the JSON produced by PushSubscription.toJSON().
+// ExpirationTime is declared but unused: the decoder disallows unknown fields,
+// and the browser always includes "expirationTime" (usually null), so omitting
+// it made every subscribe 400 with "invalid subscription".
 type browserSubscription struct {
-	Endpoint string `json:"endpoint"`
-	Keys     struct {
+	Endpoint       string `json:"endpoint"`
+	ExpirationTime any    `json:"expirationTime"`
+	Keys           struct {
 		P256dh string `json:"p256dh"`
 		Auth   string `json:"auth"`
 	} `json:"keys"`
