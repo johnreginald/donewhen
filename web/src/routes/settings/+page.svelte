@@ -10,10 +10,23 @@
 	let createdSecret = $state('');
 	let pushOn = $state(false);
 	let pushBusy = $state(false);
+	let pushPerm = $state('');
+	let pushSupp = $state(true);
+	let pushErr = $state('');
+
+	function refreshPushState() {
+		try {
+			pushSupp = pushSupported();
+			pushPerm = typeof Notification !== 'undefined' ? Notification.permission : 'n/a';
+		} catch {
+			/* ignore */
+		}
+	}
 
 	onMount(async () => {
 		tokens = (await api.tokens()) || [];
 		pushOn = !!(await currentSubscription());
+		refreshPushState();
 	});
 
 	async function createToken() {
@@ -41,18 +54,24 @@
 				const r = await enablePush($appConfig.vapidPublicKey);
 				if (r.ok) {
 					pushOn = true;
+					pushErr = '';
 					showToast('Push enabled');
-				} else if (r.reason === 'blocked') {
-					showToast('Notifications are blocked for this site. Allow them in the browser menu (site permissions), then retry.', 'error');
-				} else if (r.reason === 'unsupported') {
-					showToast('This browser can’t do Web Push here.', 'error');
 				} else {
-					showToast('Push failed: ' + r.reason, 'error');
+					pushErr = r.reason || 'unknown';
+					if (r.reason === 'blocked') {
+						showToast('Notifications are blocked for this site. Allow them in the browser menu (site permissions), then retry.', 'error');
+					} else if (r.reason === 'unsupported') {
+						showToast('This browser can’t do Web Push here.', 'error');
+					} else {
+						showToast('Push failed: ' + r.reason, 'error');
+					}
 				}
 			}
 		} catch (e) {
-			showToast('Push failed: ' + (e?.message || e), 'error');
+			pushErr = e?.message || String(e);
+			showToast('Push failed: ' + pushErr, 'error');
 		} finally {
+			refreshPushState();
 			pushBusy = false;
 		}
 	}
@@ -76,6 +95,12 @@
 				<input type="checkbox" checked={pushOn} disabled={pushBusy} onchange={togglePush} />
 				<span>Push notifications to this device (works when the app is closed)</span>
 			</label>
+			<div class="diag faint">
+				<span>subscribed: <b>{pushOn ? 'yes' : 'no'}</b></span>
+				<span>permission: <b>{pushPerm || '—'}</b></span>
+				<span>supported: <b>{pushSupp ? 'yes' : 'no'}</b></span>
+				{#if pushErr}<span class="err">last error: <b>{pushErr}</b></span>{/if}
+			</div>
 		{/if}
 	</section>
 
@@ -166,6 +191,22 @@
 		gap: 10px;
 		align-items: center;
 		font-size: 13.5px;
+	}
+	.diag {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 14px;
+		margin-top: 10px;
+		font-size: 12px;
+		font-family: var(--mono);
+	}
+	.diag b {
+		color: var(--text);
+		font-weight: 600;
+	}
+	.diag .err b {
+		color: var(--danger, #ff6b6b);
+		word-break: break-word;
 	}
 	.tokens {
 		list-style: none;
