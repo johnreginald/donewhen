@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -101,12 +102,22 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		// Reconcile in place against the existing rows (ordered by position): update
+		// slot i, append new slots, delete the tail. Ticking one item off re-sends the
+		// same list, so its row is updated — id and created_at survive, no churn.
 		existing, _ := d.store.ListCriteria(ctx, is.ID)
-		for _, c := range existing {
-			_ = d.store.DeleteCriterion(ctx, c.ID)
-		}
+		items := criteriaItems(req)
 		out := []models.Criterion{}
-		for _, it := range criteriaItems(req) {
+		for i, it := range items {
+			if i < len(existing) {
+				body, done := it.text, it.done
+				c, err := d.store.UpdateCriterion(ctx, existing[i].ID, &body, &done)
+				if err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				out = append(out, c)
+				continue
+			}
 			c, err := d.store.AddCriterion(ctx, is.ID, it.text)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
@@ -119,7 +130,51 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			}
 			out = append(out, c)
 		}
+		for i := len(items); i < len(existing); i++ {
+			_ = d.store.DeleteCriterion(ctx, existing[i].ID)
+		}
 		return jsonResult(out)
+	})
+
+	// ---- check_criterion ----
+	s.AddTool(mcp.NewTool("check_criterion",
+		mcp.WithDescription("Tick (or untick) ONE done-when item in place — the light path for incremental "+
+			"progress, no need to re-send the whole list. Identify the item by 1-based 'index' (its order in "+
+			"get_criteria) or by exact case-insensitive 'text'. 'done' defaults true. Every other item and all "+
+			"timestamps stay untouched."),
+		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
+		mcp.WithNumber("index", mcp.Description("1-based position of the item in the checklist")),
+		mcp.WithString("text", mcp.Description("Exact criterion text (case-insensitive) — alternative to index")),
+		mcp.WithBoolean("done", mcp.Description("Met? default true")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		items, err := d.store.ListCriteria(ctx, is.ID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var target *models.Criterion
+		if idx := req.GetInt("index", 0); idx >= 1 && idx <= len(items) {
+			target = &items[idx-1]
+		} else if txt := strings.TrimSpace(req.GetString("text", "")); txt != "" {
+			for i := range items {
+				if strings.EqualFold(strings.TrimSpace(items[i].Body), txt) {
+					target = &items[i]
+					break
+				}
+			}
+		}
+		if target == nil {
+			return mcp.NewToolResultError("no matching criterion — check index/text against get_criteria"), nil
+		}
+		done := req.GetBool("done", true)
+		c, err := d.store.UpdateCriterion(ctx, target.ID, nil, &done)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return jsonResult(c)
 	})
 
 	// ---- get_activity ----
