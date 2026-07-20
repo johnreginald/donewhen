@@ -61,7 +61,7 @@ func (n *Notifier) Run(ctx context.Context) {
 func (n *Notifier) build(e events.Event) (payload, bool) {
 	actor := "you"
 	if e.Actor == "ai" {
-		actor = "AI"
+		actor = "Clanker"
 	}
 	switch e.Type {
 	case events.IssueStateChanged:

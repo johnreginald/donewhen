@@ -173,7 +173,7 @@
 					</div>
 				{/if}
 			</div>
-			<button class="ai-toggle" class:on={aiOnly} onclick={() => (aiOnly = !aiOnly)} title="AI-written only">✦ AI</button>
+			<button class="ai-toggle" class:on={aiOnly} onclick={() => (aiOnly = !aiOnly)} title="Clanker-written only">✦ Clanker</button>
 		</div>
 		<div class="list">
 			{#each filtered as d (d.id)}
@@ -228,7 +228,7 @@
 					<div class="doc">
 						<h1 class="doctitle">{sel.title}</h1>
 						<div class="prov">
-							{#if sel.author === 'ai'}<span class="by ai">✦ Written by AI</span>{:else}<span class="by">Written by you</span>{/if}
+							{#if sel.author === 'ai'}<span class="by ai">✦ Written by Clanker</span>{:else}<span class="by">Written by you</span>{/if}
 							{#if at && at.kind === 'issue' && at.issue}<span class="sep">·</span><button class="prov-lnk" onclick={() => openIssue(at.issue.key)}>from {at.issue.key}</button>{/if}
 							<span class="sep">·</span><span>{relTime(sel.updatedAt)}</span>
 						</div>
@@ -287,7 +287,7 @@
 		{:else}
 			<div class="ph">
 				<div class="ph-ic">✦</div>
-				<div class="ph-t">The AI's engineering journal</div>
+				<div class="ph-t">Clanker's engineering journal</div>
 				<div class="faint">Claude writes a document when it implements or changes something — what it is, how it works, a mermaid diagram, key files. Pick one on the left to read.</div>
 			</div>
 		{/if}

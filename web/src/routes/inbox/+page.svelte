@@ -73,7 +73,7 @@
 <div class="inbox">
 	<div class="ib-head">
 		<span class="ib-title"><InboxIcon size={17} strokeWidth={2} /> Inbox</span>
-		<span class="ib-sub faint">What the AI did while you were away</span>
+		<span class="ib-sub faint">What Clanker did while you were away</span>
 	</div>
 
 	<div class="ib-body">
@@ -124,21 +124,21 @@
 				</div>
 			{:else}
 				<div class="empty faint">
-					{loading ? 'Loading…' : 'Nothing waiting. The AI hasn’t moved anything to In Review yet.'}
+					{loading ? 'Loading…' : 'Nothing waiting. Clanker hasn’t moved anything to In Review yet.'}
 				</div>
 			{/if}
 		</section>
 
-		<!-- Recent AI activity -->
+		<!-- Recent Clanker activity -->
 		<section>
 			<h2 class="sec">
-				Recent AI activity
+				Recent Clanker activity
 				{#if newCount}<span class="count new">{newCount} new</span>{/if}
 			</h2>
 			{#if recent.length}
 				<ActivityFeed items={recent} showIssue={true} />
 			{:else}
-				<div class="empty faint">{loading ? 'Loading…' : 'No AI activity yet.'}</div>
+				<div class="empty faint">{loading ? 'Loading…' : 'No Clanker activity yet.'}</div>
 			{/if}
 		</section>
 	</div>
