@@ -114,3 +114,26 @@ func (s *Server) handleDeleteCriterion(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// handleIssueByCommit handles GET /api/commits/{sha} → the issue that
+// recorded this commit, with its done-when criteria.
+//
+// The reverse of POST /api/issues/{id}/commits, and the seam a code
+// intelligence tool needs: both systems already record a commit SHA, so it
+// is the one key that joins "why this was built" to "what the code
+// actually does". Without it, a tool holding a SHA has no way to ask Raenil
+// what that commit was supposed to accomplish.
+//
+// 404 when no issue claims the SHA — an ordinary outcome, not an error.
+func (s *Server) handleIssueByCommit(w http.ResponseWriter, r *http.Request) {
+	sha := r.PathValue("sha")
+	if sha == "" {
+		writeErr(w, http.StatusBadRequest, "sha required")
+		return
+	}
+	owner, err := s.store.IssueByCommit(r.Context(), sha)
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, 200, owner)
+}

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -138,4 +139,56 @@ func (s *Store) DeleteCriterion(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// CommitOwner is the issue a commit belongs to, with the done-when list
+// that commit was meant to satisfy.
+//
+// This is the reverse of AddCommit, and it exists so a code-intelligence
+// tool can start from a commit SHA — the one identifier both systems
+// already record — and recover the intent behind it. Raenil knows WHY code
+// was written; a tool like Lumos knows WHAT it actually does. Matching the
+// two is what turns "the ticket says it is done" into "the code shows it is
+// done".
+type CommitOwner struct {
+	IssueID   string             `json:"issueId"`
+	IssueKey  string             `json:"issueKey"`
+	Title     string             `json:"title"`
+	State     string             `json:"state"`
+	SHA       string             `json:"sha"`
+	Message   string             `json:"message"`
+	URL       *string            `json:"url"`
+	Criteria  []models.Criterion `json:"criteria"`
+	CreatedAt time.Time          `json:"createdAt"`
+}
+
+// IssueByCommit returns the issue that recorded sha, with its acceptance
+// criteria.
+//
+// Matches on prefix in both directions so a short SHA (git rev-parse
+// --short, which is what most tools record) finds a full one and vice
+// versa. Returns pgx.ErrNoRows when no issue claims the commit — an
+// ordinary outcome, since plenty of commits are not tracked.
+func (s *Store) IssueByCommit(ctx context.Context, sha string) (CommitOwner, error) {
+	var out CommitOwner
+	err := s.pool.QueryRow(ctx, `
+		SELECT i.id, i.key, i.title, COALESCE(ws.name, ''),
+		       ic.sha, ic.message, ic.url, ic.created_at
+		FROM issue_commits ic
+		JOIN issues i ON i.id = ic.issue_id
+		LEFT JOIN workflow_states ws ON ws.id = i.state_id
+		WHERE ic.sha = $1 OR ic.sha LIKE $1 || '%' OR $1 LIKE ic.sha || '%'
+		ORDER BY length(ic.sha) DESC, ic.created_at DESC
+		LIMIT 1
+	`, sha).Scan(&out.IssueID, &out.IssueKey, &out.Title, &out.State,
+		&out.SHA, &out.Message, &out.URL, &out.CreatedAt)
+	if err != nil {
+		return out, err
+	}
+	crit, err := s.ListCriteria(ctx, out.IssueID)
+	if err != nil {
+		return out, err
+	}
+	out.Criteria = crit
+	return out, nil
 }

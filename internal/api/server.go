@@ -121,6 +121,9 @@ func (s *Server) Handler() http.Handler {
 	// dev links (branch / PR / commits) + done-when criteria
 	mux.HandleFunc("GET /api/issues/{id}/commits", s.guard(s.handleListCommits))
 	mux.HandleFunc("POST /api/issues/{id}/commits", s.guard(s.handleAddCommit))
+	// Reverse lookup: which issue owns this commit, and what was it meant
+	// to satisfy. The seam for code-intelligence tooling — see dev.go.
+	mux.HandleFunc("GET /api/commits/{sha}", s.guard(s.handleIssueByCommit))
 	mux.HandleFunc("PATCH /api/issues/{id}/dev", s.guard(s.handleSetDev))
 	mux.HandleFunc("GET /api/issues/{id}/criteria", s.guard(s.handleListCriteria))
 	mux.HandleFunc("POST /api/issues/{id}/criteria", s.guard(s.handleAddCriterion))

@@ -41,6 +41,23 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		return jsonResult(c)
 	})
 
+	// ---- issue_by_commit ----
+	s.AddTool(mcp.NewTool("issue_by_commit",
+		mcp.WithDescription("Find the issue that recorded a commit SHA, with its done-when criteria. "+
+			"The reverse of link_commit. Use it when you have a commit and need the intent behind "+
+			"it — e.g. a code-intelligence tool reports what a commit actually changed, and you want "+
+			"to check that against what the ticket said it should do. Matches short and full SHAs "+
+			"in either direction. Returns not-found when no issue claims the commit, which is "+
+			"ordinary: plenty of commits are untracked."),
+		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, short or full")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		owner, err := d.store.IssueByCommit(ctx, req.GetString("sha", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return jsonResult(owner)
+	})
+
 	// ---- set_issue_dev ----
 	s.AddTool(mcp.NewTool("set_issue_dev",
 		mcp.WithDescription("Set the branch and/or pull-request URL that implemented an issue."),
