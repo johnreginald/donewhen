@@ -38,6 +38,8 @@ docker compose run --rm raenil /app/raenil genvapid
 docker compose up -d --build
 docker compose exec raenil /app/raenil user you@example.com 'a-strong-password'
 docker compose exec raenil /app/raenil token claude   # copy the token
+# Optional: pin a token to one workspace so an agent sees only that tracker
+docker compose exec raenil /app/raenil token globex-agent globex
 ```
 
 Open `https://tracker.yourdomain.com`, sign in, and (Settings → Notifications)
@@ -85,3 +87,45 @@ gunzip -c backups/raenil-YYYYMMDD-HHMMSS.sql.gz | \
 git pull
 docker compose up -d --build   # migrations run automatically on start
 ```
+
+
+## Workspaces
+
+Raenil is multi-tenant: `Workspace → Project (initiative) → Epic → Issue`. A
+workspace owns its issues, epics, labels, board columns, artifacts and activity
+log, and only its members can read them — over REST, over MCP, and over the SSE
+stream alike.
+
+```bash
+raenil workspace list                          # what exists, and how many members
+raenil workspace create "Client Work" CLI      # new issues become CLI-1, CLI-2, …
+raenil workspace add client-work sam@x.com member
+```
+
+New issues take their workspace's key prefix. **Existing keys are never
+rewritten** — a workspace that already holds `ACM-*` issues adopts `ACM` and
+continues from the highest number in use, so nothing that references an old key
+breaks.
+
+### Upgrading an existing install
+
+Migration `0011` introduces workspaces and backfills one per existing
+initiative. Issues with no epic are placed by their key prefix where that prefix
+belongs to a single workspace; anything genuinely unplaceable lands in an
+`Unsorted` workspace, which is only created if such rows exist. Every existing
+account becomes an owner of every workspace, so nobody loses access.
+
+It rewrites `issues.state_id` and every label link, so **take a backup first and
+rehearse against it**:
+
+```bash
+make backup                                   # ./backups/raenil-<ts>.sql.gz
+createdb raenil_rehearsal
+gunzip -c backups/raenil-<ts>.sql.gz | psql raenil_rehearsal
+RAENIL_DATABASE_URL=postgres://…/raenil_rehearsal ./raenil migrate
+```
+
+Then compare row counts for `issues`, `labels`, `issue_labels`, `documents` and
+`activity` before and after — they must be identical, with only foreign keys
+repointed. The whole migration runs in one transaction, so a failure rolls back
+cleanly.

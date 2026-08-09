@@ -1,6 +1,8 @@
 import { writable, get } from 'svelte/store';
-import { api } from './api.js';
+import { api, getWorkspace, setWorkspace } from './api.js';
 
+export const workspaces = writable([]); // the caller's memberships
+export const activeWorkspace = writable(null); // the one everything is scoped to
 export const states = writable([]);
 export const projects = writable([]);
 export const initiatives = writable([]);
@@ -12,6 +14,42 @@ export const activeProject = writable(''); // '' = all (epic-level filter)
 export const activeInitiative = writable(''); // '' = all (Project-level filter)
 export const activeLabel = writable(''); // '' = all (label filter)
 export const inboxCount = writable(0); // needs-review queue size (sidebar badge)
+
+// loadWorkspaces resolves which workspaces the caller can reach and settles on
+// one. It must run before loadMeta: every other request is scoped to the result.
+export async function loadWorkspaces() {
+	const list = (await api.workspaces()) || [];
+	workspaces.set(list);
+	if (!list.length) {
+		activeWorkspace.set(null);
+		setWorkspace('');
+		return null;
+	}
+	// Prefer the stored choice, but only if it is still one of ours.
+	const stored = getWorkspace();
+	const chosen = list.find((w) => w.slug === stored || w.id === stored) || list[0];
+	activeWorkspace.set(chosen);
+	setWorkspace(chosen.slug);
+	return chosen;
+}
+
+// switchWorkspace changes what every view is looking at. The per-workspace
+// filters are cleared because their ids belong to the workspace being left.
+export async function switchWorkspace(slug) {
+	const list = get(workspaces);
+	const target = list.find((w) => w.slug === slug || w.id === slug);
+	if (!target) return;
+	setWorkspace(target.slug);
+	activeWorkspace.set(target);
+	activeInitiative.set('');
+	activeProject.set('');
+	activeLabel.set('');
+	issues.set([]);
+	// Remember the choice server-side so a new session lands here too.
+	api.activateWorkspace(target.id).catch(() => {});
+	await loadMeta();
+	await loadIssues();
+}
 
 export async function loadMeta() {
 	const [st, pr, ini, lb, cfg] = await Promise.all([

@@ -1,14 +1,39 @@
-// Thin REST client. Sends cookies; adds the CSRF header on mutations.
+// Thin REST client. Sends cookies; adds the CSRF header on mutations, and names
+// the active workspace on every request — the server scopes everything to it.
 
 function getCookie(name) {
 	const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
 	return m ? decodeURIComponent(m[1]) : '';
 }
 
+const WS_KEY = 'raenil_workspace';
+
+// The active workspace lives in localStorage so a reload lands in the same
+// place, and so this module can read it without importing the store (which
+// imports this file).
+export function getWorkspace() {
+	try {
+		return localStorage.getItem(WS_KEY) || '';
+	} catch {
+		return '';
+	}
+}
+
+export function setWorkspace(slug) {
+	try {
+		if (slug) localStorage.setItem(WS_KEY, slug);
+		else localStorage.removeItem(WS_KEY);
+	} catch {
+		/* private mode: fall back to the server's default */
+	}
+}
+
 async function request(method, path, body) {
 	const headers = {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('raenil_csrf');
+	const wsp = getWorkspace();
+	if (wsp) headers['X-Workspace'] = wsp;
 	const res = await fetch('/api' + path, {
 		method,
 		headers,
@@ -18,6 +43,19 @@ async function request(method, path, body) {
 	if (res.status === 401) {
 		const err = new Error('unauthorized');
 		err.status = 401;
+		throw err;
+	}
+	if (res.status === 403) {
+		// The stored workspace is no longer ours (revoked, renamed, deleted).
+		// Drop it so the next request falls back to a workspace we do have,
+		// and let the caller re-pick rather than logging out.
+		const data = await res.json().catch(() => null);
+		const err = new Error((data && data.error) || 'forbidden');
+		err.status = 403;
+		if (wsp) {
+			setWorkspace('');
+			err.workspaceRejected = true;
+		}
 		throw err;
 	}
 	if (res.status === 204) return null;
@@ -36,7 +74,17 @@ export const api = {
 	patch: (p, b) => request('PATCH', p, b ?? {}),
 	del: (p) => request('DELETE', p),
 
+	// workspaces — the tenancy boundary
+	workspaces: () => request('GET', '/workspaces'),
+	createWorkspace: (b) => request('POST', '/workspaces', b),
+	updateWorkspace: (id, b) => request('PATCH', `/workspaces/${id}`, b),
+	activateWorkspace: (id) => request('POST', `/workspaces/${id}/activate`, {}),
+	members: (id) => request('GET', `/workspaces/${id}/members`),
+	addMember: (id, b) => request('POST', `/workspaces/${id}/members`, b),
+	removeMember: (id, userId) => request('DELETE', `/workspaces/${id}/members/${userId}`),
+
 	// auth
+	me: () => request('GET', '/me'),
 	authStatus: () => request('GET', '/auth/status'),
 	setup: (email, password) => request('POST', '/auth/setup', { email, password }),
 	login: (email, password) => request('POST', '/auth/login', { email, password }),
@@ -105,7 +153,7 @@ export const api = {
 
 	// tokens
 	tokens: () => request('GET', '/tokens'),
-	createToken: (name) => request('POST', '/tokens', { name }),
+	createToken: (name, workspace) => request('POST', '/tokens', { name, workspace }),
 	deleteToken: (id) => request('DELETE', `/tokens/${id}`),
 
 	// push
