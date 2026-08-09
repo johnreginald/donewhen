@@ -182,25 +182,26 @@ type CommitOwner struct {
 }
 
 // IssueByCommit returns the issue that recorded sha, with its acceptance
-// criteria, scoped to one workspace.
+// criteria, searched across the given workspaces.
 //
 // Matches on prefix in both directions so a short SHA (git rev-parse
 // --short, which is what most tools record) finds a full one and vice
 // versa. Returns pgx.ErrNoRows when no issue claims the commit — an
 // ordinary outcome, since plenty of commits are not tracked.
-func (s *Store) IssueByCommit(ctx context.Context, wsID, sha string) (CommitOwner, error) {
+func (s *Store) IssueByCommit(ctx context.Context, wsIDs []string, sha string) (CommitOwner, error) {
 	var out CommitOwner
+	var wsID string
 	err := s.pool.QueryRow(ctx, `
-		SELECT i.id, i.key, i.title, COALESCE(ws.name, ''),
+		SELECT i.id, i.key, i.title, COALESCE(ws.name, ''), i.workspace_id,
 		       ic.sha, ic.message, ic.url, ic.created_at
 		FROM issue_commits ic
 		JOIN issues i ON i.id = ic.issue_id
 		LEFT JOIN workflow_states ws ON ws.id = i.state_id
-		WHERE i.workspace_id = $2
+		WHERE i.workspace_id = ANY($2)
 		  AND (ic.sha = $1 OR ic.sha LIKE $1 || '%' OR $1 LIKE ic.sha || '%')
 		ORDER BY length(ic.sha) DESC, ic.created_at DESC
 		LIMIT 1
-	`, sha, wsID).Scan(&out.IssueID, &out.IssueKey, &out.Title, &out.State,
+	`, sha, wsIDs).Scan(&out.IssueID, &out.IssueKey, &out.Title, &out.State, &wsID,
 		&out.SHA, &out.Message, &out.URL, &out.CreatedAt)
 	if err != nil {
 		return out, err

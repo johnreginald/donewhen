@@ -58,6 +58,9 @@ type DocFilter struct {
 	ProjectID    string
 	IssueID      string
 	InitiativeID string
+	// WorkspaceIDs widens a listing beyond the single workspace passed to
+	// ListDocuments — the agent surface only.
+	WorkspaceIDs []string
 }
 
 const docCols = `id, title, body_md, type, author, project_id, initiative_id, issue_id, created_at, updated_at`
@@ -70,8 +73,12 @@ func scanDocument(row pgx.Row) (models.Document, error) {
 }
 
 func (s *Store) ListDocuments(ctx context.Context, wsID string, f DocFilter) ([]models.Document, error) {
-	q := `SELECT ` + docCols + ` FROM documents WHERE workspace_id=$1`
-	args := []any{wsID}
+	scope := f.WorkspaceIDs
+	if len(scope) == 0 {
+		scope = []string{wsID}
+	}
+	q := `SELECT ` + docCols + ` FROM documents WHERE workspace_id = ANY($1)`
+	args := []any{scope}
 	n := 1
 	add := func(col string, v string) {
 		if v == "" {

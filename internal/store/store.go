@@ -50,11 +50,26 @@ func isUniqueViolation(err error, constraint string) bool {
 	return constraint == "" || pgErr.ConstraintName == constraint
 }
 
+// scopeIDs normalizes the one-or-many workspace scope into the array form the
+// queries use, so a single-workspace read and a multi-workspace read share one
+// code path and cannot drift apart.
+func scopeIDs(one string, many []string) []string {
+	if one != "" {
+		return []string{one}
+	}
+	return many
+}
+
 // ---- Issues ----
 
 type IssueFilter struct {
-	WorkspaceID  string // required — the tenancy boundary
+	// WorkspaceID scopes to exactly one workspace — what a browser request
+	// always wants. WorkspaceIDs scopes to several, for an agent whose token
+	// spans the account's memberships. Exactly one of the two must be set.
+	WorkspaceID  string
+	WorkspaceIDs []string
 	StateID      string
+	StateName    string // resolves by name, so it works across workspaces
 	ProjectID    string
 	InitiativeID string // all issues whose epic belongs to this Project (initiative)
 	LabelID      string // all issues carrying this label
@@ -81,11 +96,11 @@ func scanIssue(row pgx.Row) (models.Issue, error) {
 }
 
 func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, error) {
-	if f.WorkspaceID == "" {
+	if f.WorkspaceID == "" && len(f.WorkspaceIDs) == 0 {
 		return nil, errors.New("ListIssues: workspace id is required")
 	}
-	q := `SELECT ` + issueCols + ` FROM issues i WHERE i.workspace_id = $1`
-	args := []any{f.WorkspaceID}
+	q := `SELECT ` + issueCols + ` FROM issues i WHERE i.workspace_id = ANY($1)`
+	args := []any{scopeIDs(f.WorkspaceID, f.WorkspaceIDs)}
 	n := 1
 	add := func(cond string, v any) {
 		n++
@@ -94,6 +109,11 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 	}
 	if f.StateID != "" {
 		add("i.state_id=", f.StateID)
+	}
+	if f.StateName != "" {
+		n++
+		q += fmt.Sprintf(" AND i.state_id IN (SELECT id FROM workflow_states WHERE lower(name)=lower($%d))", n)
+		args = append(args, f.StateName)
 	}
 	if f.ProjectID != "" {
 		add("i.project_id=", f.ProjectID)
@@ -175,13 +195,13 @@ func (s *Store) attachLabels(ctx context.Context, issues []models.Issue) ([]mode
 }
 
 // IssuesMissingDocs returns completed-category issues with no attached document.
-func (s *Store) IssuesMissingDocs(ctx context.Context, wsID string) ([]models.Issue, error) {
+func (s *Store) IssuesMissingDocs(ctx context.Context, wsIDs []string) ([]models.Issue, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+issueCols+`
 		FROM issues i JOIN workflow_states w ON w.id = i.state_id
-		WHERE i.workspace_id = $1
+		WHERE i.workspace_id = ANY($1)
 		  AND w.category = 'completed'
 		  AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.issue_id = i.id)
-		ORDER BY i.number`, wsID)
+		ORDER BY i.number`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -240,6 +260,39 @@ func (s *Store) WorkspaceOfIssueKey(ctx context.Context, key string) (string, er
 	var wsID string
 	err := s.pool.QueryRow(ctx,
 		`SELECT workspace_id FROM issues WHERE upper(key)=upper($1)`, key).Scan(&wsID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return wsID, err
+}
+
+// WorkspaceOfIssueRef resolves a uuid or a human key to its workspace.
+//
+// This is the seam that lets a caller say "R-289" and have the workspace worked
+// out rather than demanded. It is a lookup, not a guess — but it deliberately
+// answers for ANY issue, so every caller must check membership on the result
+// before using it.
+func (s *Store) WorkspaceOfIssueRef(ctx context.Context, ref string) (string, error) {
+	var wsID string
+	err := s.pool.QueryRow(ctx,
+		`SELECT workspace_id FROM issues WHERE id::text = $1 OR upper(key) = upper($1)`, ref).Scan(&wsID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return wsID, err
+}
+
+// WorkspaceOf resolves the owning workspace of a row in one of the tenant
+// tables. Same contract as WorkspaceOfIssueRef: the caller checks membership.
+func (s *Store) WorkspaceOf(ctx context.Context, table, id string) (string, error) {
+	switch table {
+	case "projects", "initiatives", "documents":
+	default:
+		return "", fmt.Errorf("WorkspaceOf: unsupported table %q", table)
+	}
+	var wsID string
+	err := s.pool.QueryRow(ctx,
+		`SELECT workspace_id FROM `+table+` WHERE id::text = $1`, id).Scan(&wsID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
 	}

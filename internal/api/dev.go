@@ -131,7 +131,7 @@ func (s *Server) handleIssueByCommit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "sha required")
 		return
 	}
-	owner, err := s.store.IssueByCommit(r.Context(), ws(r), sha)
+	owner, err := s.store.IssueByCommit(r.Context(), []string{ws(r)}, sha)
 	if handleStoreErr(w, err) {
 		return
 	}

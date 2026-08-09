@@ -27,7 +27,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("url", mcp.Description("Full commit URL; omit to auto-build from the project repo")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -57,11 +57,11 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, short or full")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		owner, err := d.store.IssueByCommit(ctx, wsID, req.GetString("sha", ""))
+		owner, err := d.store.IssueByCommit(ctx, wsIDs, req.GetString("sha", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -76,7 +76,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("prUrl", mcp.Description("Pull request URL")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -98,7 +98,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -136,7 +136,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			})),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -190,7 +190,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithBoolean("done", mcp.Description("Met? default true")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -230,7 +230,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

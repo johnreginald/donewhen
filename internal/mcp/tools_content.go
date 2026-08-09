@@ -18,11 +18,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithString("issueId", mcp.Required(), mcp.Description("Issue id or key")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		ref, err := req.RequireString("issueId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		ref, err := req.RequireString("issueId")
+		wsID, err := d.scopeOne(ctx, req, issueRef(ref))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -43,15 +43,15 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithString("body", mcp.Required(), mcp.Description("Markdown comment body")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
 		ref, err := req.RequireString("issueId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		body, err := req.RequireString("body")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		wsID, err := d.scopeOne(ctx, req, issueRef(ref))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -74,11 +74,12 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithString("initiative", mcp.Description("Initiative id filter")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		docs, err := d.store.ListDocuments(ctx, wsID, store.DocFilter{
+		docs, err := d.store.ListDocuments(ctx, "", store.DocFilter{
+			WorkspaceIDs: wsIDs,
 			ProjectID:    req.GetString("project", ""),
 			IssueID:      req.GetString("issue", ""),
 			InitiativeID: req.GetString("initiative", ""),
@@ -94,11 +95,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithString("id", mcp.Required(), mcp.Description("Document id")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		id, err := req.RequireString("id")
+		wsID, err := d.scopeOne(ctx, req, documentRef(id))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -133,7 +134,8 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			mcp.Items(map[string]any{"type": "string"})),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsID, err := d.scopeOne(ctx, req, documentRef(req.GetString("id", "")), issueRef(req.GetString("issue", "")),
+			projectRef(req.GetString("project", "")), iniRef(req.GetString("initiative", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -172,11 +174,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			"engineering journal. Write an implementation doc for each with save_document."),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		wsID, err := d.ws(ctx, req)
+		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		issues, err := d.store.IssuesMissingDocs(ctx, wsID)
+		issues, err := d.store.IssuesMissingDocs(ctx, wsIDs)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

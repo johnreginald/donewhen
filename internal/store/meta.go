@@ -14,9 +14,17 @@ import (
 // ---- Workflow states ----
 
 func (s *Store) ListStates(ctx context.Context, wsID string) ([]models.WorkflowState, error) {
+	return s.ListStatesAcross(ctx, []string{wsID})
+}
+
+// ListStatesAcross reads the board columns of several workspaces at once. Only
+// the agent surface uses the Across variants: a browser is always in exactly
+// one workspace, and keeping its methods single-valued preserves the
+// compile-time guarantee that a request cannot accidentally widen its scope.
+func (s *Store) ListStatesAcross(ctx context.Context, wsIDs []string) ([]models.WorkflowState, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, name, category, position, color FROM workflow_states
-		 WHERE workspace_id=$1 ORDER BY position`, wsID)
+		 WHERE workspace_id = ANY($1) ORDER BY position`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +84,12 @@ func (s *Store) resolveStateTx(ctx context.Context, tx pgx.Tx, wsID, id, name st
 // ---- Label groups & labels ----
 
 func (s *Store) ListLabelGroups(ctx context.Context, wsID string) ([]models.LabelGroup, error) {
+	return s.ListLabelGroupsAcross(ctx, []string{wsID})
+}
+
+func (s *Store) ListLabelGroupsAcross(ctx context.Context, wsIDs []string) ([]models.LabelGroup, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, exclusive FROM label_groups WHERE workspace_id=$1 ORDER BY name`, wsID)
+		`SELECT id, name, exclusive FROM label_groups WHERE workspace_id = ANY($1) ORDER BY name`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +106,12 @@ func (s *Store) ListLabelGroups(ctx context.Context, wsID string) ([]models.Labe
 }
 
 func (s *Store) ListLabels(ctx context.Context, wsID string) ([]models.Label, error) {
+	return s.ListLabelsAcross(ctx, []string{wsID})
+}
+
+func (s *Store) ListLabelsAcross(ctx context.Context, wsIDs []string) ([]models.Label, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, group_id, name, color FROM labels WHERE workspace_id=$1 ORDER BY name`, wsID)
+		`SELECT id, group_id, name, color FROM labels WHERE workspace_id = ANY($1) ORDER BY name`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -219,9 +235,13 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, wsID string, i
 // ---- Initiatives ----
 
 func (s *Store) ListInitiatives(ctx context.Context, wsID string) ([]models.Initiative, error) {
+	return s.ListInitiativesAcross(ctx, []string{wsID})
+}
+
+func (s *Store) ListInitiativesAcross(ctx context.Context, wsIDs []string) ([]models.Initiative, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at
-		 FROM initiatives WHERE workspace_id=$1 ORDER BY position, created_at`, wsID)
+		 FROM initiatives WHERE workspace_id = ANY($1) ORDER BY position, created_at`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -287,9 +307,13 @@ func (s *Store) DeleteInitiative(ctx context.Context, wsID, id string) error {
 // ---- Projects ----
 
 func (s *Store) ListProjects(ctx context.Context, wsID, initiativeID string) ([]models.Project, error) {
+	return s.ListProjectsAcross(ctx, []string{wsID}, initiativeID)
+}
+
+func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiativeID string) ([]models.Project, error) {
 	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
-	      FROM projects WHERE workspace_id=$1`
-	args := []any{wsID}
+	      FROM projects WHERE workspace_id = ANY($1)`
+	args := []any{wsIDs}
 	if initiativeID != "" {
 		q += ` AND initiative_id=$2`
 		args = append(args, initiativeID)

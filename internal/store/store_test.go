@@ -246,6 +246,104 @@ func TestPushSubscriptionsFollowMembership(t *testing.T) {
 	}
 }
 
+// An agent reading across its memberships sees all of them at once, and each
+// row says which workspace it came from.
+func TestListIssuesSpansWorkspaces(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	wsA, wsB := newWorkspace(t, s), newWorkspace(t, s)
+
+	a, err := s.CreateIssue(ctx, wsA, IssueInput{Title: "in a", StateName: "Backlog"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreateIssue(ctx, wsB, IssueInput{Title: "in b", StateName: "Ready"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	both, err := s.ListIssues(ctx, IssueFilter{WorkspaceIDs: []string{wsA, wsB}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]string{}
+	for _, is := range both {
+		seen[is.ID] = is.WorkspaceID
+	}
+	if seen[a.ID] != wsA || seen[b.ID] != wsB {
+		t.Fatalf("expected both issues tagged with their own workspace, got %v", seen)
+	}
+
+	// A state name resolves across workspaces, where a state id could not.
+	ready, err := s.ListIssues(ctx, IssueFilter{WorkspaceIDs: []string{wsA, wsB}, StateName: "Ready"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready) != 1 || ready[0].ID != b.ID {
+		t.Fatalf("StateName filter across workspaces returned %d rows, want just the Ready one", len(ready))
+	}
+
+	// Narrowing to one workspace still excludes the other.
+	onlyA, err := s.ListIssues(ctx, IssueFilter{WorkspaceID: wsA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, is := range onlyA {
+		if is.ID == b.ID {
+			t.Fatal("single-workspace read leaked another workspace's issue")
+		}
+	}
+}
+
+// Derivation: a bare key or id is enough to find the owning workspace, which is
+// what lets a caller say "R-289" instead of naming a workspace.
+func TestWorkspaceDerivation(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+
+	is, err := s.CreateIssue(ctx, ws, IssueInput{Title: "derive me", StateName: "Backlog"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []string{is.ID, is.Key, strings.ToLower(is.Key)} {
+		got, err := s.WorkspaceOfIssueRef(ctx, ref)
+		if err != nil {
+			t.Fatalf("resolve %q: %v", ref, err)
+		}
+		if got != ws {
+			t.Fatalf("resolve %q gave the wrong workspace", ref)
+		}
+	}
+	if _, err := s.WorkspaceOfIssueRef(ctx, "NOPE-999"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown ref should be ErrNotFound, got %v", err)
+	}
+
+	ini, err := s.SaveInitiative(ctx, ws, models.Initiative{Name: "derive ini"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proj, err := s.SaveProject(ctx, ws, models.Project{Name: "derive epic", InitiativeID: &ini.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.SaveDocument(ctx, ws, models.Document{Title: "derive doc", IssueID: &is.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ table, id string }{
+		{"initiatives", ini.ID}, {"projects", proj.ID}, {"documents", doc.ID},
+	} {
+		got, err := s.WorkspaceOf(ctx, c.table, c.id)
+		if err != nil || got != ws {
+			t.Fatalf("WorkspaceOf(%s) = %q, %v", c.table, got, err)
+		}
+	}
+	if _, err := s.WorkspaceOf(ctx, "users", is.ID); err == nil {
+		t.Fatal("WorkspaceOf should refuse a table outside the tenant set")
+	}
+}
+
 func TestExclusiveLabelGroupLastWins(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
