@@ -68,17 +68,24 @@ same verbs as the Linear MCP, so existing workflow habits carry over.
 
 ### Workspaces and MCP
 
-Every tool acts on exactly one workspace. Pin a token to one so an agent working
-in a given repo only ever sees that repo's tracker:
+You rarely have to say which workspace you mean. Listing tools span every
+workspace the token can reach, and a call that names an existing issue, epic,
+initiative or document has the workspace derived from it — issue keys are
+globally unique, so `get_issue R-8` is a lookup, not a guess. Membership is
+checked on whatever comes back, so deriving can never reach a workspace the
+account is not in.
+
+The one genuinely ambiguous case is creating something with no parent to inherit
+from. There, pass `workspace: "globex"` (or belong to a single workspace).
+
+Pin a token when an agent should be confined to one repo's tracker:
 
 ```bash
-raenil token globex-agent globex    # pinned to the 'globex' workspace
+raenil token globex-agent globex    # sees only the 'globex' workspace
 ```
 
-A pinned token is refused if it asks for any other workspace. An unpinned token
-whose owner belongs to several must name one (`workspace: "globex"` on the tool
-call, or the `X-Workspace` header over REST) rather than having one guessed for
-it. `list_workspaces` shows what a token can reach.
+A pinned token needs no argument at all and is refused any other workspace.
+`list_workspaces` shows what a token can reach.
 
 ### Mermaid convention
 

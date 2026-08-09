@@ -28,7 +28,7 @@ func (s *Server) handleIssueActivity(w http.ResponseWriter, r *http.Request) {
 // handleMissingDocs returns completed issues with no attached artifact — the
 // gaps in the record.
 func (s *Server) handleMissingDocs(w http.ResponseWriter, r *http.Request) {
-	iss, err := s.store.IssuesMissingDocs(r.Context(), ws(r))
+	iss, err := s.store.IssuesMissingDocs(r.Context(), []string{ws(r)})
 	if handleStoreErr(w, err) {
 		return
 	}

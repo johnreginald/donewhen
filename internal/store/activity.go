@@ -61,7 +61,9 @@ func (s *Store) ListActivity(ctx context.Context, wsID, issueID string) ([]model
 
 // ActivityFilter scopes the recent-activity (log) feed.
 type ActivityFilter struct {
-	WorkspaceID  string // required — the tenancy boundary
+	// One of WorkspaceID / WorkspaceIDs is required — the tenancy boundary.
+	WorkspaceID  string
+	WorkspaceIDs []string
 	InitiativeID string
 	ProjectID    string
 	Actor        string // human | ai
@@ -70,8 +72,11 @@ type ActivityFilter struct {
 
 // ListRecentActivity returns the cross-issue log feed, newest first.
 func (s *Store) ListRecentActivity(ctx context.Context, f ActivityFilter) ([]models.Activity, error) {
-	q := `SELECT ` + activityCols + ` FROM activity a WHERE a.workspace_id = $1`
-	args := []any{f.WorkspaceID}
+	if f.WorkspaceID == "" && len(f.WorkspaceIDs) == 0 {
+		return nil, fmt.Errorf("ListRecentActivity: workspace id is required")
+	}
+	q := `SELECT ` + activityCols + ` FROM activity a WHERE a.workspace_id = ANY($1)`
+	args := []any{scopeIDs(f.WorkspaceID, f.WorkspaceIDs)}
 	n := 1
 	if f.Actor != "" {
 		n++
