@@ -174,10 +174,16 @@ func (m *Manager) ResolveWorkspace(ctx context.Context, user models.User, reques
 		return ws, role, nil
 	}
 
-	if last, err := m.Store.LastWorkspace(ctx, user.ID); err == nil && last != "" {
-		if ws, err := m.Store.GetWorkspace(ctx, last); err == nil {
-			if role, err := m.Store.RoleIn(ctx, ws.ID, user.ID); err == nil {
-				return ws, role, nil
+	// Where the user was last is a convenience for the browser only. An agent
+	// must never inherit it: "wherever the human was last looking" is not the
+	// same as "the workspace this tool call means", and silently writing to the
+	// wrong tracker is the failure this whole boundary exists to prevent.
+	if ActorFrom(ctx) == ActorHuman {
+		if last, err := m.Store.LastWorkspace(ctx, user.ID); err == nil && last != "" {
+			if ws, err := m.Store.GetWorkspace(ctx, last); err == nil {
+				if role, err := m.Store.RoleIn(ctx, ws.ID, user.ID); err == nil {
+					return ws, role, nil
+				}
 			}
 		}
 	}
@@ -186,18 +192,16 @@ func (m *Manager) ResolveWorkspace(ctx context.Context, user models.User, reques
 	if err != nil {
 		return models.Workspace{}, "", err
 	}
-	switch len(memberships) {
-	case 0:
+	if len(memberships) == 0 {
 		return models.Workspace{}, "", ErrNoWorkspace
-	default:
-		// A human browser gets a sensible default; an agent that could act on
-		// several workspaces is made to say which, so it cannot write to the
-		// wrong one by accident.
-		if ActorFrom(ctx) == ActorAI && len(memberships) > 1 {
-			return models.Workspace{}, "", ErrAmbiguousWorkspace
-		}
-		return memberships[0].Workspace, memberships[0].Role, nil
 	}
+	// A sole membership is unambiguous for anyone. Beyond that a human browser
+	// gets a sensible default, while an agent is made to say which workspace it
+	// means — pin its token, or pass `workspace` on the call.
+	if ActorFrom(ctx) == ActorAI && len(memberships) > 1 {
+		return models.Workspace{}, "", ErrAmbiguousWorkspace
+	}
+	return memberships[0].Workspace, memberships[0].Role, nil
 }
 
 // RequestedWorkspace pulls the workspace a request names, from the header or
