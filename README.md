@@ -7,7 +7,8 @@ the browser and by Claude over MCP. Continuous-flow Kanban, no sprints/estimates
 - **Realtime:** SSE for live board updates · Web Push (VAPID) for background phone notifications
 - **AI:** an MCP server whose tools mirror Linear's verbs (`save_issue`, `list_issues`, …)
 - **Docs:** markdown with rendered ```mermaid diagrams
-- **Hierarchy:** Initiatives → Projects → Issues
+- **Hierarchy:** Workspaces → Projects (initiatives) → Epics → Issues
+- **Tenancy:** every workspace is a hard boundary — its own issues, epics, labels, board columns, artifacts and activity log, visible only to its members
 - **States:** Triage → Backlog → Aligning → Ready → In Progress → In Review → Done → Canceled
 
 ## Quick start (local, no Docker)
@@ -28,6 +29,7 @@ make build
 # 4. Migrate + create your account + an API token for Claude
 ./raenil migrate
 ./raenil user you@example.com 'a-strong-password'
+./raenil workspace create "My Work" MYW   # first workspace; keys become MYW-1, MYW-2, …
 ./raenil genvapid          # paste the two lines into .env, then re-export
 ./raenil token claude      # copy the printed token
 
@@ -45,6 +47,7 @@ docker compose up -d --build
 
 # first-time account + token (exec into the running container)
 docker compose exec raenil /app/raenil user you@example.com 'a-strong-password'
+docker compose exec raenil /app/raenil workspace create "My Work" MYW
 docker compose exec raenil /app/raenil token claude
 ```
 
@@ -63,6 +66,20 @@ claude mcp add --transport http raenil https://tracker.yourdomain.com/mcp \
 Tools appear as `mcp__raenil__save_issue`, `mcp__raenil__list_issues`, etc. — the
 same verbs as the Linear MCP, so existing workflow habits carry over.
 
+### Workspaces and MCP
+
+Every tool acts on exactly one workspace. Pin a token to one so an agent working
+in a given repo only ever sees that repo's tracker:
+
+```bash
+raenil token lumos-agent lumos    # pinned to the 'lumos' workspace
+```
+
+A pinned token is refused if it asks for any other workspace. An unpinned token
+whose owner belongs to several must name one (`workspace: "lumos"` on the tool
+call, or the `X-Workspace` header over REST) rather than having one guessed for
+it. `list_workspaces` shows what a token can reach.
+
 ### Mermaid convention
 
 Backend-labeled issues should include a ```mermaid diagram in the description.
@@ -77,7 +94,10 @@ add `mcp__raenil__save_issue` to its PreToolUse matcher (see `docs/DEPLOY.md`).
 | `raenil migrate` | apply DB migrations |
 | `raenil mcp` | MCP over stdio (local fallback transport) |
 | `raenil user <email> <pass>` | create the account |
-| `raenil token <name>` | create an API token (shown once) |
+| `raenil token <name> [workspace]` | create an API token (shown once); pass a workspace slug to pin it |
+| `raenil workspace list` | show workspaces and member counts |
+| `raenil workspace create <name> <prefix>` | create a workspace |
+| `raenil workspace add <slug> <email> [role]` | grant a user access (owner/admin/member) |
 | `raenil genvapid` | print a fresh VAPID keypair |
 
 ## Backups

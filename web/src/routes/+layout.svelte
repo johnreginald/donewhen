@@ -9,7 +9,7 @@
 	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { loadMeta, loadIssues, applyEvent, me } from '$lib/store.js';
+	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace } from '$lib/store.js';
 	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 	import { Columns3, List, Plus, Settings, LogOut, Inbox, Activity, FileText } from '@lucide/svelte';
@@ -26,6 +26,7 @@
 
 	let { children } = $props();
 	let ready = $state(false);
+	let noWorkspace = $state(false);
 	let mobileNav = $state(false);
 	let userOpen = $state(false);
 	let disconnect;
@@ -53,14 +54,39 @@
 				return;
 			}
 			me.set(status.user);
+			// Resolve the workspace first: every request below is scoped to it.
+			const wsp = await loadWorkspaces();
+			if (!wsp) {
+				noWorkspace = true;
+				ready = true;
+				return;
+			}
 			await loadMeta();
 			await loadIssues();
 			disconnect = connectSSE(handleEvent);
 			ready = true;
-		} catch {
+		} catch (e) {
+			if (e?.status === 403) {
+				// Not a member of the stored workspace; api.js already cleared
+				// it, so a retry falls back to one we do have.
+				noWorkspace = true;
+				ready = true;
+				return;
+			}
 			goto('/login');
 		}
 	}
+
+	// The SSE stream is bound to the workspace it opened with, so it has to be
+	// torn down and reopened whenever the active workspace changes.
+	let streamFor = $state(null);
+	$effect(() => {
+		const wsp = $activeWorkspace;
+		if (!ready || !wsp || streamFor === wsp.id) return;
+		streamFor = wsp.id;
+		disconnect && disconnect();
+		disconnect = connectSSE(handleEvent);
+	});
 
 	function handleEvent(ev) {
 		applyEvent(ev);
@@ -96,6 +122,16 @@
 
 {#if isLogin}
 	{@render children()}
+{:else if noWorkspace}
+	<div class="empty-shell">
+		<h1>No workspace</h1>
+		<p>
+			This account is not a member of any workspace. Ask an owner to add you, or create one
+			from the command line:
+		</p>
+		<pre>raenil workspace create "My Workspace" MYW</pre>
+		<button class="btn" onclick={() => location.reload()}>Retry</button>
+	</div>
 {:else if ready}
 	<div class="shell">
 		<div class="nav-col" class:open={mobileNav}>
@@ -155,6 +191,30 @@
 {/if}
 
 <style>
+	.empty-shell {
+		max-width: 460px;
+		margin: 18vh auto;
+		padding: 0 20px;
+		text-align: center;
+		color: var(--text-dim);
+	}
+	.empty-shell h1 {
+		font-size: 20px;
+		color: var(--text);
+		margin-bottom: 10px;
+	}
+	.empty-shell pre {
+		background: var(--bg-elev2);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 10px 12px;
+		font-family: var(--mono);
+		font-size: 12.5px;
+		margin: 14px 0 18px;
+		overflow-x: auto;
+		text-align: left;
+	}
+
 	.shell {
 		display: flex;
 		height: 100%;
