@@ -29,7 +29,13 @@ CREATE TABLE workspaces (
     slug       text NOT NULL UNIQUE,          -- url-safe handle, e.g. 'acme-engineering'
     name       text NOT NULL,
     key_prefix text NOT NULL UNIQUE,          -- prefix for NEW issue keys, e.g. 'ACM'
-    issue_seq  bigint NOT NULL DEFAULT 0,     -- per-workspace issue counter
+    -- Two counters, deliberately independent. issue_seq is the human-facing key
+    -- suffix (ACM-288). number_seq feeds issues.number, which was a GLOBAL
+    -- sequence before workspaces existed and is now unique per workspace — so a
+    -- brand new workspace whose issues carry high legacy numbers can still hand
+    -- out GLX-1 rather than GLX-501.
+    issue_seq  bigint NOT NULL DEFAULT 0,
+    number_seq bigint NOT NULL DEFAULT 0,
     position   int  NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
@@ -233,17 +239,18 @@ BEGIN
     END LOOP;
 END $$;
 
--- Seed each counter past everything already taken, on BOTH axes it has to stay
--- unique on: the numeric half of an existing key with this prefix (issues.key is
--- globally unique) and the largest number already used inside this workspace
--- (issues.number becomes UNIQUE per workspace below). Note issues.number was a
--- global sequence, so it does NOT match the key's numeric half for imported rows.
-UPDATE workspaces w SET issue_seq = GREATEST(
-    coalesce((SELECT max(coalesce(nullif(regexp_replace(split_part(i.key, '-', 2), '[^0-9]', '', 'g'), ''), '0')::bigint)
-                FROM issues i
-               WHERE upper(split_part(i.key, '-', 1)) = w.key_prefix), 0),
-    coalesce((SELECT max(i.number) FROM issues i WHERE i.workspace_id = w.id), 0)
-);
+-- Seed both counters past everything already taken on their own axis.
+-- issue_seq: the highest suffix of any existing key carrying this prefix, since
+--   issues.key stays globally unique. Zero for a workspace with a fresh prefix.
+-- number_seq: the highest number already inside this workspace, since
+--   issues.number becomes UNIQUE per workspace below.
+UPDATE workspaces w SET
+    issue_seq = coalesce((
+        SELECT max(coalesce(nullif(regexp_replace(split_part(i.key, '-', 2), '[^0-9]', '', 'g'), ''), '0')::bigint)
+          FROM issues i
+         WHERE upper(split_part(i.key, '-', 1)) = w.key_prefix), 0),
+    number_seq = coalesce((
+        SELECT max(i.number) FROM issues i WHERE i.workspace_id = w.id), 0);
 
 -- ---------------------------------------------------------------------------
 -- 6. Clone the workflow states per workspace and repoint every issue.
