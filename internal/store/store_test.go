@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"raenil/internal/db"
+	"raenil/internal/models"
 )
 
 // These tests need a throwaway Postgres. Set RAENIL_TEST_DATABASE_URL to run;
@@ -197,6 +198,51 @@ func TestMembershipGate(t *testing.T) {
 	// The last owner cannot be removed, or the workspace becomes unadministrable.
 	if err := s.RemoveMember(ctx, ws, insider); err == nil {
 		t.Fatal("removing the last owner should be refused")
+	}
+}
+
+// A notification for one workspace must not reach a device whose owner is only
+// a member of another.
+func TestPushSubscriptionsFollowMembership(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	wsA, wsB := newWorkspace(t, s), newWorkspace(t, s)
+	alice, bob := newUser(t, s), newUser(t, s)
+
+	if err := s.AddMember(ctx, wsA, alice, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddMember(ctx, wsB, bob, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	aliceEP := fmt.Sprintf("https://push.test/alice-%d", time.Now().UnixNano())
+	bobEP := fmt.Sprintf("https://push.test/bob-%d", time.Now().UnixNano())
+	for _, sub := range []struct{ user, ep string }{{alice, aliceEP}, {bob, bobEP}} {
+		if err := s.SavePushSubscription(ctx, sub.user, models.PushSubscription{
+			Endpoint: sub.ep, P256dh: "k", Auth: "a",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = s.DeletePushSubscriptionByEndpoint(ctx, sub.ep) })
+	}
+
+	subs, err := s.ListPushSubscriptions(ctx, wsA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sub := range subs {
+		if sub.Endpoint == bobEP {
+			t.Fatal("a non-member's device would have been notified")
+		}
+	}
+	found := false
+	for _, sub := range subs {
+		if sub.Endpoint == aliceEP {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the member's own device was not notified")
 	}
 }
 
