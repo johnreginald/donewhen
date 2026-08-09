@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -15,9 +16,14 @@ const (
 	SessionCookie = "raenil_session"
 	CSRFCookie    = "raenil_csrf"
 	CSRFHeader    = "X-CSRF-Token"
-	SessionTTL    = 30 * 24 * time.Hour
-	ActorHuman    = "human"
-	ActorAI       = "ai"
+	// WorkspaceHeader names the workspace a request acts on, by id, slug or key
+	// prefix. The ?workspace= query parameter is accepted as an alternative for
+	// EventSource, which cannot set headers.
+	WorkspaceHeader = "X-Workspace"
+	WorkspaceQuery  = "workspace"
+	SessionTTL      = 30 * 24 * time.Hour
+	ActorHuman      = "human"
+	ActorAI         = "ai"
 )
 
 type ctxKey int
@@ -25,7 +31,18 @@ type ctxKey int
 const (
 	userKey ctxKey = iota
 	actorKey
+	workspaceKey
+	roleKey
+	tokenPinKey
 )
+
+// ErrNoWorkspace means the caller belongs to no workspace at all — nothing to
+// scope a request to.
+var ErrNoWorkspace = errors.New("no workspace available")
+
+// ErrAmbiguousWorkspace means the caller belongs to several workspaces and did
+// not say which one to use. Better to say so than to silently pick.
+var ErrAmbiguousWorkspace = errors.New("workspace must be specified")
 
 // Manager wires auth against the store and cookie policy.
 type Manager struct {
@@ -48,9 +65,12 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			tok := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
 			if tok != "" {
-				if u, err := m.Store.LookupAPIToken(ctx, HashToken(tok)); err == nil {
+				if u, pin, err := m.Store.LookupAPIToken(ctx, HashToken(tok)); err == nil {
 					ctx = context.WithValue(ctx, userKey, u)
 					ctx = context.WithValue(ctx, actorKey, ActorAI)
+					if pin != nil {
+						ctx = context.WithValue(ctx, tokenPinKey, *pin)
+					}
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
@@ -91,6 +111,109 @@ func ActorFrom(ctx context.Context) string {
 		return a
 	}
 	return ActorHuman
+}
+
+// WorkspaceFrom returns the workspace this request acts on.
+func WorkspaceFrom(ctx context.Context) (models.Workspace, bool) {
+	w, ok := ctx.Value(workspaceKey).(models.Workspace)
+	return w, ok
+}
+
+// RoleFrom returns the caller's role in the active workspace.
+func RoleFrom(ctx context.Context) string {
+	r, _ := ctx.Value(roleKey).(string)
+	return r
+}
+
+// TokenPinFrom returns the workspace an API token is pinned to, if any.
+func TokenPinFrom(ctx context.Context) (string, bool) {
+	p, ok := ctx.Value(tokenPinKey).(string)
+	return p, ok
+}
+
+// WithWorkspace stashes a resolved workspace + role on the context.
+func WithWorkspace(ctx context.Context, ws models.Workspace, role string) context.Context {
+	ctx = context.WithValue(ctx, workspaceKey, ws)
+	return context.WithValue(ctx, roleKey, role)
+}
+
+// ResolveWorkspace decides which workspace a request acts on and proves the
+// caller belongs to it.
+//
+// Order: an explicit request (header or query) wins; then a token's pin; then
+// where the user was last; then their only membership. A caller who names a
+// workspace they are not a member of is refused — never quietly given a
+// different one — and a pinned token may not be talked out of its pin.
+func (m *Manager) ResolveWorkspace(ctx context.Context, user models.User, requested string) (models.Workspace, string, error) {
+	pin, pinned := TokenPinFrom(ctx)
+
+	if requested != "" {
+		ws, err := m.Store.ResolveWorkspace(ctx, requested)
+		if err != nil {
+			return models.Workspace{}, "", err
+		}
+		if pinned && ws.ID != pin {
+			return models.Workspace{}, "", store.ErrNotMember
+		}
+		role, err := m.Store.RoleIn(ctx, ws.ID, user.ID)
+		if err != nil {
+			return models.Workspace{}, "", err
+		}
+		return ws, role, nil
+	}
+
+	if pinned {
+		ws, err := m.Store.GetWorkspace(ctx, pin)
+		if err != nil {
+			return models.Workspace{}, "", err
+		}
+		role, err := m.Store.RoleIn(ctx, ws.ID, user.ID)
+		if err != nil {
+			return models.Workspace{}, "", err
+		}
+		return ws, role, nil
+	}
+
+	if last, err := m.Store.LastWorkspace(ctx, user.ID); err == nil && last != "" {
+		if ws, err := m.Store.GetWorkspace(ctx, last); err == nil {
+			if role, err := m.Store.RoleIn(ctx, ws.ID, user.ID); err == nil {
+				return ws, role, nil
+			}
+		}
+	}
+
+	memberships, err := m.Store.ListMemberships(ctx, user.ID)
+	if err != nil {
+		return models.Workspace{}, "", err
+	}
+	switch len(memberships) {
+	case 0:
+		return models.Workspace{}, "", ErrNoWorkspace
+	default:
+		// A human browser gets a sensible default; an agent that could act on
+		// several workspaces is made to say which, so it cannot write to the
+		// wrong one by accident.
+		if ActorFrom(ctx) == ActorAI && len(memberships) > 1 {
+			return models.Workspace{}, "", ErrAmbiguousWorkspace
+		}
+		return memberships[0].Workspace, memberships[0].Role, nil
+	}
+}
+
+// RequestedWorkspace pulls the workspace a request names, from the header or
+// the query string (EventSource cannot set headers).
+func RequestedWorkspace(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get(WorkspaceHeader)); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.URL.Query().Get(WorkspaceQuery))
+}
+
+// IsAccessError reports whether err means "you may not act on that workspace",
+// as opposed to an infrastructure failure.
+func IsAccessError(err error) bool {
+	return errors.Is(err, store.ErrNotMember) || errors.Is(err, store.ErrNotFound) ||
+		errors.Is(err, ErrNoWorkspace) || errors.Is(err, ErrAmbiguousWorkspace)
 }
 
 // StartSession creates a session row and returns the cookie to set.

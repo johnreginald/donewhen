@@ -54,7 +54,7 @@ type ImportResult struct {
 // UpdateDescriptions overwrites description_md for the given issue keys (used to
 // backfill full bodies after an import that carried truncated descriptions).
 // One transaction, no events. Returns how many rows were updated.
-func (s *Store) UpdateDescriptions(ctx context.Context, byKey map[string]string) (int, error) {
+func (s *Store) UpdateDescriptions(ctx context.Context, wsID string, byKey map[string]string) (int, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -63,7 +63,7 @@ func (s *Store) UpdateDescriptions(ctx context.Context, byKey map[string]string)
 	n := 0
 	for key, desc := range byKey {
 		ct, err := tx.Exec(ctx,
-			`UPDATE issues SET description_md=$1, updated_at=now() WHERE key=$2`, desc, key)
+			`UPDATE issues SET description_md=$1, updated_at=now() WHERE key=$2 AND workspace_id=$3`, desc, key, wsID)
 		if err != nil {
 			return n, err
 		}
@@ -91,7 +91,7 @@ var linearTypeToState = map[string]string{
 // state, priority, project membership, labels, and sub-issue parent keys. It is
 // idempotent: issues whose key already exists are skipped. Runs in one
 // transaction and emits no events (bulk import must not spam push/SSE).
-func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, error) {
+func (s *Store) Import(ctx context.Context, wsID string, data ImportData) (ImportResult, error) {
 	var res ImportResult
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 
 	// --- states: name -> id, plus a default for unmatched statuses ---
 	stateByName := map[string]string{} // lower(name) -> id
-	rows, err := tx.Query(ctx, `SELECT id, name FROM workflow_states`)
+	rows, err := tx.Query(ctx, `SELECT id, name FROM workflow_states WHERE workspace_id=$1`, wsID)
 	if err != nil {
 		return res, err
 	}
@@ -121,7 +121,8 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 	if id, ok := stateByName["backlog"]; ok {
 		defaultState = id
 	} else {
-		if err := tx.QueryRow(ctx, `SELECT id FROM workflow_states ORDER BY position LIMIT 1`).Scan(&defaultState); err != nil {
+		if err := tx.QueryRow(ctx,
+			`SELECT id FROM workflow_states WHERE workspace_id=$1 ORDER BY position LIMIT 1`, wsID).Scan(&defaultState); err != nil {
 			return res, err
 		}
 	}
@@ -151,10 +152,11 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 			return id, nil
 		}
 		var id string
-		err := tx.QueryRow(ctx, `SELECT id FROM initiatives WHERE name=$1 LIMIT 1`, name).Scan(&id)
+		err := tx.QueryRow(ctx,
+			`SELECT id FROM initiatives WHERE name=$1 AND workspace_id=$2 LIMIT 1`, name, wsID).Scan(&id)
 		if err == pgx.ErrNoRows {
 			if err := tx.QueryRow(ctx,
-				`INSERT INTO initiatives (name) VALUES ($1) RETURNING id`, name).Scan(&id); err != nil {
+				`INSERT INTO initiatives (workspace_id, name) VALUES ($1,$2) RETURNING id`, wsID, name).Scan(&id); err != nil {
 				return "", err
 			}
 			res.Initiatives++
@@ -188,14 +190,15 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 				return nil
 			}
 			_, err := tx.Exec(ctx,
-				`UPDATE projects SET initiative_id=$1 WHERE id=$2 AND initiative_id IS NULL`, *iniID, id)
+				`UPDATE projects SET initiative_id=$1 WHERE id=$2 AND initiative_id IS NULL AND workspace_id=$3`, *iniID, id, wsID)
 			return err
 		}
 		if id, ok := projByName[name]; ok {
 			return id, link(id)
 		}
 		var id string
-		err := tx.QueryRow(ctx, `SELECT id FROM projects WHERE name=$1 LIMIT 1`, name).Scan(&id)
+		err := tx.QueryRow(ctx,
+			`SELECT id FROM projects WHERE name=$1 AND workspace_id=$2 LIMIT 1`, name, wsID).Scan(&id)
 		if err == nil {
 			projByName[name] = id
 			return id, link(id)
@@ -204,8 +207,8 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 			return "", err
 		}
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO projects (name, description_md, initiative_id) VALUES ($1,$2,$3) RETURNING id`,
-			name, desc, iniID).Scan(&id); err != nil {
+			`INSERT INTO projects (workspace_id, name, description_md, initiative_id) VALUES ($1,$2,$3,$4) RETURNING id`,
+			wsID, name, desc, iniID).Scan(&id); err != nil {
 			return "", err
 		}
 		projByName[name] = id
@@ -232,9 +235,9 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 		var id string
 		var inserted bool // xmax = 0 on a fresh insert; nonzero when the row pre-existed
 		err := tx.QueryRow(ctx,
-			`INSERT INTO labels (name) VALUES ($1)
-			 ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name
-			 RETURNING id, (xmax = 0)`, name).Scan(&id, &inserted)
+			`INSERT INTO labels (workspace_id, name) VALUES ($1,$2)
+			 ON CONFLICT (workspace_id, name) DO UPDATE SET name=EXCLUDED.name
+			 RETURNING id, (xmax = 0)`, wsID, name).Scan(&id, &inserted)
 		if err != nil {
 			return "", err
 		}
@@ -268,8 +271,11 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 			projectID = &pid
 		}
 
-		var number int
-		if err := tx.QueryRow(ctx, `SELECT nextval('issue_number_seq')`).Scan(&number); err != nil {
+		// Imported issues keep their own key, so only the per-workspace number
+		// counter advances here; issue_seq is reconciled once, after the loop.
+		var number int64
+		if err := tx.QueryRow(ctx,
+			`UPDATE workspaces SET number_seq = number_seq + 1 WHERE id=$1 RETURNING number_seq`, wsID).Scan(&number); err != nil {
 			return res, err
 		}
 
@@ -289,11 +295,11 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 		var id string
 		err := tx.QueryRow(ctx, `
 			INSERT INTO issues
-			  (number, key, title, description_md, state_id, project_id, priority, position, parent_key, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+			  (workspace_id, number, key, title, description_md, state_id, project_id, priority, position, parent_key, created_at, updated_at)
+			VALUES ($12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
 			number, is.ID, is.Title, is.Description,
 			resolveState(is.Status, is.StatusType), projectID, is.Priority.Value,
-			float64(number), parentKey, created, updated,
+			float64(number), parentKey, created, updated, wsID,
 		).Scan(&id)
 		if err != nil {
 			return res, fmt.Errorf("insert issue %s: %w", is.ID, err)
@@ -314,6 +320,17 @@ func (s *Store) Import(ctx context.Context, data ImportData) (ImportResult, erro
 			}
 		}
 		res.Issues++
+	}
+
+	// An import can land keys that share this workspace's prefix (e.g. importing
+	// ZLA-300 into the ZLA workspace). Lift issue_seq past them so the next
+	// natively-created issue does not propose a key that already exists.
+	if _, err := tx.Exec(ctx, `
+		UPDATE workspaces w SET issue_seq = GREATEST(w.issue_seq, coalesce((
+			SELECT max(coalesce(nullif(regexp_replace(split_part(i.key,'-',2), '[^0-9]', '', 'g'), ''), '0')::bigint)
+			  FROM issues i WHERE upper(split_part(i.key,'-',1)) = w.key_prefix), 0))
+		WHERE w.id = $1`, wsID); err != nil {
+		return res, err
 	}
 
 	for st := range unmapped {

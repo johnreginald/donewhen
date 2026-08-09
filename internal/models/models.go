@@ -19,6 +19,43 @@ type User struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// Workspace is the top of the hierarchy and the tenancy boundary:
+// Workspace → Project (initiative) → Epic (project) → Issue. Everything a
+// request can read or write is scoped to exactly one of these.
+type Workspace struct {
+	ID        string    `json:"id"`
+	Slug      string    `json:"slug"`
+	Name      string    `json:"name"`
+	KeyPrefix string    `json:"keyPrefix"`
+	Position  int       `json:"position"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Workspace membership roles, most privileged first.
+const (
+	RoleOwner  = "owner"
+	RoleAdmin  = "admin"
+	RoleMember = "member"
+)
+
+// CanAdmin reports whether a role may change a workspace or its membership.
+func CanAdmin(role string) bool { return role == RoleOwner || role == RoleAdmin }
+
+// Membership is a workspace as seen by one user, carrying their role in it.
+type Membership struct {
+	Workspace
+	Role string `json:"role"`
+}
+
+// Member is one person's access to a workspace.
+type Member struct {
+	UserID    string    `json:"userId"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type Initiative struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
@@ -65,6 +102,7 @@ type Label struct {
 
 type Issue struct {
 	ID            string    `json:"id"`
+	WorkspaceID   string    `json:"workspaceId"`
 	Number        int       `json:"number"`
 	Key           string    `json:"key"` // e.g. K-42
 	Title         string    `json:"title"`

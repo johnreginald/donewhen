@@ -15,7 +15,7 @@ func scanInboxRow(row pgx.Row) (models.Issue, int, *time.Time, error) {
 	var is models.Issue
 	var commitCount int
 	var enteredAt *time.Time
-	err := row.Scan(&is.ID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
+	err := row.Scan(&is.ID, &is.WorkspaceID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
 		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
 		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.GitBranch, &is.PRURL,
 		&is.CreatedAt, &is.UpdatedAt, &commitCount, &enteredAt)
@@ -24,7 +24,7 @@ func scanInboxRow(row pgx.Row) (models.Issue, int, *time.Time, error) {
 
 // InboxNeedsReview returns issues currently in "In Review" that the AI moved
 // there — the human's review queue. Newest-entered first.
-func (s *Store) InboxNeedsReview(ctx context.Context) ([]models.InboxItem, error) {
+func (s *Store) InboxNeedsReview(ctx context.Context, wsID string) ([]models.InboxItem, error) {
 	q := `
 		SELECT ` + issueCols + `,
 			(SELECT count(*) FROM issue_commits ic WHERE ic.issue_id = i.id) AS commit_count,
@@ -32,13 +32,14 @@ func (s *Store) InboxNeedsReview(ctx context.Context) ([]models.InboxItem, error
 			   WHERE a.issue_id = i.id AND a.kind = 'state_changed'
 			     AND a.to_val = 'In Review' AND a.actor = 'ai') AS entered_review_at
 		FROM issues i
-		WHERE i.state_id = (SELECT id FROM workflow_states WHERE name = 'In Review')
+		WHERE i.workspace_id = $1
+		  AND i.state_id = (SELECT id FROM workflow_states WHERE name = 'In Review' AND workspace_id = $1)
 		  AND EXISTS (
 			SELECT 1 FROM activity a
 			WHERE a.issue_id = i.id AND a.kind = 'state_changed'
 			  AND a.to_val = 'In Review' AND a.actor = 'ai')
 		ORDER BY entered_review_at DESC NULLS LAST`
-	rows, err := s.pool.Query(ctx, q)
+	rows, err := s.pool.Query(ctx, q, wsID)
 	if err != nil {
 		return nil, err
 	}

@@ -93,20 +93,28 @@ type APIToken struct {
 	Name       string     `json:"name"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt"`
+	// WorkspaceID pins the token to one workspace. Nil means "any workspace the
+	// owning user belongs to" — the caller then has to name one.
+	WorkspaceID   *string `json:"workspaceId"`
+	WorkspaceName *string `json:"workspaceName"`
 }
 
-func (s *Store) CreateAPIToken(ctx context.Context, userID, name, hash string) (APIToken, error) {
+// CreateAPIToken mints a token. Pass wsID to pin it to a single workspace, so
+// an agent working in one repo can never see another workspace's issues.
+func (s *Store) CreateAPIToken(ctx context.Context, userID, name, hash string, wsID *string) (APIToken, error) {
 	var t APIToken
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO api_tokens (user_id, name, hash) VALUES ($1,$2,$3)
-		 RETURNING id, name, created_at, last_used_at`,
-		userID, name, hash).Scan(&t.ID, &t.Name, &t.CreatedAt, &t.LastUsedAt)
+		`INSERT INTO api_tokens (user_id, name, hash, workspace_id) VALUES ($1,$2,$3,$4)
+		 RETURNING id, name, created_at, last_used_at, workspace_id`,
+		userID, name, hash, wsID).Scan(&t.ID, &t.Name, &t.CreatedAt, &t.LastUsedAt, &t.WorkspaceID)
 	return t, err
 }
 
 func (s *Store) ListAPITokens(ctx context.Context, userID string) ([]APIToken, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, created_at, last_used_at FROM api_tokens WHERE user_id=$1 ORDER BY created_at`, userID)
+	rows, err := s.pool.Query(ctx, `
+		SELECT t.id, t.name, t.created_at, t.last_used_at, t.workspace_id, w.name
+		FROM api_tokens t LEFT JOIN workspaces w ON w.id = t.workspace_id
+		WHERE t.user_id=$1 ORDER BY t.created_at`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +122,7 @@ func (s *Store) ListAPITokens(ctx context.Context, userID string) ([]APIToken, e
 	var out []APIToken
 	for rows.Next() {
 		var t APIToken
-		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt, &t.LastUsedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt, &t.LastUsedAt, &t.WorkspaceID, &t.WorkspaceName); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -123,18 +131,21 @@ func (s *Store) ListAPITokens(ctx context.Context, userID string) ([]APIToken, e
 }
 
 // LookupAPIToken resolves a token hash to its owner and touches last_used_at.
-func (s *Store) LookupAPIToken(ctx context.Context, hash string) (models.User, error) {
+// The second return is the workspace the token is pinned to, or nil when it may
+// act on any workspace its owner belongs to.
+func (s *Store) LookupAPIToken(ctx context.Context, hash string) (models.User, *string, error) {
 	var u models.User
+	var wsID *string
 	err := s.pool.QueryRow(ctx, `
 		UPDATE api_tokens t SET last_used_at=now()
 		FROM users u
 		WHERE t.hash=$1 AND u.id = t.user_id
-		RETURNING u.id, u.email, u.created_at`,
-		hash).Scan(&u.ID, &u.Email, &u.CreatedAt)
+		RETURNING u.id, u.email, u.created_at, t.workspace_id`,
+		hash).Scan(&u.ID, &u.Email, &u.CreatedAt, &wsID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return u, ErrNotFound
+		return u, nil, ErrNotFound
 	}
-	return u, err
+	return u, wsID, err
 }
 
 func (s *Store) DeleteAPIToken(ctx context.Context, userID, id string) error {
@@ -159,8 +170,15 @@ func (s *Store) SavePushSubscription(ctx context.Context, userID string, sub mod
 	return err
 }
 
-func (s *Store) ListPushSubscriptions(ctx context.Context) ([]models.PushSubscription, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, endpoint, p256dh, auth FROM push_subscriptions`)
+// ListPushSubscriptions returns the devices that should be notified about a
+// workspace: only those belonging to its members. Without the membership join a
+// notification for one workspace would buzz a phone that cannot even open it.
+func (s *Store) ListPushSubscriptions(ctx context.Context, wsID string) ([]models.PushSubscription, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.id, p.endpoint, p.p256dh, p.auth
+		FROM push_subscriptions p
+		JOIN workspace_members m ON m.user_id = p.user_id
+		WHERE m.workspace_id = $1`, wsID)
 	if err != nil {
 		return nil, err
 	}

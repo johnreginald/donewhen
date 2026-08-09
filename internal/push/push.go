@@ -43,7 +43,10 @@ func (n *Notifier) Run(ctx context.Context) {
 		log.Println("push: VAPID keys not set, Web Push disabled")
 		return
 	}
-	ch, unsub := n.bus.Subscribe()
+	// The empty workspace id means "every workspace": the notifier is the one
+	// consumer that must see all events, because it fans out per event to that
+	// event's members rather than holding a single workspace open.
+	ch, unsub := n.bus.Subscribe("")
 	defer unsub()
 	for {
 		select {
@@ -54,7 +57,7 @@ func (n *Notifier) Run(ctx context.Context) {
 				return
 			}
 			if p, want := n.build(e); want {
-				n.broadcast(ctx, p)
+				n.broadcast(ctx, e.WorkspaceID, p)
 			}
 		}
 	}
@@ -105,12 +108,17 @@ func (n *Notifier) issueURL(is *models.Issue) string {
 	return fmt.Sprintf("%s/issue/%s", n.cfg.BaseURL, is.Key)
 }
 
-func (n *Notifier) broadcast(ctx context.Context, p payload) {
+// broadcast notifies only the devices of the workspace's members — a phone
+// whose owner cannot open the issue must not buzz for it.
+func (n *Notifier) broadcast(ctx context.Context, wsID string, p payload) {
+	if wsID == "" {
+		return // unattributed event: no membership to resolve, so nobody to tell
+	}
 	body, err := json.Marshal(p)
 	if err != nil {
 		return
 	}
-	subs, err := n.store.ListPushSubscriptions(ctx)
+	subs, err := n.store.ListPushSubscriptions(ctx, wsID)
 	if err != nil {
 		log.Printf("push: list subscriptions: %v", err)
 		return

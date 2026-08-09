@@ -2,6 +2,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -61,6 +62,45 @@ func (s *Server) guard(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// wsGuard is guard plus tenancy: it resolves which workspace the request acts
+// on and proves membership before the handler runs. Everything that reads or
+// writes tenant data goes through here.
+func (s *Server) wsGuard(next http.HandlerFunc) http.HandlerFunc {
+	return s.guard(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := auth.UserFrom(r.Context())
+		wsp, role, err := s.auth.ResolveWorkspace(r.Context(), user, auth.RequestedWorkspace(r))
+		if err != nil {
+			switch {
+			case errors.Is(err, auth.ErrNoWorkspace):
+				writeErr(w, http.StatusForbidden, "no workspace available for this account")
+			case errors.Is(err, auth.ErrAmbiguousWorkspace):
+				writeErr(w, http.StatusBadRequest,
+					"this token spans several workspaces; name one with the X-Workspace header")
+			case errors.Is(err, store.ErrNotFound):
+				writeErr(w, http.StatusNotFound, "workspace not found")
+			default:
+				// Membership failures and pinned-token mismatches both land
+				// here: the caller may not act on the workspace it named.
+				writeErr(w, http.StatusForbidden, "not a member of this workspace")
+			}
+			return
+		}
+		next(w, r.WithContext(auth.WithWorkspace(r.Context(), wsp, role)))
+	})
+}
+
+// adminOnly rejects a member trying to administer a workspace. The UI hides
+// these actions, but hiding a button is not access control.
+func (s *Server) adminOnly(next http.HandlerFunc) http.HandlerFunc {
+	return s.wsGuard(func(w http.ResponseWriter, r *http.Request) {
+		if !canAdmin(r) {
+			writeErr(w, http.StatusForbidden, "requires workspace owner or admin")
+			return
+		}
+		next(w, r)
+	})
+}
+
 // Handler builds the full HTTP handler (routes + auth middleware + static).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -78,77 +118,87 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/me", s.guard(s.handleMe))
 
+	// Workspaces — the tenancy boundary. Listing memberships must NOT be
+	// workspace-scoped: it is how a client discovers which ones exist.
+	mux.HandleFunc("GET /api/workspaces", s.guard(s.handleListWorkspaces))
+	mux.HandleFunc("POST /api/workspaces", s.guard(s.handleCreateWorkspace))
+	mux.HandleFunc("POST /api/workspaces/{id}/activate", s.guard(s.handleActivateWorkspace))
+	mux.HandleFunc("PATCH /api/workspaces/{id}", s.adminOnly(s.handleUpdateWorkspace))
+	mux.HandleFunc("GET /api/workspaces/{id}/members", s.wsGuard(s.handleListMembers))
+	mux.HandleFunc("POST /api/workspaces/{id}/members", s.adminOnly(s.handleAddMember))
+	mux.HandleFunc("DELETE /api/workspaces/{id}/members/{userId}", s.adminOnly(s.handleRemoveMember))
+
 	// API tokens.
 	mux.HandleFunc("GET /api/tokens", s.guard(s.handleListTokens))
 	mux.HandleFunc("POST /api/tokens", s.guard(s.handleCreateToken))
 	mux.HandleFunc("DELETE /api/tokens/{id}", s.guard(s.handleDeleteToken))
 
 	// Metadata.
-	mux.HandleFunc("GET /api/states", s.guard(s.handleListStates))
-	mux.HandleFunc("GET /api/states/{id}", s.guard(s.handleGetState))
-	mux.HandleFunc("GET /api/labels", s.guard(s.handleListLabels))
-	mux.HandleFunc("GET /api/label-groups", s.guard(s.handleListLabelGroups))
-	mux.HandleFunc("POST /api/labels", s.guard(s.handleCreateLabel))
+	mux.HandleFunc("GET /api/states", s.wsGuard(s.handleListStates))
+	mux.HandleFunc("GET /api/states/{id}", s.wsGuard(s.handleGetState))
+	mux.HandleFunc("GET /api/labels", s.wsGuard(s.handleListLabels))
+	mux.HandleFunc("GET /api/label-groups", s.wsGuard(s.handleListLabelGroups))
+	mux.HandleFunc("POST /api/labels", s.wsGuard(s.handleCreateLabel))
 
 	// Initiatives.
-	mux.HandleFunc("GET /api/initiatives", s.guard(s.handleListInitiatives))
-	mux.HandleFunc("POST /api/initiatives", s.guard(s.handleSaveInitiative))
-	mux.HandleFunc("GET /api/initiatives/{id}", s.guard(s.handleGetInitiative))
-	mux.HandleFunc("PATCH /api/initiatives/{id}", s.guard(s.handleSaveInitiative))
-	mux.HandleFunc("DELETE /api/initiatives/{id}", s.guard(s.handleDeleteInitiative))
+	mux.HandleFunc("GET /api/initiatives", s.wsGuard(s.handleListInitiatives))
+	mux.HandleFunc("POST /api/initiatives", s.wsGuard(s.handleSaveInitiative))
+	mux.HandleFunc("GET /api/initiatives/{id}", s.wsGuard(s.handleGetInitiative))
+	mux.HandleFunc("PATCH /api/initiatives/{id}", s.wsGuard(s.handleSaveInitiative))
+	mux.HandleFunc("DELETE /api/initiatives/{id}", s.wsGuard(s.handleDeleteInitiative))
 
 	// Projects.
-	mux.HandleFunc("GET /api/projects", s.guard(s.handleListProjects))
-	mux.HandleFunc("POST /api/projects", s.guard(s.handleSaveProject))
-	mux.HandleFunc("GET /api/projects/{id}", s.guard(s.handleGetProject))
-	mux.HandleFunc("PATCH /api/projects/{id}", s.guard(s.handleSaveProject))
-	mux.HandleFunc("DELETE /api/projects/{id}", s.guard(s.handleDeleteProject))
+	mux.HandleFunc("GET /api/projects", s.wsGuard(s.handleListProjects))
+	mux.HandleFunc("POST /api/projects", s.wsGuard(s.handleSaveProject))
+	mux.HandleFunc("GET /api/projects/{id}", s.wsGuard(s.handleGetProject))
+	mux.HandleFunc("PATCH /api/projects/{id}", s.wsGuard(s.handleSaveProject))
+	mux.HandleFunc("DELETE /api/projects/{id}", s.wsGuard(s.handleDeleteProject))
 
 	// Issues.
-	mux.HandleFunc("GET /api/issues/missing-docs", s.guard(s.handleMissingDocs))
-	mux.HandleFunc("GET /api/issues", s.guard(s.handleListIssues))
-	mux.HandleFunc("POST /api/issues", s.guard(s.handleCreateIssue))
-	mux.HandleFunc("GET /api/issues/{id}", s.guard(s.handleGetIssue))
-	mux.HandleFunc("PATCH /api/issues/{id}", s.guard(s.handleUpdateIssue))
-	mux.HandleFunc("DELETE /api/issues/{id}", s.guard(s.handleDeleteIssue))
-	mux.HandleFunc("GET /api/issues/{id}/activity", s.guard(s.handleIssueActivity))
-	mux.HandleFunc("GET /api/activity", s.guard(s.handleActivity))
+	mux.HandleFunc("GET /api/issues/missing-docs", s.wsGuard(s.handleMissingDocs))
+	mux.HandleFunc("GET /api/issues", s.wsGuard(s.handleListIssues))
+	mux.HandleFunc("POST /api/issues", s.wsGuard(s.handleCreateIssue))
+	mux.HandleFunc("GET /api/issues/{id}", s.wsGuard(s.handleGetIssue))
+	mux.HandleFunc("PATCH /api/issues/{id}", s.wsGuard(s.handleUpdateIssue))
+	mux.HandleFunc("DELETE /api/issues/{id}", s.wsGuard(s.handleDeleteIssue))
+	mux.HandleFunc("GET /api/issues/{id}/activity", s.wsGuard(s.handleIssueActivity))
+	mux.HandleFunc("GET /api/activity", s.wsGuard(s.handleActivity))
 
 	// inbox — the human's review queue (AI moved to In Review) + recent AI activity
-	mux.HandleFunc("GET /api/inbox", s.guard(s.handleInbox))
-	mux.HandleFunc("POST /api/inbox/seen", s.guard(s.handleInboxSeen))
+	mux.HandleFunc("GET /api/inbox", s.wsGuard(s.handleInbox))
+	mux.HandleFunc("POST /api/inbox/seen", s.wsGuard(s.handleInboxSeen))
 
 	// dev links (branch / PR / commits) + done-when criteria
-	mux.HandleFunc("GET /api/issues/{id}/commits", s.guard(s.handleListCommits))
-	mux.HandleFunc("POST /api/issues/{id}/commits", s.guard(s.handleAddCommit))
+	mux.HandleFunc("GET /api/issues/{id}/commits", s.wsGuard(s.handleListCommits))
+	mux.HandleFunc("POST /api/issues/{id}/commits", s.wsGuard(s.handleAddCommit))
 	// Reverse lookup: which issue owns this commit, and what was it meant
 	// to satisfy. The seam for code-intelligence tooling — see dev.go.
-	mux.HandleFunc("GET /api/commits/{sha}", s.guard(s.handleIssueByCommit))
-	mux.HandleFunc("PATCH /api/issues/{id}/dev", s.guard(s.handleSetDev))
-	mux.HandleFunc("GET /api/issues/{id}/criteria", s.guard(s.handleListCriteria))
-	mux.HandleFunc("POST /api/issues/{id}/criteria", s.guard(s.handleAddCriterion))
-	mux.HandleFunc("PATCH /api/criteria/{id}", s.guard(s.handleUpdateCriterion))
-	mux.HandleFunc("DELETE /api/criteria/{id}", s.guard(s.handleDeleteCriterion))
-	mux.HandleFunc("GET /api/issues/{id}/comments", s.guard(s.handleListComments))
-	mux.HandleFunc("POST /api/issues/{id}/comments", s.guard(s.handleAddComment))
+	mux.HandleFunc("GET /api/commits/{sha}", s.wsGuard(s.handleIssueByCommit))
+	mux.HandleFunc("PATCH /api/issues/{id}/dev", s.wsGuard(s.handleSetDev))
+	mux.HandleFunc("GET /api/issues/{id}/criteria", s.wsGuard(s.handleListCriteria))
+	mux.HandleFunc("POST /api/issues/{id}/criteria", s.wsGuard(s.handleAddCriterion))
+	mux.HandleFunc("PATCH /api/criteria/{id}", s.wsGuard(s.handleUpdateCriterion))
+	mux.HandleFunc("DELETE /api/criteria/{id}", s.wsGuard(s.handleDeleteCriterion))
+	mux.HandleFunc("GET /api/issues/{id}/comments", s.wsGuard(s.handleListComments))
+	mux.HandleFunc("POST /api/issues/{id}/comments", s.wsGuard(s.handleAddComment))
 
 	// Documents.
-	mux.HandleFunc("GET /api/documents", s.guard(s.handleListDocuments))
-	mux.HandleFunc("POST /api/documents", s.guard(s.handleSaveDocument))
-	mux.HandleFunc("GET /api/documents/{id}", s.guard(s.handleGetDocument))
-	mux.HandleFunc("PATCH /api/documents/{id}", s.guard(s.handleSaveDocument))
-	mux.HandleFunc("DELETE /api/documents/{id}", s.guard(s.handleDeleteDocument))
+	mux.HandleFunc("GET /api/documents", s.wsGuard(s.handleListDocuments))
+	mux.HandleFunc("POST /api/documents", s.wsGuard(s.handleSaveDocument))
+	mux.HandleFunc("GET /api/documents/{id}", s.wsGuard(s.handleGetDocument))
+	mux.HandleFunc("PATCH /api/documents/{id}", s.wsGuard(s.handleSaveDocument))
+	mux.HandleFunc("DELETE /api/documents/{id}", s.wsGuard(s.handleDeleteDocument))
 
 	// Push.
 	// bulk import (external tracker → Raenil)
-	mux.HandleFunc("POST /api/import", s.guard(s.handleImport))
-	mux.HandleFunc("POST /api/import/descriptions", s.guard(s.handleUpdateDescriptions))
+	mux.HandleFunc("POST /api/import", s.wsGuard(s.handleImport))
+	mux.HandleFunc("POST /api/import/descriptions", s.wsGuard(s.handleUpdateDescriptions))
 
 	mux.HandleFunc("POST /api/push/subscribe", s.guard(s.handlePushSubscribe))
 	mux.HandleFunc("POST /api/push/unsubscribe", s.guard(s.handlePushUnsubscribe))
 
 	// SSE.
-	mux.HandleFunc("GET /api/events", s.guard(s.sse.ServeHTTP))
+	mux.HandleFunc("GET /api/events", s.wsGuard(s.sse.ServeHTTP))
 
 	// MCP endpoint (bearer-authed inside the handler).
 	if s.mcp != nil {

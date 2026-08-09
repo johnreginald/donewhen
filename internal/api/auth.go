@@ -142,7 +142,14 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFrom(r.Context())
-	writeJSON(w, 200, u)
+	out := map[string]any{"id": u.ID, "email": u.Email, "createdAt": u.CreatedAt}
+	// Report where the caller currently is, so the client can render the
+	// switcher without a second round trip. Absent when they belong to none.
+	if wsp, role, err := s.auth.ResolveWorkspace(r.Context(), u, auth.RequestedWorkspace(r)); err == nil {
+		out["workspace"] = wsp
+		out["role"] = role
+	}
+	writeJSON(w, 200, out)
 }
 
 // ---- API tokens ----
@@ -160,10 +167,25 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFrom(r.Context())
 	var body struct {
 		Name string `json:"name"`
+		// Workspace pins the token to one workspace (id, slug or key prefix),
+		// so an agent working in one repo cannot read another's issues.
+		Workspace string `json:"workspace"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
+	}
+	var pin *string
+	if strings.TrimSpace(body.Workspace) != "" {
+		target, err := s.store.ResolveWorkspace(r.Context(), body.Workspace)
+		if handleStoreErr(w, err) {
+			return
+		}
+		// You may only pin a token to a workspace you belong to.
+		if _, err := s.store.RoleIn(r.Context(), target.ID, u.ID); handleStoreErr(w, err) {
+			return
+		}
+		pin = &target.ID
 	}
 	if strings.TrimSpace(body.Name) == "" {
 		body.Name = "token"
@@ -174,7 +196,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plaintext := "raenil_" + raw
-	t, err := s.store.CreateAPIToken(r.Context(), u.ID, body.Name, auth.HashToken(plaintext))
+	t, err := s.store.CreateAPIToken(r.Context(), u.ID, body.Name, auth.HashToken(plaintext), pin)
 	if handleStoreErr(w, err) {
 		return
 	}
