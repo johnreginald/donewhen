@@ -9,7 +9,7 @@ import (
 // ---- states ----
 
 func (s *Server) handleListStates(w http.ResponseWriter, r *http.Request) {
-	states, err := s.store.ListStates(r.Context())
+	states, err := s.store.ListStates(r.Context(), ws(r))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -17,7 +17,7 @@ func (s *Server) handleListStates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
-	st, err := s.store.GetState(r.Context(), r.PathValue("id"))
+	st, err := s.store.GetState(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -27,7 +27,7 @@ func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 // ---- labels ----
 
 func (s *Server) handleListLabels(w http.ResponseWriter, r *http.Request) {
-	labels, err := s.store.ListLabels(r.Context())
+	labels, err := s.store.ListLabels(r.Context(), ws(r))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -35,7 +35,7 @@ func (s *Server) handleListLabels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListLabelGroups(w http.ResponseWriter, r *http.Request) {
-	groups, err := s.store.ListLabelGroups(r.Context())
+	groups, err := s.store.ListLabelGroups(r.Context(), ws(r))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -52,7 +52,7 @@ func (s *Server) handleCreateLabel(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name required")
 		return
 	}
-	l, err := s.store.CreateLabel(r.Context(), body.Name, body.Color, body.Group)
+	l, err := s.store.CreateLabel(r.Context(), ws(r), body.Name, body.Color, body.Group)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -62,7 +62,7 @@ func (s *Server) handleCreateLabel(w http.ResponseWriter, r *http.Request) {
 // ---- initiatives ----
 
 func (s *Server) handleListInitiatives(w http.ResponseWriter, r *http.Request) {
-	items, err := s.store.ListInitiatives(r.Context())
+	items, err := s.store.ListInitiatives(r.Context(), ws(r))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) handleListInitiatives(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetInitiative(w http.ResponseWriter, r *http.Request) {
-	i, err := s.store.GetInitiative(r.Context(), r.PathValue("id"))
+	i, err := s.store.GetInitiative(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -90,7 +90,7 @@ func (s *Server) handleSaveInitiative(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name required")
 		return
 	}
-	saved, err := s.store.SaveInitiative(r.Context(), i)
+	saved, err := s.store.SaveInitiative(r.Context(), ws(r), i)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -98,7 +98,7 @@ func (s *Server) handleSaveInitiative(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteInitiative(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.store.DeleteInitiative(r.Context(), r.PathValue("id"))) {
+	if handleStoreErr(w, s.store.DeleteInitiative(r.Context(), ws(r), r.PathValue("id"))) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})
@@ -107,7 +107,7 @@ func (s *Server) handleDeleteInitiative(w http.ResponseWriter, r *http.Request) 
 // ---- projects ----
 
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
-	items, err := s.store.ListProjects(r.Context(), r.URL.Query().Get("initiative"))
+	items, err := s.store.ListProjects(r.Context(), ws(r), r.URL.Query().Get("initiative"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -115,7 +115,7 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
-	p, err := s.store.GetProject(r.Context(), r.PathValue("id"))
+	p, err := s.store.GetProject(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -135,7 +135,7 @@ func (s *Server) handleSaveProject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name required")
 		return
 	}
-	saved, err := s.store.SaveProject(r.Context(), p)
+	saved, err := s.store.SaveProject(r.Context(), ws(r), p)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -143,7 +143,7 @@ func (s *Server) handleSaveProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.store.DeleteProject(r.Context(), r.PathValue("id"))) {
+	if handleStoreErr(w, s.store.DeleteProject(r.Context(), ws(r), r.PathValue("id"))) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})

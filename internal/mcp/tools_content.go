@@ -16,16 +16,21 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("list_comments",
 		mcp.WithDescription("List comments on an issue."),
 		mcp.WithString("issueId", mcp.Required(), mcp.Description("Issue id or key")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.ws(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		ref, err := req.RequireString("issueId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		is, err := d.resolveIssueRef(ctx, ref)
+		is, err := d.resolveIssueRef(ctx, wsID, ref)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		comments, err := d.store.ListComments(ctx, is.ID)
+		comments, err := d.store.ListComments(ctx, wsID, is.ID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -36,7 +41,12 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithDescription("Add a comment to an issue."),
 		mcp.WithString("issueId", mcp.Required(), mcp.Description("Issue id or key")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("Markdown comment body")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.ws(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		ref, err := req.RequireString("issueId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -45,11 +55,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		is, err := d.resolveIssueRef(ctx, ref)
+		is, err := d.resolveIssueRef(ctx, wsID, ref)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		c, err := d.svc.AddComment(ctx, is.ID, body, auth.ActorAI)
+		c, err := d.svc.AddComment(ctx, wsID, is.ID, body, auth.ActorAI)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -62,8 +72,13 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithString("project", mcp.Description("Project id filter")),
 		mcp.WithString("issue", mcp.Description("Issue id filter")),
 		mcp.WithString("initiative", mcp.Description("Initiative id filter")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		docs, err := d.store.ListDocuments(ctx, store.DocFilter{
+		wsID, err := d.ws(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		docs, err := d.store.ListDocuments(ctx, wsID, store.DocFilter{
 			ProjectID:    req.GetString("project", ""),
 			IssueID:      req.GetString("issue", ""),
 			InitiativeID: req.GetString("initiative", ""),
@@ -77,12 +92,17 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("get_document",
 		mcp.WithDescription("Get a document by id."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Document id")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.ws(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		doc, err := d.store.GetDocument(ctx, id)
+		doc, err := d.store.GetDocument(ctx, wsID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -111,10 +131,15 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		mcp.WithString("initiative", mcp.Description("Attach to this initiative id")),
 		mcp.WithArray("labels", mcp.Description("Label names (exclusive groups enforced)"),
 			mcp.Items(map[string]any{"type": "string"})),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.ws(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		issueID := req.GetString("issue", "")
 		if issueID != "" {
-			if is, err := d.resolveIssueRef(ctx, issueID); err == nil {
+			if is, err := d.resolveIssueRef(ctx, wsID, issueID); err == nil {
 				issueID = is.ID
 			}
 		}
@@ -128,15 +153,15 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			IssueID:      strp(issueID),
 			InitiativeID: strp(req.GetString("initiative", "")),
 		}
-		saved, err := d.store.SaveDocument(ctx, doc)
+		saved, err := d.store.SaveDocument(ctx, wsID, doc)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		if labels := stringSlice(req, "labels"); labels != nil {
-			if err := d.store.SetDocumentLabels(ctx, saved.ID, nil, labels); err != nil {
+			if err := d.store.SetDocumentLabels(ctx, wsID, saved.ID, nil, labels); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			saved, _ = d.store.GetDocument(ctx, saved.ID)
+			saved, _ = d.store.GetDocument(ctx, wsID, saved.ID)
 		}
 		return jsonResult(saved)
 	})
@@ -145,8 +170,13 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("list_issues_missing_docs",
 		mcp.WithDescription("List completed (Done) issues that have no attached document yet — the gaps in the "+
 			"engineering journal. Write an implementation doc for each with save_document."),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		issues, err := d.store.IssuesMissingDocs(ctx)
+		wsID, err := d.ws(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		issues, err := d.store.IssuesMissingDocs(ctx, wsID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

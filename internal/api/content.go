@@ -11,7 +11,7 @@ import (
 // ---- comments ----
 
 func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
-	comments, err := s.store.ListComments(r.Context(), r.PathValue("id"))
+	comments, err := s.store.ListComments(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -26,7 +26,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bodyMd required")
 		return
 	}
-	c, err := s.svc.AddComment(r.Context(), r.PathValue("id"), body.BodyMd, auth.ActorFrom(r.Context()))
+	c, err := s.svc.AddComment(r.Context(), ws(r), r.PathValue("id"), body.BodyMd, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -37,7 +37,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListDocuments(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	docs, err := s.store.ListDocuments(r.Context(), store.DocFilter{
+	docs, err := s.store.ListDocuments(r.Context(), ws(r), store.DocFilter{
 		ProjectID:    q.Get("project"),
 		IssueID:      q.Get("issue"),
 		InitiativeID: q.Get("initiative"),
@@ -49,7 +49,7 @@ func (s *Server) handleListDocuments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetDocument(w http.ResponseWriter, r *http.Request) {
-	d, err := s.store.GetDocument(r.Context(), r.PathValue("id"))
+	d, err := s.store.GetDocument(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -86,7 +86,7 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 		d.ID = id
 		// Preserve type on curate when the client didn't send one.
 		if d.Type == "" {
-			if cur, err := s.store.GetDocument(r.Context(), id); err == nil {
+			if cur, err := s.store.GetDocument(r.Context(), ws(r), id); err == nil {
 				d.Type = cur.Type
 			}
 		}
@@ -104,22 +104,22 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 	if req.IssueId != nil {
 		d.IssueID = strPtr(*req.IssueId)
 	}
-	saved, err := s.store.SaveDocument(r.Context(), d)
+	saved, err := s.store.SaveDocument(r.Context(), ws(r), d)
 	if handleStoreErr(w, err) {
 		return
 	}
 	if req.LabelIds != nil || req.LabelNames != nil {
-		if err := s.store.SetDocumentLabels(r.Context(), saved.ID, req.LabelIds, req.LabelNames); err != nil {
+		if err := s.store.SetDocumentLabels(r.Context(), ws(r), saved.ID, req.LabelIds, req.LabelNames); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		saved, _ = s.store.GetDocument(r.Context(), saved.ID)
+		saved, _ = s.store.GetDocument(r.Context(), ws(r), saved.ID)
 	}
 	writeJSON(w, 200, saved)
 }
 
 func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.store.DeleteDocument(r.Context(), r.PathValue("id"))) {
+	if handleStoreErr(w, s.store.DeleteDocument(r.Context(), ws(r), r.PathValue("id"))) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})

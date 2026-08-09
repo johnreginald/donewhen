@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"raenil/internal/auth"
 	"raenil/internal/events"
 )
 
@@ -33,7 +34,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // disable proxy buffering
 
-	ch, unsub := h.bus.Subscribe()
+	// The stream is bound to the workspace that was active when it opened; the
+	// client reopens it on switch.
+	var wsID string
+	if ws, ok := auth.WorkspaceFrom(r.Context()); ok {
+		wsID = ws.ID
+	}
+	ch, unsub := h.bus.Subscribe(wsID)
 	defer unsub()
 
 	// Initial comment so the client's onopen fires promptly.

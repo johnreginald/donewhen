@@ -18,7 +18,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid import payload: "+err.Error())
 		return
 	}
-	res, err := s.store.Import(r.Context(), data)
+	res, err := s.store.Import(r.Context(), ws(r), data)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -35,7 +35,7 @@ func (s *Server) handleUpdateDescriptions(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusBadRequest, "invalid payload: "+err.Error())
 		return
 	}
-	n, err := s.store.UpdateDescriptions(r.Context(), byKey)
+	n, err := s.store.UpdateDescriptions(r.Context(), ws(r), byKey)
 	if handleStoreErr(w, err) {
 		return
 	}

@@ -5,8 +5,9 @@
 //	raenil serve                 run the HTTP API + SSE + Web Push + MCP endpoint
 //	raenil migrate               apply DB migrations and exit
 //	raenil mcp                   run the MCP server over stdio (local fallback)
-//	raenil token <name>          create an API token for the first user
+//	raenil token <name> [ws]     create an API token, optionally pinned to a workspace
 //	raenil user <email> <pass>   create the initial user
+//	raenil workspace ...         list/create workspaces and grant access
 //	raenil genvapid              print a fresh VAPID keypair
 package main
 
@@ -52,6 +53,8 @@ func main() {
 		runToken(os.Args[2:])
 	case "user":
 		runUser(os.Args[2:])
+	case "workspace", "ws":
+		runWorkspace(os.Args[2:])
 	case "genvapid":
 		runGenVAPID()
 	case "help", "-h", "--help":
@@ -70,9 +73,13 @@ usage:
   raenil serve                 run the server (default)
   raenil migrate               apply DB migrations and exit
   raenil mcp                   run the MCP server over stdio
-  raenil token <name>          create an API token for the first user
+  raenil token <name> [ws]     create an API token; pass a workspace slug to pin it
   raenil user <email> <pass>   create the initial user
   raenil genvapid              print a fresh VAPID keypair
+
+  raenil workspace list                      show workspaces + member counts
+  raenil workspace create <name> <prefix>    create a workspace
+  raenil workspace add <slug> <email> [role] grant a user access (owner|admin|member)
 `)
 }
 
@@ -163,6 +170,12 @@ func runToken(args []string) {
 	if len(args) > 0 {
 		name = args[0]
 	}
+	// A pinned token can only ever act on one workspace — the recipe for giving
+	// an agent working in one repo access to just that repo's tracker.
+	wsRef := ""
+	if len(args) > 1 {
+		wsRef = args[1]
+	}
 	cfg := mustConfig()
 	ctx := context.Background()
 	st := connect(ctx, cfg)
@@ -177,10 +190,93 @@ func runToken(args []string) {
 		log.Fatalf("token: %v", err)
 	}
 	secret := "raenil_" + raw
-	if _, err := st.CreateAPIToken(ctx, u.ID, name, auth.HashToken(secret)); err != nil {
+
+	var pin *string
+	scope := "all your workspaces"
+	if wsRef != "" {
+		ws, err := st.ResolveWorkspace(ctx, wsRef)
+		if err != nil {
+			log.Fatalf("workspace %q not found", wsRef)
+		}
+		pin = &ws.ID
+		scope = "workspace " + ws.Name
+	}
+	if _, err := st.CreateAPIToken(ctx, u.ID, name, auth.HashToken(secret), pin); err != nil {
 		log.Fatalf("token: %v", err)
 	}
-	fmt.Printf("API token (%s) for %s — store it now, shown once:\n\n  %s\n\n", name, u.Email, secret)
+	fmt.Printf("API token (%s) for %s, scoped to %s — store it now, shown once:\n\n  %s\n\n",
+		name, u.Email, scope, secret)
+}
+
+func runWorkspace(args []string) {
+	if len(args) == 0 {
+		log.Fatalf("usage: raenil workspace <list|create|add> ...")
+	}
+	cfg := mustConfig()
+	ctx := context.Background()
+	st := connect(ctx, cfg)
+	defer st.Pool().Close()
+
+	switch args[0] {
+	case "list":
+		items, err := st.ListWorkspaces(ctx)
+		if err != nil {
+			log.Fatalf("list workspaces: %v", err)
+		}
+		if len(items) == 0 {
+			fmt.Println("no workspaces yet — create one with `raenil workspace create <name> <prefix>`")
+			return
+		}
+		fmt.Printf("%-4s  %-24s  %-24s  %s\n", "KEY", "SLUG", "NAME", "MEMBERS")
+		for _, w := range items {
+			members, _ := st.ListMembers(ctx, w.ID)
+			fmt.Printf("%-4s  %-24s  %-24s  %d\n", w.KeyPrefix, w.Slug, w.Name, len(members))
+		}
+
+	case "create":
+		if len(args) < 3 {
+			log.Fatalf("usage: raenil workspace create <name> <prefix>")
+		}
+		name, prefix := args[1], args[2]
+		if err := store.ValidatePrefix(prefix, st.ReservedPrefix()); err != nil {
+			log.Fatalf("%v", err)
+		}
+		// The first user owns anything created from the command line.
+		owner := ""
+		if u, err := st.FirstUser(ctx); err == nil {
+			owner = u.ID
+		}
+		w, err := st.CreateWorkspace(ctx, name, "", prefix, owner)
+		if err != nil {
+			log.Fatalf("create workspace: %v", err)
+		}
+		fmt.Printf("created workspace %s (%s), issue keys will be %s-1, %s-2, …\n",
+			w.Name, w.Slug, w.KeyPrefix, w.KeyPrefix)
+
+	case "add":
+		if len(args) < 3 {
+			log.Fatalf("usage: raenil workspace add <slug> <email> [owner|admin|member]")
+		}
+		role := "member"
+		if len(args) > 3 {
+			role = args[3]
+		}
+		w, err := st.ResolveWorkspace(ctx, args[1])
+		if err != nil {
+			log.Fatalf("workspace %q not found", args[1])
+		}
+		u, _, err := st.GetUserByEmail(ctx, args[2])
+		if err != nil {
+			log.Fatalf("no account for %s — create it with `raenil user` first", args[2])
+		}
+		if err := st.AddMember(ctx, w.ID, u.ID, role); err != nil {
+			log.Fatalf("add member: %v", err)
+		}
+		fmt.Printf("%s is now %s of %s\n", u.Email, role, w.Name)
+
+	default:
+		log.Fatalf("unknown workspace command %q (list|create|add)", args[0])
+	}
 }
 
 func runUser(args []string) {
