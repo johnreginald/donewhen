@@ -1,12 +1,22 @@
 <script>
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { appConfig } from '$lib/store.js';
+	import { appConfig, workspaces, activeWorkspace, loadWorkspaces, switchWorkspace } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
 	import { pushSupported, enablePush, disablePush, currentSubscription } from '$lib/push.js';
 
 	let tokens = $state([]);
+	let members = $state([]);
 	let newTokenName = $state('');
+	let newTokenWs = $state('');
+	// workspace admin
+	let wsName = $state('');
+	let wsPrefix = $state('');
+	let renameName = $state('');
+	let renamePrefix = $state('');
+	let memberEmail = $state('');
+	let memberRole = $state('member');
+	const canAdmin = $derived(['owner', 'admin'].includes($activeWorkspace?.role));
 	let createdSecret = $state('');
 	let pushOn = $state(false);
 	let pushBusy = $state(false);
@@ -25,13 +35,70 @@
 
 	onMount(async () => {
 		tokens = (await api.tokens()) || [];
+		await refreshMembers();
+		renameName = $activeWorkspace?.name || '';
+		renamePrefix = $activeWorkspace?.keyPrefix || '';
 		pushOn = !!(await currentSubscription());
 		refreshPushState();
 	});
 
+	async function refreshMembers() {
+		if (!$activeWorkspace) return;
+		try {
+			members = (await api.members($activeWorkspace.id)) || [];
+		} catch {
+			members = [];
+		}
+	}
+
+	async function createWorkspace() {
+		try {
+			const w = await api.createWorkspace({ name: wsName, keyPrefix: wsPrefix.toUpperCase() });
+			wsName = '';
+			wsPrefix = '';
+			await loadWorkspaces();
+			showToast(`Created ${w.name} — new issues will be ${w.keyPrefix}-1, ${w.keyPrefix}-2, …`);
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+
+	async function saveWorkspace() {
+		try {
+			await api.updateWorkspace($activeWorkspace.id, {
+				name: renameName,
+				keyPrefix: renamePrefix.toUpperCase()
+			});
+			await loadWorkspaces();
+			showToast('Workspace updated');
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+
+	async function addMember() {
+		try {
+			await api.addMember($activeWorkspace.id, { email: memberEmail, role: memberRole });
+			memberEmail = '';
+			await refreshMembers();
+			showToast('Member added');
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+
+	async function removeMember(userId) {
+		try {
+			await api.removeMember($activeWorkspace.id, userId);
+			await refreshMembers();
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+
 	async function createToken() {
 		try {
-			const res = await api.createToken(newTokenName || 'token');
+			const res = await api.createToken(newTokenName || 'token', newTokenWs);
 			createdSecret = res.secret;
 			newTokenName = '';
 			tokens = (await api.tokens()) || [];
@@ -83,6 +150,79 @@
 	<h1>Settings</h1>
 
 	<section>
+		<h2>Workspaces</h2>
+		<p class="faint">
+			A workspace is the boundary: issues, epics, labels, board columns, artifacts and the
+			activity log all belong to exactly one, and only its members can see them.
+		</p>
+		<ul class="tokens">
+			{#each $workspaces as w (w.id)}
+				<li>
+					<span>
+						{w.name}
+						{#if w.id === $activeWorkspace?.id}<em class="faint">— active</em>{/if}
+					</span>
+					<span class="mono faint">{w.keyPrefix}</span>
+					<span class="faint">{w.role}</span>
+					{#if w.id !== $activeWorkspace?.id}
+						<button class="btn ghost sm" onclick={() => switchWorkspace(w.slug)}>switch</button>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+
+		{#if canAdmin}
+			<h3>Rename the active workspace</h3>
+			<div class="row">
+				<input class="input" placeholder="name" bind:value={renameName} />
+				<input class="input short" placeholder="PREFIX" bind:value={renamePrefix} />
+				<button class="btn" onclick={saveWorkspace}>Save</button>
+			</div>
+			<p class="faint hint">
+				The prefix applies to <b>new</b> issues only — existing keys never change.
+			</p>
+		{/if}
+
+		<h3>Create a workspace</h3>
+		<div class="row">
+			<input class="input" placeholder="name (e.g. Client Work)" bind:value={wsName} />
+			<input class="input short" placeholder="PREFIX" bind:value={wsPrefix} />
+			<button class="btn primary" onclick={createWorkspace}>Create</button>
+		</div>
+	</section>
+
+	<section>
+		<h2>Members of {$activeWorkspace?.name || 'this workspace'}</h2>
+		<ul class="tokens">
+			{#each members as m (m.userId)}
+				<li>
+					<span>{m.email}</span>
+					<span class="faint">{m.role}</span>
+					{#if canAdmin}
+						<button class="btn ghost sm" onclick={() => removeMember(m.userId)}>remove</button>
+					{/if}
+				</li>
+			{:else}
+				<li class="faint">No members listed.</li>
+			{/each}
+		</ul>
+		{#if canAdmin}
+			<div class="row">
+				<input class="input" placeholder="existing account email" bind:value={memberEmail} />
+				<select class="input short" bind:value={memberRole}>
+					<option value="member">member</option>
+					<option value="admin">admin</option>
+					<option value="owner">owner</option>
+				</select>
+				<button class="btn" onclick={addMember}>Add</button>
+			</div>
+			<p class="faint hint">
+				The account must already exist — create it with <code>raenil user &lt;email&gt; &lt;pass&gt;</code>.
+			</p>
+		{/if}
+	</section>
+
+	<section>
 		<h2>Notifications</h2>
 		{#if !$appConfig.pushEnabled}
 			<p class="faint">
@@ -118,8 +258,18 @@
 		<h2>API tokens</h2>
 		<div class="row">
 			<input class="input" placeholder="token name (e.g. claude)" bind:value={newTokenName} />
+			<select class="input short" bind:value={newTokenWs}>
+				<option value="">all my workspaces</option>
+				{#each $workspaces as w (w.id)}
+					<option value={w.slug}>{w.name}</option>
+				{/each}
+			</select>
 			<button class="btn primary" onclick={createToken}>Create</button>
 		</div>
+		<p class="faint hint">
+			Pinning a token to one workspace is how an agent working in a single repo only ever sees
+			that repo's tracker.
+		</p>
 		{#if createdSecret}
 			<div class="secret">
 				<strong>Copy now — shown once:</strong>
@@ -131,6 +281,7 @@
 			{#each tokens as t (t.id)}
 				<li>
 					<span>{t.name}</span>
+					<span class="mono faint">{t.workspaceName || 'all workspaces'}</span>
 					<span class="faint">{new Date(t.createdAt).toLocaleDateString()}</span>
 					<button class="btn ghost sm" onclick={() => delToken(t.id)}>revoke</button>
 				</li>
@@ -163,6 +314,26 @@
 	h2 {
 		font-size: 14px;
 		margin: 0 0 10px;
+	}
+	h3 {
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--text-faint);
+		margin: 18px 0 8px;
+		font-weight: 600;
+	}
+	.input.short {
+		max-width: 150px;
+		flex: none;
+	}
+	.hint {
+		font-size: 12px;
+		margin-top: 8px;
+	}
+	.mono {
+		font-family: var(--mono);
+		font-size: 11.5px;
 	}
 	.row {
 		display: flex;

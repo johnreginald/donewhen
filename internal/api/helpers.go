@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"raenil/internal/auth"
+	"raenil/internal/models"
 	"raenil/internal/store"
 )
 
@@ -25,12 +27,29 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
 	}
+	if errors.Is(err, store.ErrNotMember) {
+		writeErr(w, http.StatusForbidden, "not a member of this workspace")
+		return true
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return true
 	}
 	writeErr(w, http.StatusInternalServerError, err.Error())
 	return true
+}
+
+// ws returns the workspace id this request acts on. Handlers behind wsGuard can
+// rely on it being present; it is passed explicitly into every store call so a
+// missing scope is a compile error rather than a leak.
+func ws(r *http.Request) string {
+	w, _ := auth.WorkspaceFrom(r.Context())
+	return w.ID
+}
+
+// canAdmin reports whether the caller may administer the active workspace.
+func canAdmin(r *http.Request) bool {
+	return models.CanAdmin(auth.RoleFrom(r.Context()))
 }
 
 func readJSON(r *http.Request, dst any) error {

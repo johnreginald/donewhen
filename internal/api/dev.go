@@ -10,7 +10,7 @@ import (
 // ---- commits ----
 
 func (s *Server) handleListCommits(w http.ResponseWriter, r *http.Request) {
-	cs, err := s.store.ListCommits(r.Context(), r.PathValue("id"))
+	cs, err := s.store.ListCommits(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -28,12 +28,12 @@ func (s *Server) handleAddCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	c, err := s.store.AddCommit(r.Context(), id, body.Sha, body.Message, strPtr(body.URL))
+	c, err := s.store.AddCommit(r.Context(), ws(r), id, body.Sha, body.Message, strPtr(body.URL))
 	if handleStoreErr(w, err) {
 		return
 	}
-	if is, e := s.store.GetIssue(r.Context(), id); e == nil {
-		_ = s.store.RecordActivity(r.Context(), models.Activity{
+	if is, e := s.store.GetIssue(r.Context(), ws(r), id); e == nil {
+		_ = s.store.RecordActivity(r.Context(), ws(r), models.Activity{
 			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title,
 			Actor: auth.ActorFrom(r.Context()), Kind: "committed",
 			Detail: shortSHA(body.Sha) + " " + body.Message,
@@ -60,7 +60,7 @@ func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	is, err := s.store.SetIssueDev(r.Context(), r.PathValue("id"), strPtr(body.GitBranch), strPtr(body.PrURL))
+	is, err := s.store.SetIssueDev(r.Context(), ws(r), r.PathValue("id"), strPtr(body.GitBranch), strPtr(body.PrURL))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
 // ---- done-when criteria ----
 
 func (s *Server) handleListCriteria(w http.ResponseWriter, r *http.Request) {
-	cs, err := s.store.ListCriteria(r.Context(), r.PathValue("id"))
+	cs, err := s.store.ListCriteria(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -85,7 +85,7 @@ func (s *Server) handleAddCriterion(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "body required")
 		return
 	}
-	c, err := s.store.AddCriterion(r.Context(), r.PathValue("id"), body.Body)
+	c, err := s.store.AddCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -101,7 +101,7 @@ func (s *Server) handleUpdateCriterion(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	c, err := s.store.UpdateCriterion(r.Context(), r.PathValue("id"), body.Body, body.Done)
+	c, err := s.store.UpdateCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -109,7 +109,7 @@ func (s *Server) handleUpdateCriterion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteCriterion(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.store.DeleteCriterion(r.Context(), r.PathValue("id"))) {
+	if handleStoreErr(w, s.store.DeleteCriterion(r.Context(), ws(r), r.PathValue("id"))) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -131,7 +131,7 @@ func (s *Server) handleIssueByCommit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "sha required")
 		return
 	}
-	owner, err := s.store.IssueByCommit(r.Context(), sha)
+	owner, err := s.store.IssueByCommit(r.Context(), []string{ws(r)}, sha)
 	if handleStoreErr(w, err) {
 		return
 	}

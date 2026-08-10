@@ -13,11 +13,11 @@ import (
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	u, _ := auth.UserFrom(r.Context())
 
-	needs, err := s.store.InboxNeedsReview(r.Context())
+	needs, err := s.store.InboxNeedsReview(r.Context(), ws(r))
 	if handleStoreErr(w, err) {
 		return
 	}
-	recent, err := s.store.ListRecentActivity(r.Context(), store.ActivityFilter{Actor: "ai", Limit: 100})
+	recent, err := s.store.ListRecentActivity(r.Context(), store.ActivityFilter{WorkspaceID: ws(r), Actor: "ai", Limit: 100})
 	if handleStoreErr(w, err) {
 		return
 	}

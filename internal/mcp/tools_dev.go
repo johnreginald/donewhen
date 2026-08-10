@@ -25,16 +25,21 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA (git rev-parse HEAD)")),
 		mcp.WithString("message", mcp.Description("Commit subject line")),
 		mcp.WithString("url", mcp.Description("Full commit URL; omit to auto-build from the project repo")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		c, err := d.store.AddCommit(ctx, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")))
+		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		_ = d.store.RecordActivity(ctx, models.Activity{
+		c, err := d.store.AddCommit(ctx, wsID, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		_ = d.store.RecordActivity(ctx, wsID, models.Activity{
 			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: "ai",
 			Kind: "committed", Detail: shortSHA(c.SHA) + " " + c.Message,
 		})
@@ -50,8 +55,13 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			"in either direction. Returns not-found when no issue claims the commit, which is "+
 			"ordinary: plenty of commits are untracked."),
 		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, short or full")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		owner, err := d.store.IssueByCommit(ctx, req.GetString("sha", ""))
+		wsIDs, err := d.scopeAll(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		owner, err := d.store.IssueByCommit(ctx, wsIDs, req.GetString("sha", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -64,12 +74,17 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		mcp.WithString("gitBranch", mcp.Description("Branch name")),
 		mcp.WithString("prUrl", mcp.Description("Pull request URL")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		upd, err := d.store.SetIssueDev(ctx, is.ID, strp(req.GetString("gitBranch", "")), strp(req.GetString("prUrl", "")))
+		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		upd, err := d.store.SetIssueDev(ctx, wsID, is.ID, strp(req.GetString("gitBranch", "")), strp(req.GetString("prUrl", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -81,12 +96,17 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithDescription("Get an issue's done-when acceptance checklist with each item's done state. "+
 			"Read this before moving an issue toward Done — every criterion must be done:true."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		items, err := d.store.ListCriteria(ctx, is.ID)
+		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		items, err := d.store.ListCriteria(ctx, wsID, is.ID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -114,41 +134,46 @@ func (d *deps) registerDev(s *server.MCPServer) {
 				},
 				"required": []any{"text"},
 			})),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		// Reconcile in place against the existing rows (ordered by position): update
 		// slot i, append new slots, delete the tail. Ticking one item off re-sends the
 		// same list, so its row is updated — id and created_at survive, no churn.
-		existing, _ := d.store.ListCriteria(ctx, is.ID)
+		existing, _ := d.store.ListCriteria(ctx, wsID, is.ID)
 		items := criteriaItems(req)
 		out := []models.Criterion{}
 		for i, it := range items {
 			if i < len(existing) {
 				body, done := it.text, it.done
-				c, err := d.store.UpdateCriterion(ctx, existing[i].ID, &body, &done)
+				c, err := d.store.UpdateCriterion(ctx, wsID, existing[i].ID, &body, &done)
 				if err != nil {
 					return mcp.NewToolResultError(err.Error()), nil
 				}
 				out = append(out, c)
 				continue
 			}
-			c, err := d.store.AddCriterion(ctx, is.ID, it.text)
+			c, err := d.store.AddCriterion(ctx, wsID, is.ID, it.text)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if it.done {
 				done := true
-				if c, err = d.store.UpdateCriterion(ctx, c.ID, nil, &done); err != nil {
+				if c, err = d.store.UpdateCriterion(ctx, wsID, c.ID, nil, &done); err != nil {
 					return mcp.NewToolResultError(err.Error()), nil
 				}
 			}
 			out = append(out, c)
 		}
 		for i := len(items); i < len(existing); i++ {
-			_ = d.store.DeleteCriterion(ctx, existing[i].ID)
+			_ = d.store.DeleteCriterion(ctx, wsID, existing[i].ID)
 		}
 		return jsonResult(out)
 	})
@@ -163,12 +188,17 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithNumber("index", mcp.Description("1-based position of the item in the checklist")),
 		mcp.WithString("text", mcp.Description("Exact criterion text (case-insensitive) — alternative to index")),
 		mcp.WithBoolean("done", mcp.Description("Met? default true")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		items, err := d.store.ListCriteria(ctx, is.ID)
+		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		items, err := d.store.ListCriteria(ctx, wsID, is.ID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -187,7 +217,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			return mcp.NewToolResultError("no matching criterion — check index/text against get_criteria"), nil
 		}
 		done := req.GetBool("done", true)
-		c, err := d.store.UpdateCriterion(ctx, target.ID, nil, &done)
+		c, err := d.store.UpdateCriterion(ctx, wsID, target.ID, nil, &done)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -198,12 +228,17 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("get_activity",
 		mcp.WithDescription("Get an issue's activity timeline (who did what, when) — the record."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		is, err := d.resolveIssueRef(ctx, req.GetString("issue", ""))
+		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		acts, err := d.store.ListActivity(ctx, is.ID)
+		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		acts, err := d.store.ListActivity(ctx, wsID, is.ID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

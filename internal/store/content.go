@@ -12,9 +12,14 @@ import (
 
 // ---- Comments ----
 
-func (s *Store) ListComments(ctx context.Context, issueID string) ([]models.Comment, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, issue_id, body_md, actor, created_at FROM comments WHERE issue_id=$1 ORDER BY created_at`, issueID)
+// ListComments returns an issue's comments. The issue is resolved through the
+// workspace first, so a caller cannot read a conversation it cannot see.
+func (s *Store) ListComments(ctx context.Context, wsID, issueID string) ([]models.Comment, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id, c.issue_id, c.body_md, c.actor, c.created_at
+		FROM comments c JOIN issues i ON i.id = c.issue_id
+		WHERE c.issue_id=$1 AND i.workspace_id=$2
+		ORDER BY c.created_at`, issueID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -30,15 +35,19 @@ func (s *Store) ListComments(ctx context.Context, issueID string) ([]models.Comm
 	return out, rows.Err()
 }
 
-func (s *Store) CreateComment(ctx context.Context, issueID, body, actor string) (models.Comment, error) {
+func (s *Store) CreateComment(ctx context.Context, wsID, issueID, body, actor string) (models.Comment, error) {
 	if actor == "" {
 		actor = "human"
 	}
 	var c models.Comment
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO comments (issue_id, body_md, actor) VALUES ($1,$2,$3)
+		`INSERT INTO comments (issue_id, body_md, actor)
+		 SELECT $1,$2,$3 FROM issues WHERE id=$1 AND workspace_id=$4
 		 RETURNING id, issue_id, body_md, actor, created_at`,
-		issueID, body, actor).Scan(&c.ID, &c.IssueID, &c.BodyMD, &c.Actor, &c.CreatedAt)
+		issueID, body, actor, wsID).Scan(&c.ID, &c.IssueID, &c.BodyMD, &c.Actor, &c.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, ErrNotFound
+	}
 	return c, err
 }
 
@@ -49,6 +58,9 @@ type DocFilter struct {
 	ProjectID    string
 	IssueID      string
 	InitiativeID string
+	// WorkspaceIDs widens a listing beyond the single workspace passed to
+	// ListDocuments — the agent surface only.
+	WorkspaceIDs []string
 }
 
 const docCols = `id, title, body_md, type, author, project_id, initiative_id, issue_id, created_at, updated_at`
@@ -60,10 +72,14 @@ func scanDocument(row pgx.Row) (models.Document, error) {
 	return d, err
 }
 
-func (s *Store) ListDocuments(ctx context.Context, f DocFilter) ([]models.Document, error) {
-	q := `SELECT ` + docCols + ` FROM documents WHERE 1=1`
-	args := []any{}
-	n := 0
+func (s *Store) ListDocuments(ctx context.Context, wsID string, f DocFilter) ([]models.Document, error) {
+	scope := f.WorkspaceIDs
+	if len(scope) == 0 {
+		scope = []string{wsID}
+	}
+	q := `SELECT ` + docCols + ` FROM documents WHERE workspace_id = ANY($1)`
+	args := []any{scope}
+	n := 1
 	add := func(col string, v string) {
 		if v == "" {
 			return
@@ -127,8 +143,9 @@ func (s *Store) attachDocLabels(ctx context.Context, docs []models.Document) ([]
 	return docs, rows.Err()
 }
 
-func (s *Store) GetDocument(ctx context.Context, id string) (models.Document, error) {
-	d, err := scanDocument(s.pool.QueryRow(ctx, `SELECT `+docCols+` FROM documents WHERE id=$1`, id))
+func (s *Store) GetDocument(ctx context.Context, wsID, id string) (models.Document, error) {
+	d, err := scanDocument(s.pool.QueryRow(ctx,
+		`SELECT `+docCols+` FROM documents WHERE id=$1 AND workspace_id=$2`, id, wsID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -142,53 +159,81 @@ func (s *Store) GetDocument(ctx context.Context, id string) (models.Document, er
 	return out[0], nil
 }
 
-func (s *Store) SaveDocument(ctx context.Context, d models.Document) (models.Document, error) {
+func (s *Store) SaveDocument(ctx context.Context, wsID string, d models.Document) (models.Document, error) {
 	if d.Type == "" {
 		d.Type = "reference"
 	}
+	// A document may only attach to things inside its own workspace.
+	if d.IssueID != nil && *d.IssueID != "" {
+		if _, err := s.GetIssue(ctx, wsID, *d.IssueID); err != nil {
+			return d, err
+		}
+	}
+	if d.ProjectID != nil && *d.ProjectID != "" {
+		if _, err := s.GetProject(ctx, wsID, *d.ProjectID); err != nil {
+			return d, err
+		}
+	}
+	if d.InitiativeID != nil && *d.InitiativeID != "" {
+		if _, err := s.GetInitiative(ctx, wsID, *d.InitiativeID); err != nil {
+			return d, err
+		}
+	}
+
 	if d.ID == "" {
 		if d.Author == "" {
 			d.Author = "human"
 		}
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO documents (title, body_md, type, author, project_id, initiative_id, issue_id)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at, updated_at`,
-			d.Title, d.BodyMD, d.Type, d.Author, d.ProjectID, d.InitiativeID, d.IssueID).Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt)
+			`INSERT INTO documents (workspace_id, title, body_md, type, author, project_id, initiative_id, issue_id)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, created_at, updated_at`,
+			wsID, d.Title, d.BodyMD, d.Type, d.Author, d.ProjectID, d.InitiativeID, d.IssueID).
+			Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt)
 		if err != nil {
 			return d, err
 		}
 		// Timeline: an artifact was written for this issue.
 		if d.IssueID != nil {
-			if is, e := s.GetIssue(ctx, *d.IssueID); e == nil {
-				_ = s.RecordActivity(ctx, models.Activity{
+			if is, e := s.GetIssue(ctx, wsID, *d.IssueID); e == nil {
+				_ = s.RecordActivity(ctx, wsID, models.Activity{
 					IssueID: d.IssueID, IssueKey: is.Key, IssueTitle: is.Title,
 					Actor: d.Author, Kind: "artifact_written", Detail: d.Title,
 				})
 			}
 		}
-		return s.GetDocument(ctx, d.ID)
+		return s.GetDocument(ctx, wsID, d.ID)
 	}
 	// Update leaves author (provenance) immutable.
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE documents SET title=$2, body_md=$3, type=$4, project_id=$5, initiative_id=$6, issue_id=$7, updated_at=now() WHERE id=$1`,
-		d.ID, d.Title, d.BodyMD, d.Type, d.ProjectID, d.InitiativeID, d.IssueID)
+		`UPDATE documents SET title=$3, body_md=$4, type=$5, project_id=$6, initiative_id=$7, issue_id=$8, updated_at=now()
+		 WHERE id=$1 AND workspace_id=$2`,
+		d.ID, wsID, d.Title, d.BodyMD, d.Type, d.ProjectID, d.InitiativeID, d.IssueID)
 	if err != nil {
 		return d, err
 	}
 	if ct.RowsAffected() == 0 {
 		return d, ErrNotFound
 	}
-	return s.GetDocument(ctx, d.ID)
+	return s.GetDocument(ctx, wsID, d.ID)
 }
 
 // SetDocumentLabels replaces a document's label set (exclusive-group aware).
-func (s *Store) SetDocumentLabels(ctx context.Context, docID string, ids, names []string) error {
+func (s *Store) SetDocumentLabels(ctx context.Context, wsID, docID string, ids, names []string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	labelIDs, err := s.resolveLabelIDsTx(ctx, tx, ids, names)
+
+	var ok bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM documents WHERE id=$1 AND workspace_id=$2)`, docID, wsID).Scan(&ok); err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	labelIDs, err := s.resolveLabelIDsTx(ctx, tx, wsID, ids, names)
 	if err != nil {
 		return err
 	}
@@ -205,8 +250,8 @@ func (s *Store) SetDocumentLabels(ctx context.Context, docID string, ids, names 
 	return tx.Commit(ctx)
 }
 
-func (s *Store) DeleteDocument(ctx context.Context, id string) error {
-	ct, err := s.pool.Exec(ctx, `DELETE FROM documents WHERE id=$1`, id)
+func (s *Store) DeleteDocument(ctx context.Context, wsID, id string) error {
+	ct, err := s.pool.Exec(ctx, `DELETE FROM documents WHERE id=$1 AND workspace_id=$2`, id, wsID)
 	if err != nil {
 		return err
 	}

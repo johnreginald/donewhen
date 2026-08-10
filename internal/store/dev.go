@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -13,28 +14,29 @@ import (
 // ---- dev links (branch / PR) ----
 
 // SetIssueDev sets the branch + PR that implemented an issue (nil clears).
-func (s *Store) SetIssueDev(ctx context.Context, issueID string, branch, prURL *string) (models.Issue, error) {
+func (s *Store) SetIssueDev(ctx context.Context, wsID, issueID string, branch, prURL *string) (models.Issue, error) {
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE issues SET git_branch=$2, pr_url=$3, updated_at=now() WHERE id=$1`, issueID, branch, prURL)
+		`UPDATE issues SET git_branch=$3, pr_url=$4, updated_at=now() WHERE id=$1 AND workspace_id=$2`,
+		issueID, wsID, branch, prURL)
 	if err != nil {
 		return models.Issue{}, err
 	}
 	if ct.RowsAffected() == 0 {
 		return models.Issue{}, ErrNotFound
 	}
-	return s.GetIssue(ctx, issueID)
+	return s.GetIssue(ctx, wsID, issueID)
 }
 
 // IssueRepo returns the default repo for an issue — its Epic's repo_url, else
 // its Project's (initiative's) repo_url, else "".
-func (s *Store) IssueRepo(ctx context.Context, issueID string) string {
+func (s *Store) IssueRepo(ctx context.Context, wsID, issueID string) string {
 	var repo *string
 	err := s.pool.QueryRow(ctx, `
 		SELECT coalesce(p.repo_url, i.repo_url)
 		FROM issues iss
 		LEFT JOIN projects p ON p.id = iss.project_id
 		LEFT JOIN initiatives i ON i.id = p.initiative_id
-		WHERE iss.id = $1`, issueID).Scan(&repo)
+		WHERE iss.id = $1 AND iss.workspace_id = $2`, issueID, wsID).Scan(&repo)
 	if err != nil || repo == nil {
 		return ""
 	}
@@ -52,25 +54,31 @@ func commitURL(repo, sha string) string {
 
 // ---- commits ----
 
-func (s *Store) AddCommit(ctx context.Context, issueID, sha, message string, url *string) (models.IssueCommit, error) {
+func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message string, url *string) (models.IssueCommit, error) {
 	// No explicit URL? Build one from the issue's default repo (Epic/Project).
 	if url == nil || *url == "" {
-		if built := commitURL(s.IssueRepo(ctx, issueID), sha); built != "" {
+		if built := commitURL(s.IssueRepo(ctx, wsID, issueID), sha); built != "" {
 			url = &built
 		}
 	}
 	var c models.IssueCommit
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO issue_commits (issue_id, sha, message, url) VALUES ($1,$2,$3,$4)
+		`INSERT INTO issue_commits (issue_id, sha, message, url)
+		 SELECT $1,$2,$3,$4 FROM issues WHERE id=$1 AND workspace_id=$5
 		 RETURNING id, issue_id, sha, message, url, created_at`,
-		issueID, sha, message, url).Scan(&c.ID, &c.IssueID, &c.SHA, &c.Message, &c.URL, &c.CreatedAt)
+		issueID, sha, message, url, wsID).Scan(&c.ID, &c.IssueID, &c.SHA, &c.Message, &c.URL, &c.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, ErrNotFound
+	}
 	return c, err
 }
 
-func (s *Store) ListCommits(ctx context.Context, issueID string) ([]models.IssueCommit, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, issue_id, sha, message, url, created_at FROM issue_commits
-		 WHERE issue_id=$1 ORDER BY created_at DESC`, issueID)
+func (s *Store) ListCommits(ctx context.Context, wsID, issueID string) ([]models.IssueCommit, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT ic.id, ic.issue_id, ic.sha, ic.message, ic.url, ic.created_at
+		FROM issue_commits ic JOIN issues i ON i.id = ic.issue_id
+		WHERE ic.issue_id=$1 AND i.workspace_id=$2
+		ORDER BY ic.created_at DESC`, issueID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,10 +102,12 @@ func scanCriterion(row pgx.Row) (models.Criterion, error) {
 	return c, err
 }
 
-func (s *Store) ListCriteria(ctx context.Context, issueID string) ([]models.Criterion, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, issue_id, body, done, position, created_at FROM issue_criteria
-		 WHERE issue_id=$1 ORDER BY position, created_at`, issueID)
+func (s *Store) ListCriteria(ctx context.Context, wsID, issueID string) ([]models.Criterion, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id, c.issue_id, c.body, c.done, c.position, c.created_at
+		FROM issue_criteria c JOIN issues i ON i.id = c.issue_id
+		WHERE c.issue_id=$1 AND i.workspace_id=$2
+		ORDER BY c.position, c.created_at`, issueID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,25 +123,34 @@ func (s *Store) ListCriteria(ctx context.Context, issueID string) ([]models.Crit
 	return out, rows.Err()
 }
 
-func (s *Store) AddCriterion(ctx context.Context, issueID, body string) (models.Criterion, error) {
-	return scanCriterion(s.pool.QueryRow(ctx,
-		`INSERT INTO issue_criteria (issue_id, body, position)
-		 VALUES ($1, $2, coalesce((SELECT max(position)+1 FROM issue_criteria WHERE issue_id=$1), 0))
-		 RETURNING id, issue_id, body, done, position, created_at`, issueID, body))
-}
-
-func (s *Store) UpdateCriterion(ctx context.Context, id string, body *string, done *bool) (models.Criterion, error) {
+func (s *Store) AddCriterion(ctx context.Context, wsID, issueID, body string) (models.Criterion, error) {
 	c, err := scanCriterion(s.pool.QueryRow(ctx,
-		`UPDATE issue_criteria SET body=coalesce($2,body), done=coalesce($3,done) WHERE id=$1
-		 RETURNING id, issue_id, body, done, position, created_at`, id, body, done))
-	if err == pgx.ErrNoRows {
+		`INSERT INTO issue_criteria (issue_id, body, position)
+		 SELECT $1, $2, coalesce((SELECT max(position)+1 FROM issue_criteria WHERE issue_id=$1), 0)
+		 FROM issues WHERE id=$1 AND workspace_id=$3
+		 RETURNING id, issue_id, body, done, position, created_at`, issueID, body, wsID))
+	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
 	return c, err
 }
 
-func (s *Store) DeleteCriterion(ctx context.Context, id string) error {
-	ct, err := s.pool.Exec(ctx, `DELETE FROM issue_criteria WHERE id=$1`, id)
+func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *string, done *bool) (models.Criterion, error) {
+	c, err := scanCriterion(s.pool.QueryRow(ctx, `
+		UPDATE issue_criteria c SET body=coalesce($2,c.body), done=coalesce($3,c.done)
+		FROM issues i
+		WHERE c.id=$1 AND i.id = c.issue_id AND i.workspace_id=$4
+		RETURNING c.id, c.issue_id, c.body, c.done, c.position, c.created_at`, id, body, done, wsID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return c, ErrNotFound
+	}
+	return c, err
+}
+
+func (s *Store) DeleteCriterion(ctx context.Context, wsID, id string) error {
+	ct, err := s.pool.Exec(ctx, `
+		DELETE FROM issue_criteria c USING issues i
+		WHERE c.id=$1 AND i.id = c.issue_id AND i.workspace_id=$2`, id, wsID)
 	if err != nil {
 		return err
 	}
@@ -163,29 +182,31 @@ type CommitOwner struct {
 }
 
 // IssueByCommit returns the issue that recorded sha, with its acceptance
-// criteria.
+// criteria, searched across the given workspaces.
 //
 // Matches on prefix in both directions so a short SHA (git rev-parse
 // --short, which is what most tools record) finds a full one and vice
 // versa. Returns pgx.ErrNoRows when no issue claims the commit — an
 // ordinary outcome, since plenty of commits are not tracked.
-func (s *Store) IssueByCommit(ctx context.Context, sha string) (CommitOwner, error) {
+func (s *Store) IssueByCommit(ctx context.Context, wsIDs []string, sha string) (CommitOwner, error) {
 	var out CommitOwner
+	var wsID string
 	err := s.pool.QueryRow(ctx, `
-		SELECT i.id, i.key, i.title, COALESCE(ws.name, ''),
+		SELECT i.id, i.key, i.title, COALESCE(ws.name, ''), i.workspace_id,
 		       ic.sha, ic.message, ic.url, ic.created_at
 		FROM issue_commits ic
 		JOIN issues i ON i.id = ic.issue_id
 		LEFT JOIN workflow_states ws ON ws.id = i.state_id
-		WHERE ic.sha = $1 OR ic.sha LIKE $1 || '%' OR $1 LIKE ic.sha || '%'
+		WHERE i.workspace_id = ANY($2)
+		  AND (ic.sha = $1 OR ic.sha LIKE $1 || '%' OR $1 LIKE ic.sha || '%')
 		ORDER BY length(ic.sha) DESC, ic.created_at DESC
 		LIMIT 1
-	`, sha).Scan(&out.IssueID, &out.IssueKey, &out.Title, &out.State,
+	`, sha, wsIDs).Scan(&out.IssueID, &out.IssueKey, &out.Title, &out.State, &wsID,
 		&out.SHA, &out.Message, &out.URL, &out.CreatedAt)
 	if err != nil {
 		return out, err
 	}
-	crit, err := s.ListCriteria(ctx, out.IssueID)
+	crit, err := s.ListCriteria(ctx, wsID, out.IssueID)
 	if err != nil {
 		return out, err
 	}

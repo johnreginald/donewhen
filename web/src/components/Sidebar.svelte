@@ -3,9 +3,31 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { initiatives, projects, activeProject, activeInitiative, loadIssues, issues, inboxCount } from '$lib/store.js';
+	import {
+		initiatives,
+		projects,
+		activeProject,
+		activeInitiative,
+		loadIssues,
+		issues,
+		inboxCount,
+		workspaces,
+		activeWorkspace,
+		switchWorkspace
+	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight } from '@lucide/svelte';
+	import { FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check, ChevronsUpDown, Settings } from '@lucide/svelte';
+
+	// Workspace switcher — the top-level scope. Everything below it (epics,
+	// issues, labels, the inbox badge) belongs to the selected workspace only.
+	let wsOpen = $state(false);
+	async function pickWorkspace(slug) {
+		wsOpen = false;
+		if (slug === $activeWorkspace?.slug) return;
+		await switchWorkspace(slug);
+		if ($page.url.pathname !== '/' && $page.url.pathname !== '/list') goto('/');
+		onnavigate();
+	}
 
 	// Collapsible initiative groups — so a big epic list stays manageable.
 	let expanded = $state(new Set());
@@ -105,9 +127,30 @@
 </script>
 
 <nav class="sidebar">
-	<div class="brand">
-		<span class="logo">R</span>
-		<span class="name">Raenil</span>
+	<div class="ws">
+		<button class="ws-btn" onclick={() => (wsOpen = !wsOpen)} title="Switch workspace">
+			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}</span>
+			<span class="ws-text">
+				<span class="ws-name">{$activeWorkspace?.name || 'Raenil'}</span>
+				<span class="ws-key">{$activeWorkspace?.keyPrefix || ''}</span>
+			</span>
+			<ChevronsUpDown size={14} strokeWidth={2} />
+		</button>
+		{#if wsOpen}
+			<div class="menu-backdrop" role="presentation" onclick={() => (wsOpen = false)}></div>
+			<div class="ws-menu">
+				{#each $workspaces as w (w.id)}
+					<button class="ws-item" class:on={w.id === $activeWorkspace?.id} onclick={() => pickWorkspace(w.slug)}>
+						<span class="ws-item-key">{w.keyPrefix}</span>
+						<span class="ws-item-name">{w.name}</span>
+						{#if w.id === $activeWorkspace?.id}<Check size={14} strokeWidth={2.4} />{/if}
+					</button>
+				{/each}
+				<a class="ws-item manage" href="/settings" onclick={() => (wsOpen = false)}>
+					<Settings size={13} strokeWidth={2} />Manage workspaces
+				</a>
+			</div>
+		{/if}
 	</div>
 
 	<button class="cmdk" onclick={() => paletteOpen.set(true)}>
@@ -196,6 +239,106 @@
 		padding: 12px 10px;
 		gap: 14px;
 		overflow-y: auto;
+	}
+	.ws {
+		position: relative;
+	}
+	.ws-btn {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		width: 100%;
+		padding: 5px 8px;
+		border: none;
+		background: none;
+		border-radius: 8px;
+		color: var(--text-dim);
+		text-align: left;
+	}
+	.ws-btn:hover {
+		background: var(--bg-hover);
+	}
+	.ws-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		line-height: 1.25;
+	}
+	.ws-name {
+		font-weight: 600;
+		font-size: 14px;
+		color: var(--text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ws-key {
+		font-family: var(--mono);
+		font-size: 10.5px;
+		color: var(--text-faint);
+		letter-spacing: 0.04em;
+	}
+	.ws-menu {
+		position: absolute;
+		top: 42px;
+		left: 4px;
+		right: 4px;
+		z-index: 31;
+		background: var(--bg-elev2);
+		border: 1px solid var(--border-strong);
+		border-radius: 9px;
+		box-shadow: var(--shadow);
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+	.ws-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		text-align: left;
+		padding: 7px 8px;
+		border-radius: 6px;
+		font-size: 13.5px;
+		width: 100%;
+		text-decoration: none;
+	}
+	.ws-item:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.ws-item.on {
+		color: var(--text);
+	}
+	.ws-item-key {
+		font-family: var(--mono);
+		font-size: 10px;
+		color: var(--text-faint);
+		background: var(--bg);
+		border-radius: 4px;
+		padding: 2px 5px;
+		flex: none;
+		min-width: 34px;
+		text-align: center;
+	}
+	.ws-item-name {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ws-item.manage {
+		border-top: 1px solid var(--border);
+		margin-top: 3px;
+		padding-top: 8px;
+		font-size: 12.5px;
+		color: var(--text-faint);
 	}
 	.brand {
 		display: flex;

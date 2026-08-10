@@ -13,6 +13,7 @@ func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	issues, err := s.store.ListIssues(r.Context(), store.IssueFilter{
+		WorkspaceID:  ws(r),
 		StateID:      q.Get("state"),
 		ProjectID:    q.Get("project"),
 		InitiativeID: q.Get("initiative"),
@@ -39,9 +40,9 @@ func (s *Server) handleGetIssue(w http.ResponseWriter, r *http.Request) {
 func (s *Server) resolveIssue(r *http.Request, ref string) (models.Issue, error) {
 	// A key looks like "PREFIX-<n>"; a UUID is 36 chars with dashes at 8-13-18-23.
 	if looksLikeKey(ref) {
-		return s.store.GetIssueByKey(r.Context(), ref)
+		return s.store.GetIssueByKey(r.Context(), ws(r), ref)
 	}
-	return s.store.GetIssue(r.Context(), ref)
+	return s.store.GetIssue(r.Context(), ws(r), ref)
 }
 
 func looksLikeKey(ref string) bool {
@@ -86,7 +87,7 @@ func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		LabelIDs:      req.LabelIds,
 		LabelNames:    req.LabelNames,
 	}
-	is, err := s.svc.CreateIssue(r.Context(), in, auth.ActorFrom(r.Context()))
+	is, err := s.svc.CreateIssue(r.Context(), ws(r), in, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -139,7 +140,7 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		p.LabelIDs = req.LabelIds
 		p.LabelNames = req.LabelNames
 	}
-	is, err := s.svc.UpdateIssue(r.Context(), r.PathValue("id"), p, auth.ActorFrom(r.Context()))
+	is, err := s.svc.UpdateIssue(r.Context(), ws(r), r.PathValue("id"), p, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -147,7 +148,7 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.svc.DeleteIssue(r.Context(), r.PathValue("id"), auth.ActorFrom(r.Context()))) {
+	if handleStoreErr(w, s.svc.DeleteIssue(r.Context(), ws(r), r.PathValue("id"), auth.ActorFrom(r.Context()))) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})

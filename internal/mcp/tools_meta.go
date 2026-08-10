@@ -14,8 +14,13 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("list_projects",
 		mcp.WithDescription("List projects (epics), optionally within an initiative."),
 		mcp.WithString("initiative", mcp.Description("Initiative id filter")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		items, err := d.store.ListProjects(ctx, req.GetString("initiative", ""))
+		wsIDs, err := d.scopeAll(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		items, err := d.store.ListProjectsAcross(ctx, wsIDs, req.GetString("initiative", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -25,12 +30,17 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("get_project",
 		mcp.WithDescription("Get a project by id."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Project id")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		p, err := d.store.GetProject(ctx, id)
+		wsID, err := d.scopeOne(ctx, req, projectRef(id))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		p, err := d.store.GetProject(ctx, wsID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -43,14 +53,19 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		mcp.WithString("name", mcp.Description("Project name")),
 		mcp.WithString("description", mcp.Description("Markdown description")),
 		mcp.WithString("initiative", mcp.Description("Parent initiative id")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.scopeOne(ctx, req, projectRef(req.GetString("id", "")), iniRef(req.GetString("initiative", "")))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		p := models.Project{
 			ID:            req.GetString("id", ""),
 			Name:          req.GetString("name", ""),
 			DescriptionMD: req.GetString("description", ""),
 			InitiativeID:  strp(req.GetString("initiative", "")),
 		}
-		saved, err := d.store.SaveProject(ctx, p)
+		saved, err := d.store.SaveProject(ctx, wsID, p)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -61,12 +76,17 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("get_initiative",
 		mcp.WithDescription("Get an initiative by id."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Initiative id")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		it, err := d.store.GetInitiative(ctx, id)
+		wsID, err := d.scopeOne(ctx, req, iniRef(id))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		it, err := d.store.GetInitiative(ctx, wsID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -75,8 +95,13 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 
 	s.AddTool(mcp.NewTool("list_initiatives",
 		mcp.WithDescription("List initiatives (top-level grouping of projects)."),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		items, err := d.store.ListInitiatives(ctx)
+		wsIDs, err := d.scopeAll(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		items, err := d.store.ListInitiativesAcross(ctx, wsIDs)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -88,13 +113,18 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		mcp.WithString("id", mcp.Description("Initiative id to update; omit to create")),
 		mcp.WithString("name", mcp.Description("Initiative name")),
 		mcp.WithString("description", mcp.Description("Markdown description")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.scopeOne(ctx, req, iniRef(req.GetString("id", "")))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		i := models.Initiative{
 			ID:            req.GetString("id", ""),
 			Name:          req.GetString("name", ""),
 			DescriptionMD: req.GetString("description", ""),
 		}
-		saved, err := d.store.SaveInitiative(ctx, i)
+		saved, err := d.store.SaveInitiative(ctx, wsID, i)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -104,8 +134,13 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	// ---- statuses ----
 	s.AddTool(mcp.NewTool("list_issue_statuses",
 		mcp.WithDescription("List the workflow states (Triage → ... → Done, Canceled)."),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		states, err := d.store.ListStates(ctx)
+		wsIDs, err := d.scopeAll(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		states, err := d.store.ListStatesAcross(ctx, wsIDs)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -115,12 +150,17 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("get_issue_status",
 		mcp.WithDescription("Get a workflow state by id."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("State id")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		st, err := d.store.GetState(ctx, id)
+		wsID, err := d.scopeOne(ctx, req, stateRef(id))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		st, err := d.store.GetState(ctx, wsID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -130,12 +170,17 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	// ---- labels ----
 	s.AddTool(mcp.NewTool("list_issue_labels",
 		mcp.WithDescription("List labels and their exclusive groups."),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		labels, err := d.store.ListLabels(ctx)
+		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		groups, _ := d.store.ListLabelGroups(ctx)
+		labels, err := d.store.ListLabelsAcross(ctx, wsIDs)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		groups, _ := d.store.ListLabelGroupsAcross(ctx, wsIDs)
 		return jsonResult(map[string]any{"labels": labels, "groups": groups})
 	})
 
@@ -144,12 +189,17 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		mcp.WithString("name", mcp.Required(), mcp.Description("Label name")),
 		mcp.WithString("color", mcp.Description("Hex color")),
 		mcp.WithString("group", mcp.Description("Group name, e.g. 'domain'")),
+		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		wsID, err := d.scopeOne(ctx, req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		name, err := req.RequireString("name")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		l, err := d.store.CreateLabel(ctx, name, req.GetString("color", ""), req.GetString("group", ""))
+		l, err := d.store.CreateLabel(ctx, wsID, name, req.GetString("color", ""), req.GetString("group", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -1,4 +1,10 @@
 // Live event stream. Reconnects automatically (EventSource does this natively).
+//
+// The stream is bound to one workspace: EventSource cannot send headers, so the
+// workspace rides in the query string. Switching workspace closes and reopens
+// it — see the layout.
+
+import { getWorkspace } from './api.js';
 
 export function connectSSE(onEvent) {
 	let es;

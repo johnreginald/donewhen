@@ -13,9 +13,18 @@ import (
 
 // ---- Workflow states ----
 
-func (s *Store) ListStates(ctx context.Context) ([]models.WorkflowState, error) {
+func (s *Store) ListStates(ctx context.Context, wsID string) ([]models.WorkflowState, error) {
+	return s.ListStatesAcross(ctx, []string{wsID})
+}
+
+// ListStatesAcross reads the board columns of several workspaces at once. Only
+// the agent surface uses the Across variants: a browser is always in exactly
+// one workspace, and keeping its methods single-valued preserves the
+// compile-time guarantee that a request cannot accidentally widen its scope.
+func (s *Store) ListStatesAcross(ctx context.Context, wsIDs []string) ([]models.WorkflowState, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, category, position, color FROM workflow_states ORDER BY position`)
+		`SELECT id, name, category, position, color FROM workflow_states
+		 WHERE workspace_id = ANY($1) ORDER BY position`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -31,10 +40,10 @@ func (s *Store) ListStates(ctx context.Context) ([]models.WorkflowState, error) 
 	return out, rows.Err()
 }
 
-func (s *Store) GetState(ctx context.Context, id string) (models.WorkflowState, error) {
+func (s *Store) GetState(ctx context.Context, wsID, id string) (models.WorkflowState, error) {
 	var w models.WorkflowState
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, category, position, color FROM workflow_states WHERE id=$1`, id).
+		`SELECT id, name, category, position, color FROM workflow_states WHERE id=$1 AND workspace_id=$2`, id, wsID).
 		Scan(&w.ID, &w.Name, &w.Category, &w.Position, &w.Color)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return w, ErrNotFound
@@ -42,37 +51,45 @@ func (s *Store) GetState(ctx context.Context, id string) (models.WorkflowState, 
 	return w, err
 }
 
-// resolveStateTx returns a valid state id given an id and/or a name.
-// If both are empty it defaults to the lowest-position state (Triage/Backlog).
-func (s *Store) resolveStateTx(ctx context.Context, tx pgx.Tx, id, name string) (string, error) {
+// resolveStateTx returns a valid state id given an id and/or a name, within one
+// workspace. If both are empty it defaults to the lowest-position state.
+func (s *Store) resolveStateTx(ctx context.Context, tx pgx.Tx, wsID, id, name string) (string, error) {
 	if id != "" {
 		var got string
-		err := tx.QueryRow(ctx, `SELECT id FROM workflow_states WHERE id=$1`, id).Scan(&got)
+		err := tx.QueryRow(ctx,
+			`SELECT id FROM workflow_states WHERE id=$1 AND workspace_id=$2`, id, wsID).Scan(&got)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("state id %q not found", id)
+			return "", fmt.Errorf("state id %q not found in this workspace", id)
 		}
 		return got, err
 	}
 	if name != "" {
 		var got string
-		err := tx.QueryRow(ctx, `SELECT id FROM workflow_states WHERE lower(name)=lower($1)`, name).Scan(&got)
+		err := tx.QueryRow(ctx,
+			`SELECT id FROM workflow_states WHERE lower(name)=lower($1) AND workspace_id=$2`, name, wsID).Scan(&got)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("state name %q not found", name)
+			return "", fmt.Errorf("state name %q not found in this workspace", name)
 		}
 		return got, err
 	}
 	var got string
-	err := tx.QueryRow(ctx, `SELECT id FROM workflow_states ORDER BY position LIMIT 1`).Scan(&got)
+	err := tx.QueryRow(ctx,
+		`SELECT id FROM workflow_states WHERE workspace_id=$1 ORDER BY position LIMIT 1`, wsID).Scan(&got)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", errors.New("no workflow states defined")
+		return "", errors.New("no workflow states defined for this workspace")
 	}
 	return got, err
 }
 
 // ---- Label groups & labels ----
 
-func (s *Store) ListLabelGroups(ctx context.Context) ([]models.LabelGroup, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, name, exclusive FROM label_groups ORDER BY name`)
+func (s *Store) ListLabelGroups(ctx context.Context, wsID string) ([]models.LabelGroup, error) {
+	return s.ListLabelGroupsAcross(ctx, []string{wsID})
+}
+
+func (s *Store) ListLabelGroupsAcross(ctx context.Context, wsIDs []string) ([]models.LabelGroup, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, name, exclusive FROM label_groups WHERE workspace_id = ANY($1) ORDER BY name`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +105,13 @@ func (s *Store) ListLabelGroups(ctx context.Context) ([]models.LabelGroup, error
 	return out, rows.Err()
 }
 
-func (s *Store) ListLabels(ctx context.Context) ([]models.Label, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, group_id, name, color FROM labels ORDER BY name`)
+func (s *Store) ListLabels(ctx context.Context, wsID string) ([]models.Label, error) {
+	return s.ListLabelsAcross(ctx, []string{wsID})
+}
+
+func (s *Store) ListLabelsAcross(ctx context.Context, wsIDs []string) ([]models.Label, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, group_id, name, color FROM labels WHERE workspace_id = ANY($1) ORDER BY name`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -105,15 +127,17 @@ func (s *Store) ListLabels(ctx context.Context) ([]models.Label, error) {
 	return out, rows.Err()
 }
 
-// CreateLabel creates (or returns existing) a label, optionally in a named group.
-func (s *Store) CreateLabel(ctx context.Context, name, color, groupName string) (models.Label, error) {
+// CreateLabel creates (or returns existing) a label in one workspace,
+// optionally in a named group.
+func (s *Store) CreateLabel(ctx context.Context, wsID, name, color, groupName string) (models.Label, error) {
 	var l models.Label
 	var groupID *string
 	if groupName != "" {
 		var gid string
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO label_groups (name) VALUES ($1)
-			 ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id`, groupName).Scan(&gid)
+			`INSERT INTO label_groups (workspace_id, name) VALUES ($1,$2)
+			 ON CONFLICT (workspace_id, name) DO UPDATE SET name=EXCLUDED.name RETURNING id`,
+			wsID, groupName).Scan(&gid)
 		if err != nil {
 			return l, err
 		}
@@ -123,17 +147,17 @@ func (s *Store) CreateLabel(ctx context.Context, name, color, groupName string) 
 		color = "#94a3b8"
 	}
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO labels (group_id, name, color) VALUES ($1,$2,$3)
-		 ON CONFLICT (name) DO UPDATE SET color=EXCLUDED.color, group_id=COALESCE(labels.group_id, EXCLUDED.group_id)
+		`INSERT INTO labels (workspace_id, group_id, name, color) VALUES ($1,$2,$3,$4)
+		 ON CONFLICT (workspace_id, name) DO UPDATE SET color=EXCLUDED.color, group_id=COALESCE(labels.group_id, EXCLUDED.group_id)
 		 RETURNING id, group_id, name, color`,
-		groupID, name, color).Scan(&l.ID, &l.GroupID, &l.Name, &l.Color)
+		wsID, groupID, name, color).Scan(&l.ID, &l.GroupID, &l.Name, &l.Color)
 	return l, err
 }
 
 // resolveLabelIDsTx turns a mix of label ids and label names into a concrete id
-// set, creating labels by name on the fly, and enforcing exclusive groups
-// (keeping the last label seen for any exclusive group).
-func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, ids, names []string) ([]string, error) {
+// set within one workspace, creating labels by name on the fly, and enforcing
+// exclusive groups (keeping the last label seen for any exclusive group).
+func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, wsID string, ids, names []string) ([]string, error) {
 	type lbl struct {
 		id      string
 		groupID *string
@@ -142,9 +166,10 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, ids, names []s
 
 	for _, id := range ids {
 		var got lbl
-		err := tx.QueryRow(ctx, `SELECT id, group_id FROM labels WHERE id=$1`, id).Scan(&got.id, &got.groupID)
+		err := tx.QueryRow(ctx,
+			`SELECT id, group_id FROM labels WHERE id=$1 AND workspace_id=$2`, id, wsID).Scan(&got.id, &got.groupID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("label id %q not found", id)
+			return nil, fmt.Errorf("label id %q not found in this workspace", id)
 		}
 		if err != nil {
 			return nil, err
@@ -157,11 +182,14 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, ids, names []s
 			continue
 		}
 		var got lbl
-		err := tx.QueryRow(ctx, `SELECT id, group_id FROM labels WHERE lower(name)=lower($1)`, name).Scan(&got.id, &got.groupID)
+		err := tx.QueryRow(ctx,
+			`SELECT id, group_id FROM labels WHERE lower(name)=lower($1) AND workspace_id=$2`, name, wsID).
+			Scan(&got.id, &got.groupID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			// auto-create ungrouped label
+			// auto-create ungrouped label in this workspace
 			if err := tx.QueryRow(ctx,
-				`INSERT INTO labels (name) VALUES ($1) RETURNING id, group_id`, name).Scan(&got.id, &got.groupID); err != nil {
+				`INSERT INTO labels (workspace_id, name) VALUES ($1,$2) RETURNING id, group_id`,
+				wsID, name).Scan(&got.id, &got.groupID); err != nil {
 				return nil, err
 			}
 		} else if err != nil {
@@ -173,7 +201,8 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, ids, names []s
 	// Enforce exclusive groups: last-wins per group.
 	exclusive := map[string]bool{}
 	if len(resolved) > 0 {
-		grows, err := tx.Query(ctx, `SELECT id FROM label_groups WHERE exclusive=true`)
+		grows, err := tx.Query(ctx,
+			`SELECT id FROM label_groups WHERE exclusive=true AND workspace_id=$1`, wsID)
 		if err != nil {
 			return nil, err
 		}
@@ -205,10 +234,14 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, ids, names []s
 
 // ---- Initiatives ----
 
-func (s *Store) ListInitiatives(ctx context.Context) ([]models.Initiative, error) {
+func (s *Store) ListInitiatives(ctx context.Context, wsID string) ([]models.Initiative, error) {
+	return s.ListInitiativesAcross(ctx, []string{wsID})
+}
+
+func (s *Store) ListInitiativesAcross(ctx context.Context, wsIDs []string) ([]models.Initiative, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at
-		 FROM initiatives ORDER BY position, created_at`)
+		 FROM initiatives WHERE workspace_id = ANY($1) ORDER BY position, created_at`, wsIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -224,10 +257,11 @@ func (s *Store) ListInitiatives(ctx context.Context) ([]models.Initiative, error
 	return out, rows.Err()
 }
 
-func (s *Store) GetInitiative(ctx context.Context, id string) (models.Initiative, error) {
+func (s *Store) GetInitiative(ctx context.Context, wsID, id string) (models.Initiative, error) {
 	var i models.Initiative
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at FROM initiatives WHERE id=$1`, id).
+		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at
+		 FROM initiatives WHERE id=$1 AND workspace_id=$2`, id, wsID).
 		Scan(&i.ID, &i.Name, &i.DescriptionMD, &i.Status, &i.Position, &i.RepoURL, &i.CreatedAt, &i.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return i, ErrNotFound
@@ -235,31 +269,32 @@ func (s *Store) GetInitiative(ctx context.Context, id string) (models.Initiative
 	return i, err
 }
 
-func (s *Store) SaveInitiative(ctx context.Context, i models.Initiative) (models.Initiative, error) {
+func (s *Store) SaveInitiative(ctx context.Context, wsID string, i models.Initiative) (models.Initiative, error) {
 	if i.Status == "" {
 		i.Status = "active"
 	}
 	if i.ID == "" {
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO initiatives (name, description_md, status, position, repo_url)
-			 VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at, updated_at`,
-			i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL).Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
+			`INSERT INTO initiatives (workspace_id, name, description_md, status, position, repo_url)
+			 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at, updated_at`,
+			wsID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL).Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
 		return i, err
 	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE initiatives SET name=$2, description_md=$3, status=$4, position=$5, repo_url=$6, updated_at=now() WHERE id=$1`,
-		i.ID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL)
+		`UPDATE initiatives SET name=$3, description_md=$4, status=$5, position=$6, repo_url=$7, updated_at=now()
+		 WHERE id=$1 AND workspace_id=$2`,
+		i.ID, wsID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL)
 	if err != nil {
 		return i, err
 	}
 	if ct.RowsAffected() == 0 {
 		return i, ErrNotFound
 	}
-	return s.GetInitiative(ctx, i.ID)
+	return s.GetInitiative(ctx, wsID, i.ID)
 }
 
-func (s *Store) DeleteInitiative(ctx context.Context, id string) error {
-	ct, err := s.pool.Exec(ctx, `DELETE FROM initiatives WHERE id=$1`, id)
+func (s *Store) DeleteInitiative(ctx context.Context, wsID, id string) error {
+	ct, err := s.pool.Exec(ctx, `DELETE FROM initiatives WHERE id=$1 AND workspace_id=$2`, id, wsID)
 	if err != nil {
 		return err
 	}
@@ -271,11 +306,16 @@ func (s *Store) DeleteInitiative(ctx context.Context, id string) error {
 
 // ---- Projects ----
 
-func (s *Store) ListProjects(ctx context.Context, initiativeID string) ([]models.Project, error) {
-	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at FROM projects`
-	args := []any{}
+func (s *Store) ListProjects(ctx context.Context, wsID, initiativeID string) ([]models.Project, error) {
+	return s.ListProjectsAcross(ctx, []string{wsID}, initiativeID)
+}
+
+func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiativeID string) ([]models.Project, error) {
+	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
+	      FROM projects WHERE workspace_id = ANY($1)`
+	args := []any{wsIDs}
 	if initiativeID != "" {
-		q += ` WHERE initiative_id=$1`
+		q += ` AND initiative_id=$2`
 		args = append(args, initiativeID)
 	}
 	q += ` ORDER BY position, created_at`
@@ -295,10 +335,11 @@ func (s *Store) ListProjects(ctx context.Context, initiativeID string) ([]models
 	return out, rows.Err()
 }
 
-func (s *Store) GetProject(ctx context.Context, id string) (models.Project, error) {
+func (s *Store) GetProject(ctx context.Context, wsID, id string) (models.Project, error) {
 	var p models.Project
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at FROM projects WHERE id=$1`, id).
+		`SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
+		 FROM projects WHERE id=$1 AND workspace_id=$2`, id, wsID).
 		Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
@@ -306,31 +347,38 @@ func (s *Store) GetProject(ctx context.Context, id string) (models.Project, erro
 	return p, err
 }
 
-func (s *Store) SaveProject(ctx context.Context, p models.Project) (models.Project, error) {
+func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) (models.Project, error) {
 	if p.Status == "" {
 		p.Status = "active"
 	}
+	// An epic may only hang off an initiative in the same workspace.
+	if p.InitiativeID != nil && *p.InitiativeID != "" {
+		if _, err := s.GetInitiative(ctx, wsID, *p.InitiativeID); err != nil {
+			return p, err
+		}
+	}
 	if p.ID == "" {
 		err := s.pool.QueryRow(ctx,
-			`INSERT INTO projects (initiative_id, name, description_md, status, position, repo_url)
-			 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at, updated_at`,
-			p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+			`INSERT INTO projects (workspace_id, initiative_id, name, description_md, status, position, repo_url)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at, updated_at`,
+			wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 		return p, err
 	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE projects SET initiative_id=$2, name=$3, description_md=$4, status=$5, position=$6, repo_url=$7, updated_at=now() WHERE id=$1`,
-		p.ID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL)
+		`UPDATE projects SET initiative_id=$3, name=$4, description_md=$5, status=$6, position=$7, repo_url=$8, updated_at=now()
+		 WHERE id=$1 AND workspace_id=$2`,
+		p.ID, wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL)
 	if err != nil {
 		return p, err
 	}
 	if ct.RowsAffected() == 0 {
 		return p, ErrNotFound
 	}
-	return s.GetProject(ctx, p.ID)
+	return s.GetProject(ctx, wsID, p.ID)
 }
 
-func (s *Store) DeleteProject(ctx context.Context, id string) error {
-	ct, err := s.pool.Exec(ctx, `DELETE FROM projects WHERE id=$1`, id)
+func (s *Store) DeleteProject(ctx context.Context, wsID, id string) error {
+	ct, err := s.pool.Exec(ctx, `DELETE FROM projects WHERE id=$1 AND workspace_id=$2`, id, wsID)
 	if err != nil {
 		return err
 	}

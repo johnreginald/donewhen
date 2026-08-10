@@ -19,8 +19,11 @@ const (
 )
 
 type Event struct {
-	Type    string                `json:"type"`
-	Actor   string                `json:"actor"` // human | ai
+	Type string `json:"type"`
+	// WorkspaceID is the tenancy boundary for delivery: a subscriber only ever
+	// receives events for the workspace it subscribed with.
+	WorkspaceID string                `json:"workspaceId"`
+	Actor       string                `json:"actor"` // human | ai
 	Issue   *models.Issue         `json:"issue,omitempty"`
 	IssueID string                `json:"issueId,omitempty"`
 	From    *models.WorkflowState `json:"from,omitempty"`
@@ -30,7 +33,8 @@ type Event struct {
 }
 
 type subscriber struct {
-	ch chan Event
+	ch   chan Event
+	wsID string
 }
 
 // Bus fans out events to all current subscribers. Sends are non-blocking:
@@ -44,9 +48,11 @@ func NewBus() *Bus {
 	return &Bus{subs: make(map[*subscriber]struct{})}
 }
 
-// Subscribe returns a receive channel and an unsubscribe func.
-func (b *Bus) Subscribe() (<-chan Event, func()) {
-	s := &subscriber{ch: make(chan Event, 32)}
+// Subscribe returns a receive channel scoped to one workspace, and an
+// unsubscribe func. Scoping here rather than at the SSE layer means a leak
+// cannot be reintroduced by a new consumer of the bus.
+func (b *Bus) Subscribe(wsID string) (<-chan Event, func()) {
+	s := &subscriber{ch: make(chan Event, 32), wsID: wsID}
 	b.mu.Lock()
 	b.subs[s] = struct{}{}
 	b.mu.Unlock()
@@ -68,6 +74,9 @@ func (b *Bus) Publish(e Event) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	for s := range b.subs {
+		if s.wsID != "" && s.wsID != e.WorkspaceID {
+			continue // different workspace: not this subscriber's business
+		}
 		select {
 		case s.ch <- e:
 		default: // slow consumer: drop
