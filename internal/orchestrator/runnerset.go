@@ -8,9 +8,36 @@ import (
 	"raenil/internal/models"
 )
 
-// RunnerLabelPrefix is the label group that picks a ticket's worker, following
-// the repo's exclusive-group convention: runner:codex, runner:opencode.
-const RunnerLabelPrefix = "runner:"
+// Label groups a ticket uses to say how it should be worked.
+const (
+	RunnerGroup = "runner"
+	RepoGroup   = "repo"
+)
+
+// labelValue reads the value a ticket carries from one label group.
+//
+// Group membership is the convention this tracker already uses — the type group
+// holds "bug", not "type:bug" — so that is matched first. A "group:value" name
+// is also accepted and stripped, because both spellings exist in the wild and
+// neither should quietly fail to match.
+func labelValue(issue models.Issue, group, groupID string) (string, bool) {
+	prefix := strings.ToLower(group) + ":"
+	for _, l := range issue.Labels {
+		name := strings.TrimSpace(l.Name)
+		inGroup := groupID != "" && l.GroupID != nil && *l.GroupID == groupID
+		hasPrefix := strings.HasPrefix(strings.ToLower(name), prefix)
+		if !inGroup && !hasPrefix {
+			continue
+		}
+		if hasPrefix {
+			name = name[len(prefix):]
+		}
+		if v := strings.ToLower(strings.TrimSpace(name)); v != "" {
+			return v, true
+		}
+	}
+	return "", false
+}
 
 // RunnerSet is the pool a ticket can choose from, keyed by runner name.
 type RunnerSet map[string]Runner
@@ -31,13 +58,8 @@ func (s RunnerSet) Names() []string {
 // fallback: someone labelled it deliberately, and quietly running the work on a
 // different agent than the one requested is the kind of substitution nobody
 // catches until the results look strange.
-func (s RunnerSet) RunnerFor(issue models.Issue, fallback Runner) (Runner, error) {
-	for _, l := range issue.Labels {
-		name := strings.TrimSpace(l.Name)
-		if !strings.HasPrefix(strings.ToLower(name), RunnerLabelPrefix) {
-			continue
-		}
-		want := strings.ToLower(strings.TrimSpace(name[len(RunnerLabelPrefix):]))
+func (s RunnerSet) RunnerFor(issue models.Issue, groupID string, fallback Runner) (Runner, error) {
+	if want, ok := labelValue(issue, RunnerGroup, groupID); ok {
 		if r, ok := s[want]; ok {
 			return r, nil
 		}
@@ -49,10 +71,6 @@ func (s RunnerSet) RunnerFor(issue models.Issue, fallback Runner) (Runner, error
 	}
 	return fallback, nil
 }
-
-// RepoLabelPrefix is the label group that says which repository a ticket is
-// worked in, following the repo's exclusive-group convention: repo:api-mobile.
-const RepoLabelPrefix = "repo:"
 
 // RepoSet maps a repo: label value to a checkout on this machine.
 type RepoSet map[string]string
@@ -73,13 +91,8 @@ func (s RepoSet) Names() []string {
 // fallback. A project with several repositories is exactly where a silent
 // default does the most damage: the work would be written, committed and
 // verified in the wrong codebase, and every check would pass.
-func (s RepoSet) RepoFor(issue models.Issue, fallback string) (string, error) {
-	for _, l := range issue.Labels {
-		name := strings.TrimSpace(l.Name)
-		if !strings.HasPrefix(strings.ToLower(name), RepoLabelPrefix) {
-			continue
-		}
-		want := strings.ToLower(strings.TrimSpace(name[len(RepoLabelPrefix):]))
+func (s RepoSet) RepoFor(issue models.Issue, groupID string, fallback string) (string, error) {
+	if want, ok := labelValue(issue, RepoGroup, groupID); ok {
 		if path, ok := s[want]; ok {
 			return path, nil
 		}

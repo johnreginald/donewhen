@@ -296,3 +296,19 @@ func splitIssueKey(ref string) (prefix, number string, ok bool) {
 	}
 	return prefix, number, true
 }
+
+// LabelGroups maps each label group's name to its id.
+func (c *RaenilClient) LabelGroups(ctx context.Context) (map[string]string, error) {
+	var groups []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/label-groups", nil, &groups); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(groups))
+	for _, g := range groups {
+		out[strings.ToLower(g.Name)] = g.ID
+	}
+	return out, nil
+}

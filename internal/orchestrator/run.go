@@ -66,9 +66,12 @@ type Orchestrator struct {
 	// Runners is the pool a ticket may choose from with a runner: label. Empty
 	// means every ticket uses Runner.
 	Runners RunnerSet
-	// Repos maps a repo: label to a checkout. Empty means every ticket is worked
+	// Repos maps a repo label to a checkout. Empty means every ticket is worked
 	// in Cfg.Repo.
 	Repos RepoSet
+	// labelGroups maps a group name to its id, resolved per ticket so labels can
+	// be matched by group membership rather than by how they happen to be named.
+	labelGroups map[string]string
 	// Log receives progress lines. Nil discards them.
 	Log func(string, ...any)
 }
@@ -92,9 +95,15 @@ func (o *Orchestrator) forTicket(ctx context.Context, ref string) (*Orchestrator
 	if err != nil {
 		return nil, issue, fmt.Errorf("fetch issue %s: %w", ref, err)
 	}
+	groups, gerr := rc.LabelGroups(ctx)
+	if gerr != nil {
+		// Not fatal: a "group:value" label name still matches without them.
+		o.logf("warning: could not read label groups, falling back to label names: %v", gerr)
+		groups = map[string]string{}
+	}
 	repo := o.Cfg.Repo
 	if len(o.Repos) > 0 {
-		repo, err = o.Repos.RepoFor(issue, o.Cfg.Repo)
+		repo, err = o.Repos.RepoFor(issue, groups[RepoGroup], o.Cfg.Repo)
 		if err != nil {
 			return nil, issue, err
 		}
@@ -102,6 +111,7 @@ func (o *Orchestrator) forTicket(ctx context.Context, ref string) (*Orchestrator
 	scoped := *o
 	scoped.Raenil = rc
 	scoped.Cfg.Repo = repo
+	scoped.labelGroups = groups
 	return &scoped, issue, nil
 }
 
@@ -173,7 +183,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 	runner := o.Runner
 	if len(o.Runners) > 0 {
-		chosen, rerr := o.Runners.RunnerFor(issue, o.Runner)
+		chosen, rerr := o.Runners.RunnerFor(issue, o.labelGroups[RunnerGroup], o.Runner)
 		if rerr != nil {
 			return v, nil, rerr
 		}
