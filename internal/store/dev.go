@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -96,15 +97,26 @@ func (s *Store) ListCommits(ctx context.Context, wsID, issueID string) ([]models
 
 // ---- done-when criteria ----
 
+// criterionCols is the column list every criterion query selects, in the order
+// scanCriterion expects.
+const criterionCols = `c.id, c.issue_id, c.body, c.done, c.position, c.kind, c.check_spec, c.evidence_ref, c.created_at`
+
 func scanCriterion(row pgx.Row) (models.Criterion, error) {
 	var c models.Criterion
-	err := row.Scan(&c.ID, &c.IssueID, &c.Body, &c.Done, &c.Position, &c.CreatedAt)
+	// check_spec is nullable jsonb; scan through []byte so NULL lands as nil
+	// rather than an empty, invalid json.RawMessage.
+	var spec []byte
+	err := row.Scan(&c.ID, &c.IssueID, &c.Body, &c.Done, &c.Position,
+		&c.Kind, &spec, &c.EvidenceRef, &c.CreatedAt)
+	if len(spec) > 0 {
+		c.CheckSpec = json.RawMessage(spec)
+	}
 	return c, err
 }
 
 func (s *Store) ListCriteria(ctx context.Context, wsID, issueID string) ([]models.Criterion, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.id, c.issue_id, c.body, c.done, c.position, c.created_at
+		SELECT `+criterionCols+`
 		FROM issue_criteria c JOIN issues i ON i.id = c.issue_id
 		WHERE c.issue_id=$1 AND i.workspace_id=$2
 		ORDER BY c.position, c.created_at`, issueID, wsID)
@@ -123,24 +135,41 @@ func (s *Store) ListCriteria(ctx context.Context, wsID, issueID string) ([]model
 	return out, rows.Err()
 }
 
-func (s *Store) AddCriterion(ctx context.Context, wsID, issueID, body string) (models.Criterion, error) {
+// AddCriterion appends a criterion. kind must be one of the models.Criterion*
+// constants; checkSpec is required for every kind except manual.
+func (s *Store) AddCriterion(ctx context.Context, wsID, issueID, body, kind string, checkSpec json.RawMessage) (models.Criterion, error) {
+	if kind == "" {
+		kind = models.CriterionManual
+	}
+	var spec []byte
+	if len(checkSpec) > 0 {
+		spec = checkSpec
+	}
 	c, err := scanCriterion(s.pool.QueryRow(ctx,
-		`INSERT INTO issue_criteria (issue_id, body, position)
-		 SELECT $1, $2, coalesce((SELECT max(position)+1 FROM issue_criteria WHERE issue_id=$1), 0)
+		`INSERT INTO issue_criteria (issue_id, body, position, kind, check_spec)
+		 SELECT $1, $2, coalesce((SELECT max(position)+1 FROM issue_criteria WHERE issue_id=$1), 0), $4, $5
 		 FROM issues WHERE id=$1 AND workspace_id=$3
-		 RETURNING id, issue_id, body, done, position, created_at`, issueID, body, wsID))
+		 RETURNING `+strings.ReplaceAll(criterionCols, "c.", "")+``, issueID, body, wsID, kind, spec))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
 	return c, err
 }
 
-func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *string, done *bool) (models.Criterion, error) {
+// UpdateCriterion patches a criterion. Every pointer/slice argument is optional;
+// nil leaves that column untouched.
+func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *string, done *bool, kind *string, checkSpec json.RawMessage, evidenceRef *string) (models.Criterion, error) {
+	var spec []byte
+	if len(checkSpec) > 0 {
+		spec = checkSpec
+	}
 	c, err := scanCriterion(s.pool.QueryRow(ctx, `
-		UPDATE issue_criteria c SET body=coalesce($2,c.body), done=coalesce($3,c.done)
+		UPDATE issue_criteria c SET body=coalesce($2,c.body), done=coalesce($3,c.done),
+			kind=coalesce($5,c.kind), check_spec=coalesce($6,c.check_spec),
+			evidence_ref=coalesce($7,c.evidence_ref)
 		FROM issues i
 		WHERE c.id=$1 AND i.id = c.issue_id AND i.workspace_id=$4
-		RETURNING c.id, c.issue_id, c.body, c.done, c.position, c.created_at`, id, body, done, wsID))
+		RETURNING `+criterionCols, id, body, done, wsID, kind, spec, evidenceRef))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}

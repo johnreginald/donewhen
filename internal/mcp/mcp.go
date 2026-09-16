@@ -262,6 +262,10 @@ func stringSlice(req mcp.CallToolRequest, key string) []string {
 type criterionItem struct {
 	text string
 	done bool
+	// kind is a models.Criterion* constant; empty means manual.
+	kind string
+	// check is the raw JSON verification spec, nil for manual criteria.
+	check json.RawMessage
 }
 
 // criteriaItems parses the "items" arg, accepting either objects {text, done}
@@ -288,7 +292,15 @@ func criteriaItems(req mcp.CallToolRequest) []criterionItem {
 				continue
 			}
 			done, _ := t["done"].(bool)
-			out = append(out, criterionItem{text: text, done: done})
+			kind, _ := t["kind"].(string)
+			// "check" arrives as decoded JSON; re-encode it for the jsonb column.
+			var check json.RawMessage
+			if raw, ok := t["check"]; ok && raw != nil {
+				if b, err := json.Marshal(raw); err == nil {
+					check = b
+				}
+			}
+			out = append(out, criterionItem{text: text, done: done, kind: kind, check: check})
 		}
 	}
 	return out

@@ -1,7 +1,10 @@
 // Package models holds the core domain types shared across the app.
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // State categories drive board grouping and "what counts as done".
 const (
@@ -68,15 +71,15 @@ type Initiative struct {
 }
 
 type Project struct {
-	ID            string     `json:"id"`
-	InitiativeID  *string    `json:"initiativeId"`
-	Name          string     `json:"name"`
-	DescriptionMD string     `json:"descriptionMd"`
-	Status        string     `json:"status"`
-	Position      int        `json:"position"`
-	RepoURL       *string    `json:"repoUrl"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	ID            string    `json:"id"`
+	InitiativeID  *string   `json:"initiativeId"`
+	Name          string    `json:"name"`
+	DescriptionMD string    `json:"descriptionMd"`
+	Status        string    `json:"status"`
+	Position      int       `json:"position"`
+	RepoURL       *string   `json:"repoUrl"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 type WorkflowState struct {
@@ -113,11 +116,11 @@ type Issue struct {
 	Priority      int       `json:"priority"` // 0 none,1 urgent,2 high,3 medium,4 low
 	Position      float64   `json:"position"` // ordering within a state column
 	Labels        []Label   `json:"labels"`
-	DocCount      int       `json:"docCount"`     // attached documents (implementation coverage)
-	ParentKey     *string   `json:"parentKey"`    // epic this issue belongs to (nil = top-level)
-	ChildCount    int       `json:"childCount"`   // sub-issues (>0 ⇒ this is an epic)
-	GitBranch     *string   `json:"gitBranch"`    // the branch that implemented this
-	PRURL         *string   `json:"prUrl"`        // the pull request
+	DocCount      int       `json:"docCount"`   // attached documents (implementation coverage)
+	ParentKey     *string   `json:"parentKey"`  // epic this issue belongs to (nil = top-level)
+	ChildCount    int       `json:"childCount"` // sub-issues (>0 ⇒ this is an epic)
+	GitBranch     *string   `json:"gitBranch"`  // the branch that implemented this
+	PRURL         *string   `json:"prUrl"`      // the pull request
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -140,14 +143,34 @@ type IssueCommit struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// Criterion kinds. A criterion says not just what "done" means but how that is
+// verified, so an orchestrator can tick it from evidence instead of assertion.
+const (
+	// CriterionManual is ticked by a human. Legacy criteria are this.
+	CriterionManual = "manual"
+	// CriterionDeterministic runs a command: {"cmd":"go test ./...","expect_exit":0}
+	CriterionDeterministic = "deterministic"
+	// CriterionPolicy inspects the diff: {"policy":"paths_within","args":["src/**"]}
+	CriterionPolicy = "policy"
+	// CriterionJudgment asks a model: {"prompt":"...","model":"..."}. Advisory —
+	// never the sole gate on moving an issue to Done.
+	CriterionJudgment = "judgment"
+)
+
 // Criterion is one done-when acceptance item.
 type Criterion struct {
-	ID        string    `json:"id"`
-	IssueID   string    `json:"issueId"`
-	Body      string    `json:"body"`
-	Done      bool      `json:"done"`
-	Position  int       `json:"position"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID       string `json:"id"`
+	IssueID  string `json:"issueId"`
+	Body     string `json:"body"`
+	Done     bool   `json:"done"`
+	Position int    `json:"position"`
+	// Kind is one of the Criterion* constants above.
+	Kind string `json:"kind"`
+	// CheckSpec describes how Kind is verified; nil for manual criteria.
+	CheckSpec json.RawMessage `json:"checkSpec,omitempty"`
+	// EvidenceRef points at what verified this criterion, once it has been.
+	EvidenceRef *string   `json:"evidenceRef,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type Comment struct {

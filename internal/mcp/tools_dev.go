@@ -124,13 +124,27 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			"every item is done:true."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		mcp.WithArray("items", mcp.Required(),
-			mcp.Description("Ordered checklist. Each item is {text, done}; done defaults false. "+
-				"Plain strings also accepted (treated as not-done)."),
+			mcp.Description("Ordered checklist. Each item is {text, done, kind, check}; done defaults false "+
+				"and kind defaults \"manual\". Plain strings also accepted (treated as a not-done manual item)."),
 			mcp.Items(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"text": map[string]any{"type": "string", "description": "Criterion text"},
 					"done": map[string]any{"type": "boolean", "description": "Met yet? default false"},
+					"kind": map[string]any{
+						"type": "string",
+						"enum": []any{"manual", "deterministic", "policy", "judgment"},
+						"description": "How this criterion is verified. manual = a human ticks it. " +
+							"deterministic = a command decides. policy = a rule over the diff decides. " +
+							"judgment = a model opines (advisory only, never a sole gate on Done).",
+					},
+					"check": map[string]any{
+						"type": "object",
+						"description": "How to verify, required unless kind is manual. " +
+							"deterministic: {\"cmd\":\"go test ./...\",\"expect_exit\":0}. " +
+							"policy: {\"policy\":\"paths_within\",\"args\":[\"src/**\"]}. " +
+							"judgment: {\"prompt\":\"...\",\"model\":\"...\"}.",
+					},
 				},
 				"required": []any{"text"},
 			})),
@@ -152,21 +166,24 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		out := []models.Criterion{}
 		for i, it := range items {
 			if i < len(existing) {
-				body, done := it.text, it.done
-				c, err := d.store.UpdateCriterion(ctx, wsID, existing[i].ID, &body, &done)
+				body, done, kind := it.text, it.done, it.kind
+				if kind == "" {
+					kind = models.CriterionManual
+				}
+				c, err := d.store.UpdateCriterion(ctx, wsID, existing[i].ID, &body, &done, &kind, it.check, nil)
 				if err != nil {
 					return mcp.NewToolResultError(err.Error()), nil
 				}
 				out = append(out, c)
 				continue
 			}
-			c, err := d.store.AddCriterion(ctx, wsID, is.ID, it.text)
+			c, err := d.store.AddCriterion(ctx, wsID, is.ID, it.text, it.kind, it.check)
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 			if it.done {
 				done := true
-				if c, err = d.store.UpdateCriterion(ctx, wsID, c.ID, nil, &done); err != nil {
+				if c, err = d.store.UpdateCriterion(ctx, wsID, c.ID, nil, &done, nil, nil, nil); err != nil {
 					return mcp.NewToolResultError(err.Error()), nil
 				}
 			}
@@ -188,6 +205,8 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithNumber("index", mcp.Description("1-based position of the item in the checklist")),
 		mcp.WithString("text", mcp.Description("Exact criterion text (case-insensitive) — alternative to index")),
 		mcp.WithBoolean("done", mcp.Description("Met? default true")),
+		mcp.WithString("evidence", mcp.Description("Reference to what verified this — e.g. an evidence id "+
+			"or artifact path. Recorded alongside the tick so the record shows why it passed, not just that it did.")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
@@ -217,7 +236,11 @@ func (d *deps) registerDev(s *server.MCPServer) {
 			return mcp.NewToolResultError("no matching criterion — check index/text against get_criteria"), nil
 		}
 		done := req.GetBool("done", true)
-		c, err := d.store.UpdateCriterion(ctx, wsID, target.ID, nil, &done)
+		var evidence *string
+		if e := strings.TrimSpace(req.GetString("evidence", "")); e != "" {
+			evidence = &e
+		}
+		c, err := d.store.UpdateCriterion(ctx, wsID, target.ID, nil, &done, nil, nil, evidence)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

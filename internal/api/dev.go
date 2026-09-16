@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"raenil/internal/auth"
@@ -69,6 +71,25 @@ func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
 
 // ---- done-when criteria ----
 
+// validateCriterionSpec enforces the same rule as the DB constraint: anything
+// other than a manual criterion has to say how it gets verified.
+func validateCriterionSpec(kind string, spec json.RawMessage) error {
+	switch kind {
+	case "", models.CriterionManual:
+		return nil
+	case models.CriterionDeterministic, models.CriterionPolicy, models.CriterionJudgment:
+		if len(spec) == 0 {
+			return fmt.Errorf("checkSpec required for kind %q", kind)
+		}
+		if !json.Valid(spec) {
+			return fmt.Errorf("checkSpec is not valid JSON")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown criterion kind %q", kind)
+	}
+}
+
 func (s *Server) handleListCriteria(w http.ResponseWriter, r *http.Request) {
 	cs, err := s.store.ListCriteria(r.Context(), ws(r), r.PathValue("id"))
 	if handleStoreErr(w, err) {
@@ -79,13 +100,19 @@ func (s *Server) handleListCriteria(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAddCriterion(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Body string `json:"body"`
+		Body      string          `json:"body"`
+		Kind      string          `json:"kind"`
+		CheckSpec json.RawMessage `json:"checkSpec"`
 	}
 	if err := readJSON(r, &body); err != nil || body.Body == "" {
 		writeErr(w, http.StatusBadRequest, "body required")
 		return
 	}
-	c, err := s.store.AddCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body)
+	if err := validateCriterionSpec(body.Kind, body.CheckSpec); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	c, err := s.store.AddCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Kind, body.CheckSpec)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -94,14 +121,23 @@ func (s *Server) handleAddCriterion(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateCriterion(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Body *string `json:"body"`
-		Done *bool   `json:"done"`
+		Body        *string         `json:"body"`
+		Done        *bool           `json:"done"`
+		Kind        *string         `json:"kind"`
+		CheckSpec   json.RawMessage `json:"checkSpec"`
+		EvidenceRef *string         `json:"evidenceRef"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	c, err := s.store.UpdateCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done)
+	if body.Kind != nil {
+		if err := validateCriterionSpec(*body.Kind, body.CheckSpec); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	c, err := s.store.UpdateCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done, body.Kind, body.CheckSpec, body.EvidenceRef)
 	if handleStoreErr(w, err) {
 		return
 	}
