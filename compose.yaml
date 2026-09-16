@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-raenil}
     volumes:
       # PG18+ wants the mount at the parent dir (data lands in a subdir).
+      # NOTE: no :U here — that option is Podman-only and Docker rejects it.
+      # Rootless Podman needs the host dir pre-owned instead; see docs/PODMAN.md.
       - ./data/pg:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raenil}"]
@@ -37,9 +39,12 @@ services:
     restart: unless-stopped
 
   # Bundled edge TLS proxy — only for boxes with FREE 80/443.
-  # Enable with:  docker compose --profile edge up -d
+  # Enable with:  make up PROFILE=edge   (or: <engine> compose --profile edge up -d)
   # If a host reverse proxy already owns 80/443, leave this disabled and point
   # that proxy at 127.0.0.1:${RAENIL_HOST_PORT:-8090}.
+  #
+  # Under rootless Podman, binding 80/443 needs a host sysctl — see docs/PODMAN.md.
+  # Under Docker this works as-is.
   caddy:
     image: caddy:2-alpine
     profiles: ["edge"]
@@ -51,7 +56,7 @@ services:
     environment:
       RAENIL_SITE_ADDRESS: ${RAENIL_SITE_ADDRESS:-:80}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
       - ./data/caddy-config:/config
     restart: unless-stopped

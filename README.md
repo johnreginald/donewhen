@@ -11,10 +11,10 @@ the browser and by Claude over MCP. Continuous-flow Kanban, no sprints/estimates
 - **Tenancy:** every workspace is a hard boundary — its own issues, epics, labels, board columns, artifacts and activity log, visible only to its members
 - **States:** Triage → Backlog → Aligning → Ready → In Progress → In Review → Done → Canceled
 
-## Quick start (local, no Docker)
+## Quick start (local, no containers)
 
 ```bash
-# 1. Postgres (any instance). Example with Docker:
+# 1. Postgres (any instance). Example with Docker (or Podman):
 docker run -d --name raenil-pg -e POSTGRES_USER=raenil -e POSTGRES_PASSWORD=raenil \
   -e POSTGRES_DB=raenil -p 5432:5432 postgres:18-alpine
 
@@ -38,6 +38,10 @@ make build
 ```
 
 ## Quick start (Docker Compose — the 24/7 box)
+
+> Commands below use `docker compose`, which is what the production box runs.
+> On a Podman dev machine use `podman compose` instead — or just `make up`,
+> which picks the engine automatically. See [docs/PODMAN.md](docs/PODMAN.md).
 
 ```bash
 cp .env.example .env
