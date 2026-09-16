@@ -208,7 +208,10 @@ func (d *Daemon) workOne(ctx context.Context, key string, cfg DaemonConfig) {
 	}
 
 	d.Orch.logf("--- %s", key)
-	v, err := d.Orch.Work(ctx, key, cfg.Work)
+	// The sweep already holds this ticket's lease, so Work must not try again.
+	inner := *d.Orch
+	inner.Leases = nil
+	v, err := inner.Work(ctx, key, cfg.Work)
 	if err != nil {
 		d.Orch.logf("%s skipped: %v", key, err)
 		// Pre-flight refusals are a property of the ticket, not a transient

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -133,5 +134,42 @@ func writeStaleLease(t *testing.T, m *LeaseManager, ticket string, pid int, beat
 	}, "", "  ")
 	if err := os.WriteFile(m.path(ticket), b, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The hand-run path is the common one, so it must claim its ticket too.
+// Two terminals on the same ticket would otherwise each cut a worktree and a
+// branch and race to commit.
+func TestWorkClaimsALease(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, fixRunner{})
+	o.Cfg.Model = "cheap/model"
+	o.Leases = &LeaseManager{Dir: filepath.Join(t.TempDir(), "leases"), TTL: time.Minute}
+
+	// Someone else already holds it.
+	held, err := o.Leases.Acquire("TST-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.Work(context.Background(), "TST-1", WorkConfig{Triage: TriagePolicy{MaxAttempts: 1}}); !errors.Is(err, ErrLeased) {
+		t.Fatalf("Work should refuse a ticket someone else holds, got %v", err)
+	}
+	f.mu.Lock()
+	states := len(f.states)
+	f.mu.Unlock()
+	if states != 0 {
+		t.Error("a refused ticket must not be touched at all")
+	}
+
+	// Once released, it works and gives the lease back.
+	if err := held.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.Work(context.Background(), "TST-1", WorkConfig{Triage: TriagePolicy{MaxAttempts: 1}}); err != nil {
+		t.Fatalf("Work: %v", err)
+	}
+	after, _ := o.Leases.Held()
+	if len(after) != 0 {
+		t.Errorf("the lease should be released when Work returns, still held: %v", after)
 	}
 }

@@ -41,6 +41,20 @@ func (w WorkConfig) withDefaults() WorkConfig {
 func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Verdict, error) {
 	wc = wc.withDefaults()
 
+	// Claim the ticket here rather than only in the daemon. Two terminals
+	// running the same ticket would otherwise each cut a worktree and a branch
+	// and race to commit — and the hand-run path is the common one.
+	if o.Leases != nil {
+		lease, err := o.Leases.Acquire(ref)
+		if err != nil {
+			return Verdict{}, err
+		}
+		defer lease.Release()
+		stop := make(chan struct{})
+		defer close(stop)
+		go lease.KeepAlive(stop)
+	}
+
 	var last Verdict
 	var spec AttemptSpec
 	var totalCost float64

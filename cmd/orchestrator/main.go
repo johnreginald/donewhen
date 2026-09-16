@@ -303,7 +303,11 @@ func cmdWork(ctx context.Context, args []string) error {
 			RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
 			Model: *model, Timeout: *timeout,
 		},
-		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
+		// Claim the ticket for the duration of the run. Without this, two
+		// terminals working the same ticket each cut a worktree and a branch and
+		// race to commit — and this hand-run path is the common one.
+		Leases: &orchestrator.LeaseManager{Dir: filepath.Join(*runRoot, "leases")},
+		Log:    func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
 	if jm != "" {
 		o.Judge = orchestrator.NewJudge(oc, jm)

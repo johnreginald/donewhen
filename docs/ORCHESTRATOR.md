@@ -151,6 +151,23 @@ existing labels are preserved.
 The loop always terminates. Every path passes, exhausts attempts, breaches the cost
 ceiling, or bounces.
 
+## Do you need the daemon?
+
+Probably not, if you drive from Claude Code and review everything yourself.
+
+`orchestrator work <TICKET>` already does the whole job — triage, retry, escalation,
+the cost ceiling, evidence, In Review — synchronously, with the verdict in front of
+you. It claims a lease like the daemon does, so two terminals cannot take the same
+ticket.
+
+The daemon exists for one thing: work happening while nobody is watching. It buys
+nothing if every result waits for a human review anyway, and it has a cost of its own
+— an always-on watcher on a board you also use by hand will pick up tickets you moved
+there yourself. `--require-label ready-for-agent` contains that, but only if you
+remember to set it.
+
+`--watch` only feeds the daemon. Without the daemon it does nothing.
+
 ## Running unattended
 
 ```bash

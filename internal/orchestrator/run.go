@@ -56,6 +56,9 @@ type Orchestrator struct {
 	// Judge evaluates judgment criteria. Nil leaves them unevaluated, which is
 	// safe: they are advisory and never gate a ticket either way.
 	Judge JudgeFunc
+	// Leases, when set, claims a ticket for the duration of Work so two runs
+	// cannot take the same one. The daemon always sets it; a hand-run should too.
+	Leases *LeaseManager
 	// Log receives progress lines. Nil discards them.
 	Log func(string, ...any)
 }
