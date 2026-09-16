@@ -13,10 +13,10 @@ import (
 // ---- simple in-memory login rate limiter (per client IP) ----
 
 type rateLimiter struct {
-	mu      sync.Mutex
-	hits    map[string][]time.Time
-	max     int
-	window  time.Duration
+	mu     sync.Mutex
+	hits   map[string][]time.Time
+	max    int
+	window time.Duration
 }
 
 var loginLimiter = &rateLimiter{hits: map[string][]time.Time{}, max: 10, window: time.Minute}

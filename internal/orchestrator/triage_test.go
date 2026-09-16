@@ -194,8 +194,8 @@ func TestWorkBouncesAfterMaxAttempts(t *testing.T) {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.states) == 0 || f.states[len(f.states)-1] != "Aligning" {
-		t.Errorf("a bounced ticket should land in Aligning, states = %v", f.states)
+	if len(f.states) == 0 || f.states[len(f.states)-1] != "Blocked" {
+		t.Errorf("a bounced ticket should land in Blocked, states = %v", f.states)
 	}
 	var labelled bool
 	for _, l := range f.labels {

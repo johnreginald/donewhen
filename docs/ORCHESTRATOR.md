@@ -145,8 +145,12 @@ when to stop.
 | past `--escalate-after` | escalate to the stronger model |
 | otherwise | retry with the failure in context |
 
-A bounce moves the ticket to `Aligning`, adds `needs-info`, and comments why. The
+A bounce moves the ticket to **`Blocked`**, adds `needs-info`, and comments why. The
 existing labels are preserved.
+
+Blocked rather than Aligning on purpose: a bounced ticket was specified, attempted, and
+has a branch and commits behind it. Aligning is for work nobody has started, and mixing
+the two hides which tickets are actually waiting on a human.
 
 The loop always terminates. Every path passes, exhausts attempts, breaches the cost
 ceiling, or bounces.

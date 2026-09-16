@@ -256,9 +256,10 @@ func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, 
 			($1,'Aligning','unstarted',2,'#A78BFA'),
 			($1,'Ready','unstarted',3,'#38BDF8'),
 			($1,'In Progress','started',4,'#FBBF24'),
-			($1,'In Review','started',5,'#FB923C'),
-			($1,'Done','completed',6,'#34D399'),
-			($1,'Canceled','canceled',7,'#6B7280')`, w.ID); err != nil {
+			($1,'Blocked','started',5,'#F87171'),
+			($1,'In Review','started',6,'#FB923C'),
+			($1,'Done','completed',7,'#34D399'),
+			($1,'Canceled','canceled',8,'#6B7280')`, w.ID); err != nil {
 		return models.Workspace{}, err
 	}
 	if _, err := tx.Exec(ctx, `

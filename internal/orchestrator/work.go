@@ -11,6 +11,10 @@ import (
 type WorkConfig struct {
 	Triage TriagePolicy
 	// StateBounced is where a ticket lands when it goes back to a human.
+	//
+	// Blocked rather than Aligning: the work was specified and attempted and has
+	// a branch behind it, so sending it back to the spec column would both lose
+	// that context and hide it among tickets nobody has started.
 	StateBounced string
 	// LabelBounced is the triage label applied on a bounce.
 	LabelBounced string
@@ -24,7 +28,7 @@ func (w WorkConfig) withDefaults() WorkConfig {
 		w.Triage.MaxAttempts = 3
 	}
 	if w.StateBounced == "" {
-		w.StateBounced = "Aligning"
+		w.StateBounced = "Blocked"
 	}
 	if w.LabelBounced == "" {
 		w.LabelBounced = "needs-info"

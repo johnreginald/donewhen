@@ -24,12 +24,12 @@ type Event struct {
 	// receives events for the workspace it subscribed with.
 	WorkspaceID string                `json:"workspaceId"`
 	Actor       string                `json:"actor"` // human | ai
-	Issue   *models.Issue         `json:"issue,omitempty"`
-	IssueID string                `json:"issueId,omitempty"`
-	From    *models.WorkflowState `json:"from,omitempty"`
-	To      *models.WorkflowState `json:"to,omitempty"`
-	Comment *models.Comment       `json:"comment,omitempty"`
-	At      time.Time             `json:"at"`
+	Issue       *models.Issue         `json:"issue,omitempty"`
+	IssueID     string                `json:"issueId,omitempty"`
+	From        *models.WorkflowState `json:"from,omitempty"`
+	To          *models.WorkflowState `json:"to,omitempty"`
+	Comment     *models.Comment       `json:"comment,omitempty"`
+	At          time.Time             `json:"at"`
 }
 
 type subscriber struct {
