@@ -1,10 +1,8 @@
 -- Every workspace gets a `runner` label group, so any project can say which
 -- agent works a ticket rather than only the one this was first tried in.
 --
--- The labels keep the `runner:` prefix even though the group already says it.
--- The orchestrator matches on the label name alone; matching on the group would
--- mean resolving a group id to its name on every ticket, and a self-describing
--- name is worth the small redundancy.
+-- The labels are bare values, like every other group here: the type group holds
+-- "bug", not "type:bug", and the group already says what the value means.
 
 INSERT INTO label_groups (workspace_id, name, exclusive)
 SELECT w.id, 'runner', true
@@ -19,8 +17,8 @@ SELECT w.id, g.id, v.name, v.color
   FROM workspaces w
   JOIN label_groups g ON g.workspace_id = w.id AND g.name = 'runner'
  CROSS JOIN (VALUES
-   ('runner:opencode', '#38bdf8'),
-   ('runner:codex',    '#8b87ff')
+   ('opencode', '#38bdf8'),
+   ('codex',    '#8b87ff')
  ) AS v(name, color)
  WHERE NOT EXISTS (
    SELECT 1 FROM labels l
