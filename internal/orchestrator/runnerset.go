@@ -49,3 +49,45 @@ func (s RunnerSet) RunnerFor(issue models.Issue, fallback Runner) (Runner, error
 	}
 	return fallback, nil
 }
+
+// RepoLabelPrefix is the label group that says which repository a ticket is
+// worked in, following the repo's exclusive-group convention: repo:api-mobile.
+const RepoLabelPrefix = "repo:"
+
+// RepoSet maps a repo: label value to a checkout on this machine.
+type RepoSet map[string]string
+
+// Names lists the configured repositories, sorted, for error messages.
+func (s RepoSet) Names() []string {
+	out := make([]string, 0, len(s))
+	for k := range s {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// RepoFor picks the checkout a ticket names.
+//
+// A ticket naming a repository this machine has no path for is an error, not a
+// fallback. A project with several repositories is exactly where a silent
+// default does the most damage: the work would be written, committed and
+// verified in the wrong codebase, and every check would pass.
+func (s RepoSet) RepoFor(issue models.Issue, fallback string) (string, error) {
+	for _, l := range issue.Labels {
+		name := strings.TrimSpace(l.Name)
+		if !strings.HasPrefix(strings.ToLower(name), RepoLabelPrefix) {
+			continue
+		}
+		want := strings.ToLower(strings.TrimSpace(name[len(RepoLabelPrefix):]))
+		if path, ok := s[want]; ok {
+			return path, nil
+		}
+		return "", fmt.Errorf("issue %s asks for repository %q, which is not configured (have: %s)",
+			issue.Key, want, strings.Join(s.Names(), ", "))
+	}
+	if fallback == "" {
+		return "", fmt.Errorf("issue %s has no repo: label and no --repo was given", issue.Key)
+	}
+	return fallback, nil
+}

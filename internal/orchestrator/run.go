@@ -66,6 +66,9 @@ type Orchestrator struct {
 	// Runners is the pool a ticket may choose from with a runner: label. Empty
 	// means every ticket uses Runner.
 	Runners RunnerSet
+	// Repos maps a repo: label to a checkout. Empty means every ticket is worked
+	// in Cfg.Repo.
+	Repos RepoSet
 	// Log receives progress lines. Nil discards them.
 	Log func(string, ...any)
 }
@@ -74,6 +77,32 @@ func (o *Orchestrator) logf(format string, args ...any) {
 	if o.Log != nil {
 		o.Log(format, args...)
 	}
+}
+
+// forTicket resolves everything that varies per ticket — which workspace owns
+// it and which repository it is worked in — and returns an orchestrator already
+// pointed at both, so the rest of the flow needs no special cases.
+func (o *Orchestrator) forTicket(ctx context.Context, ref string) (*Orchestrator, models.Issue, error) {
+	var issue models.Issue
+	rc, err := o.Raenil.Scoped(ctx, ref)
+	if err != nil {
+		return nil, issue, err
+	}
+	issue, err = rc.Issue(ctx, ref)
+	if err != nil {
+		return nil, issue, fmt.Errorf("fetch issue %s: %w", ref, err)
+	}
+	repo := o.Cfg.Repo
+	if len(o.Repos) > 0 {
+		repo, err = o.Repos.RepoFor(issue, o.Cfg.Repo)
+		if err != nil {
+			return nil, issue, err
+		}
+	}
+	scoped := *o
+	scoped.Raenil = rc
+	scoped.Cfg.Repo = repo
+	return &scoped, issue, nil
 }
 
 // AttemptSpec describes one attempt. A repair attempt carries the previous
@@ -103,14 +132,16 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if attempt < 1 {
 		attempt = 1
 	}
-	cfg := o.Cfg.withDefaults()
 	var v Verdict
 
-	// 1. Read the ticket and its contract.
-	issue, err := o.Raenil.Issue(ctx, ref)
+	// 1. Read the ticket and its contract, in its own workspace and repository.
+	scoped, issue, err := o.forTicket(ctx, ref)
 	if err != nil {
-		return v, nil, fmt.Errorf("fetch issue %s: %w", ref, err)
+		return v, nil, err
 	}
+	o = scoped
+	cfg := o.Cfg.withDefaults()
+
 	stored, err := o.Raenil.Criteria(ctx, issue.ID)
 	if err != nil {
 		return v, nil, fmt.Errorf("fetch criteria: %w", err)

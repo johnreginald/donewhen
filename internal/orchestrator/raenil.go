@@ -242,3 +242,57 @@ func (c *RaenilClient) StateName(ctx context.Context, stateID string) (string, e
 	}
 	return "", fmt.Errorf("no workflow state with id %s", stateID)
 }
+
+// Workspaces lists every workspace this token can reach. It needs no workspace
+// header itself, which is what makes it usable to resolve one.
+func (c *RaenilClient) Workspaces(ctx context.Context) ([]models.Workspace, error) {
+	var out []models.Workspace
+	return out, c.do(ctx, http.MethodGet, "/api/workspaces", nil, &out)
+}
+
+// Scoped returns a client pinned to the workspace that owns a ticket.
+//
+// A token spanning several workspaces is refused without an X-Workspace header,
+// so the workspace has to come from somewhere. It comes from the ticket key:
+// prefixes are unique per workspace, so API-42 names its own workspace and a
+// caller never has to say twice which project they meant.
+func (c *RaenilClient) Scoped(ctx context.Context, ref string) (*RaenilClient, error) {
+	if c.Workspace != "" {
+		return c, nil
+	}
+	prefix, _, ok := splitIssueKey(ref)
+	if !ok {
+		return nil, fmt.Errorf("cannot tell which workspace %q belongs to: "+
+			"pass a ticket key like API-42, or set RAENIL_WORKSPACE", ref)
+	}
+	spaces, err := c.Workspaces(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve workspace for %s: %w", ref, err)
+	}
+	var known []string
+	for _, w := range spaces {
+		if strings.EqualFold(w.KeyPrefix, prefix) {
+			scoped := *c
+			scoped.Workspace = w.Slug
+			return &scoped, nil
+		}
+		known = append(known, w.KeyPrefix)
+	}
+	return nil, fmt.Errorf("no workspace uses the key prefix %q (have: %s)",
+		prefix, strings.Join(known, ", "))
+}
+
+// splitIssueKey splits PP-175 into its prefix and number.
+func splitIssueKey(ref string) (prefix, number string, ok bool) {
+	i := strings.LastIndexByte(ref, '-')
+	if i <= 0 || i == len(ref)-1 {
+		return "", "", false
+	}
+	prefix, number = ref[:i], ref[i+1:]
+	for _, r := range number {
+		if r < '0' || r > '9' {
+			return "", "", false
+		}
+	}
+	return prefix, number, true
+}

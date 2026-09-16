@@ -38,13 +38,15 @@ func (o *Orchestrator) FindWorktree(ticketKey string) (string, error) {
 // criteria, on whatever the tree now contains. Who wrote the code makes no
 // difference to what decides whether it is acceptable.
 func (o *Orchestrator) Verify(ctx context.Context, ref string, attempt int) (Verdict, []Evidence, error) {
-	cfg := o.Cfg.withDefaults()
 	var v Verdict
 
-	issue, err := o.Raenil.Issue(ctx, ref)
+	scoped, issue, err := o.forTicket(ctx, ref)
 	if err != nil {
 		return v, nil, err
 	}
+	o = scoped
+	cfg := o.Cfg.withDefaults()
+
 	stored, err := o.Raenil.Criteria(ctx, issue.ID)
 	if err != nil {
 		return v, nil, err
@@ -114,6 +116,12 @@ func (o *Orchestrator) Verify(ctx context.Context, ref string, attempt int) (Ver
 // improve the code; deciding that it is acceptable stays with the checks, or the
 // senior becomes another model marking its own work.
 func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Verdict, error) {
+
+	scoped, _, err := o.forTicket(ctx, ref)
+	if err != nil {
+		return Verdict{}, err
+	}
+	o = scoped
 	cfg := o.Cfg.withDefaults()
 
 	v, evidence, err := o.Verify(ctx, ref, attempt)
@@ -121,8 +129,8 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 		return v, err
 	}
 	if v.Status != StatusPassed {
-		return v, fmt.Errorf("%s still fails %d gating criteria — fix them, or change the criteria if they are wrong",
-			ref, len(v.Failed))
+		return v, fmt.Errorf("%s still fails %d gating criteria — fix them, move the ticket to Blocked, "+
+			"or change the criteria if they are wrong", ref, len(v.Failed))
 	}
 
 	issue, err := o.Raenil.Issue(ctx, ref)

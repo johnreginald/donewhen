@@ -118,6 +118,9 @@ Flags (work only):
 
 Flags (run/check/work):
   --repo PATH        repository to work in (default: current directory)
+  --repos LIST       route by repo: label — api-mobile=/p/a,api-server=/p/b
+                     A ticket naming a repo with no path here is refused, never
+                     worked in the wrong one. ($ORCHESTRATOR_REPOS)
   --run-root PATH    where run dirs live (default: .orchestrator)
   --base REF         what the worktree branches from (default: HEAD)
   --model NAME       provider/model for the worker (default: $ORCHESTRATOR_MODEL)
@@ -128,7 +131,10 @@ Flags (run/check/work):
 Environment:
   RAENIL_URL         tracker base URL, e.g. https://tracker.example.com
   RAENIL_TOKEN       API token (raenil token <name>)
-  RAENIL_WORKSPACE   workspace slug or id, when the token spans several
+  RAENIL_WORKSPACE   pin every call to one workspace. Leave unset with a token
+                     that spans several: the workspace is then taken from the
+                     ticket key, so API-42 finds its own project.
+  ORCHESTRATOR_REPOS default --repos routing
   OPENCODE_URL       running 'opencode serve', e.g. http://127.0.0.1:4096
   ORCHESTRATOR_MODEL default worker model, e.g. opencode-go/glm-5.3-flash
   ORCHESTRATOR_JUDGE_MODEL     model for judgment criteria (falls back to the escalate model)
@@ -174,6 +180,32 @@ func parsePermuted(fs *flag.FlagSet, args []string) ([]string, error) {
 		positionals = append(positionals, rest[0])
 		args = rest[1:]
 	}
+}
+
+// parseRepos reads "name=path,name=path" into a repo set. Paths are checked now
+// rather than when a ticket needs one, so a typo surfaces at startup instead of
+// halfway through a run.
+func parseRepos(spec string) (orchestrator.RepoSet, error) {
+	set := orchestrator.RepoSet{}
+	for _, pair := range strings.Split(spec, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		name, path, ok := strings.Cut(pair, "=")
+		if !ok {
+			return nil, fmt.Errorf("--repos entry %q should look like name=/path", pair)
+		}
+		name, path = strings.ToLower(strings.TrimSpace(name)), strings.TrimSpace(path)
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+		if _, err := os.Stat(filepath.Join(path, ".git")); err != nil {
+			return nil, fmt.Errorf("--repos %s: %s is not a git repository", name, path)
+		}
+		set[name] = path
+	}
+	return set, nil
 }
 
 // runnerPool builds every runner this machine can drive. A ticket picks one with
@@ -244,6 +276,7 @@ func cmdHealth(ctx context.Context) error {
 func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	repo := fs.String("repo", ".", "repository to work in")
+	reposSpec := fs.String("repos", os.Getenv("ORCHESTRATOR_REPOS"), "repo:label routing, e.g. api-mobile=/p/a,api-server=/p/b")
 	runRoot := fs.String("run-root", ".orchestrator", "where run directories live")
 	baseRef := fs.String("base", "HEAD", "what the worktree branches from")
 	model := fs.String("model", os.Getenv("ORCHESTRATOR_MODEL"), "provider/model for the worker")
@@ -301,6 +334,11 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 		},
 		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
+	repos, rerr := parseRepos(*reposSpec)
+	if rerr != nil {
+		return rerr
+	}
+	o.Repos = repos
 	if *judgeModel != "" {
 		asker, aerr := pickAsker(*askerName, oc)
 		if aerr != nil {
@@ -328,6 +366,7 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 func cmdWork(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("work", flag.ExitOnError)
 	repo := fs.String("repo", ".", "repository to work in")
+	reposSpec := fs.String("repos", os.Getenv("ORCHESTRATOR_REPOS"), "repo:label routing, e.g. api-mobile=/p/a,api-server=/p/b")
 	runRoot := fs.String("run-root", ".orchestrator", "where run directories live")
 	baseRef := fs.String("base", "HEAD", "what the worktree branches from")
 	model := fs.String("model", os.Getenv("ORCHESTRATOR_MODEL"), "provider/model for the worker")
@@ -378,6 +417,11 @@ func cmdWork(ctx context.Context, args []string) error {
 		Leases: &orchestrator.LeaseManager{Dir: filepath.Join(*runRoot, "leases")},
 		Log:    func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
+	if repos, rerr := parseRepos(*reposSpec); rerr != nil {
+		return rerr
+	} else {
+		o.Repos = repos
+	}
 	o.Runners = runnerPool(ctx, oc)
 	if r, ok := o.Runners[strings.ToLower(*runnerName)]; ok {
 		o.Runner = r
@@ -416,6 +460,7 @@ func cmdWork(ctx context.Context, args []string) error {
 func cmdDaemon(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("daemon", flag.ExitOnError)
 	repo := fs.String("repo", ".", "repository to work in")
+	reposSpec := fs.String("repos", os.Getenv("ORCHESTRATOR_REPOS"), "repo:label routing, e.g. api-mobile=/p/a,api-server=/p/b")
 	runRoot := fs.String("run-root", ".orchestrator", "where run directories live")
 	baseRef := fs.String("base", "HEAD", "what the worktree branches from")
 	model := fs.String("model", os.Getenv("ORCHESTRATOR_MODEL"), "provider/model for the worker")
@@ -470,6 +515,11 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	}
 	if jm != "" {
 		o.Judge = orchestrator.NewJudge(oc, jm)
+	}
+	if repos, rerr := parseRepos(*reposSpec); rerr != nil {
+		return rerr
+	} else {
+		o.Repos = repos
 	}
 	o.Runners = runnerPool(ctx, oc)
 	if r, ok := o.Runners[strings.ToLower(*runnerName)]; ok {
@@ -710,6 +760,7 @@ func cmdReview(ctx context.Context, args []string, finish bool) error {
 	}
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	repo := fs.String("repo", ".", "repository the ticket is worked in")
+	reposSpec := fs.String("repos", os.Getenv("ORCHESTRATOR_REPOS"), "repo:label routing, e.g. api-mobile=/p/a,api-server=/p/b")
 	runRoot := fs.String("run-root", ".orchestrator", "where run directories live")
 	baseRef := fs.String("base", "HEAD", "what the worktree branched from")
 	attempt := fs.Int("attempt", 90, "run directory to write evidence into")
@@ -736,6 +787,11 @@ func cmdReview(ctx context.Context, args []string, finish bool) error {
 		},
 		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
+	repos, rerr := parseRepos(*reposSpec)
+	if rerr != nil {
+		return rerr
+	}
+	o.Repos = repos
 	if *judgeModel != "" {
 		asker, aerr := pickAsker(*askerName, oc)
 		if aerr != nil {

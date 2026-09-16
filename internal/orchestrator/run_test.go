@@ -125,7 +125,9 @@ func (f *fakeRaenil) server(t *testing.T) *RaenilClient {
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return &RaenilClient{BaseURL: srv.URL, Token: "test"}
+	// Pinned, so Scoped short-circuits — the same path a single-workspace
+	// token takes in production.
+	return &RaenilClient{BaseURL: srv.URL, Token: "test", Workspace: "test-ws"}
 }
 
 // fixRunner simulates a worker that actually does the job.

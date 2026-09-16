@@ -52,3 +52,32 @@ func TestRunnerForRefusesUnknownRunner(t *testing.T) {
 		t.Errorf("error should name what was asked for and what is available: %v", err)
 	}
 }
+
+func TestRepoForPicksByLabel(t *testing.T) {
+	set := RepoSet{"api-mobile": "/p/api-mobile", "api-server": "/p/api-server"}
+
+	issue := models.Issue{Key: "API-1", Labels: []models.Label{{Name: "type:bug"}, {Name: "repo:api-server"}}}
+	got, err := set.RepoFor(issue, "/fallback")
+	if err != nil || got != "/p/api-server" {
+		t.Errorf("label should select api-server, got %q %v", got, err)
+	}
+
+	// No label falls back to the single configured repo.
+	if got, err := set.RepoFor(models.Issue{Key: "API-2"}, "/fallback"); err != nil || got != "/fallback" {
+		t.Errorf("unlabelled should use the fallback, got %q %v", got, err)
+	}
+}
+
+// Writing to the wrong repository is the worst failure here: the work would be
+// committed and verified against a codebase nobody asked for, and pass.
+func TestRepoForRefusesUnknownRepo(t *testing.T) {
+	set := RepoSet{"api-mobile": "/p/api-mobile"}
+	issue := models.Issue{Key: "API-1", Labels: []models.Label{{Name: "repo:api-server"}}}
+
+	if _, err := set.RepoFor(issue, "/fallback"); err == nil {
+		t.Fatal("expected a refusal, never a fallback to the wrong repository")
+	}
+	if _, err := set.RepoFor(models.Issue{Key: "API-2"}, ""); err == nil {
+		t.Error("no label and no fallback should also be an error")
+	}
+}
