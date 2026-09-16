@@ -51,6 +51,8 @@ func main() {
 		err = cmdStatus(args)
 	case "bench":
 		err = cmdBench(ctx, args)
+	case "propose":
+		err = cmdPropose(ctx, args)
 	case "health":
 		err = cmdHealth(ctx)
 	case "-h", "--help", "help":
@@ -75,6 +77,7 @@ func usage() {
   orchestrator work  <TICKET>         attempt, triage, retry/escalate, or hand back
   orchestrator check <TICKET>         evaluate the criteria against the repo as it
                                       stands, without running an agent
+  orchestrator propose <TICKET>       draft a typed done-when checklist for a ticket
   orchestrator daemon                 work the Ready queue unattended
   orchestrator status                 show held leases and the kill switch
   orchestrator bench                  compare models over the fixture tasks
@@ -391,6 +394,75 @@ func cmdDaemon(ctx context.Context, args []string) error {
 		},
 	}
 	return d.Run(ctx)
+}
+
+func cmdPropose(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("propose", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository the ticket will be worked in")
+	model := fs.String("model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "model to draft with")
+	apply := fs.Bool("apply", false, "write the checklist to the ticket (default: print only)")
+	skipVerify := fs.Bool("skip-verify", false, "do not check that the criteria fail today")
+	pos, err := parsePermuted(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 1 {
+		return fmt.Errorf("a ticket key is required, e.g. PP-42")
+	}
+	ticket := pos[0]
+
+	rc, oc, cerr := clients()
+	if cerr != nil {
+		return cerr
+	}
+	if oc.BaseURL == "" {
+		return fmt.Errorf("OPENCODE_URL must be set")
+	}
+	if *model == "" {
+		return fmt.Errorf("a model is required: --model or ORCHESTRATOR_ESCALATE_MODEL")
+	}
+
+	issue, err := rc.Issue(ctx, ticket)
+	if err != nil {
+		return err
+	}
+	facts, err := orchestrator.InspectRepo(*repo)
+	if err != nil {
+		return fmt.Errorf("inspect %s: %w", *repo, err)
+	}
+	fmt.Printf("drafting criteria for %s with %s\n\n", issue.Key, *model)
+
+	items, err := orchestrator.Propose(ctx, oc, *model, issue, facts)
+	if err != nil {
+		return err
+	}
+	for i, it := range items {
+		fmt.Printf("%d. [%s] %s\n", i+1, it.Kind, it.Text)
+		if len(it.Check) > 0 {
+			fmt.Printf("     %s\n", string(it.Check))
+		}
+	}
+
+	if !*skipVerify {
+		fmt.Println("\nchecking these actually fail on the repo as it stands…")
+		gating, err := orchestrator.VerifyCriteriaFailToday(ctx, *repo, items)
+		if err != nil {
+			return err
+		}
+		for _, g := range gating {
+			fmt.Println("  " + g)
+		}
+	}
+
+	if !*apply {
+		fmt.Println("\nnot written — re-run with --apply to put this on the ticket")
+		return nil
+	}
+	if err := rc.ReplaceCriteria(ctx, issue.ID, items); err != nil {
+		return err
+	}
+	fmt.Printf("\nwrote %d criteria to %s\n", len(items), issue.Key)
+	return nil
 }
 
 func cmdBench(ctx context.Context, args []string) error {

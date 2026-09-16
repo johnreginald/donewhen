@@ -188,3 +188,43 @@ func (c *RaenilClient) IssuesInState(ctx context.Context, stateName string, limi
 	var out []models.Issue
 	return out, c.do(ctx, http.MethodGet, path, nil, &out)
 }
+
+// AddCriterion appends one typed criterion to an issue.
+func (c *RaenilClient) AddCriterion(ctx context.Context, issueRef string, body, kind string, check json.RawMessage) error {
+	payload := map[string]any{"body": body, "kind": kind}
+	if len(check) > 0 {
+		payload["checkSpec"] = check
+	}
+	return c.do(ctx, http.MethodPost, "/api/issues/"+issueRef+"/criteria", payload, nil)
+}
+
+// DeleteCriterion removes one criterion by its own id.
+func (c *RaenilClient) DeleteCriterion(ctx context.Context, criterionID string) error {
+	return c.do(ctx, http.MethodDelete, "/api/criteria/"+criterionID, nil, nil)
+}
+
+// ReplaceCriteria swaps an issue's whole checklist for a new one.
+//
+// The existing list is removed only after every new item has been accepted, so a
+// rejected draft cannot leave a ticket with no acceptance criteria at all.
+func (c *RaenilClient) ReplaceCriteria(ctx context.Context, issueRef string, items []ProposedCriterion) error {
+	issue, err := c.Issue(ctx, issueRef)
+	if err != nil {
+		return err
+	}
+	old, err := c.Criteria(ctx, issue.ID)
+	if err != nil {
+		return err
+	}
+	for _, it := range items {
+		if err := c.AddCriterion(ctx, issue.ID, it.Text, it.Kind, it.Check); err != nil {
+			return fmt.Errorf("add %q: %w", it.Text, err)
+		}
+	}
+	for _, o := range old {
+		if err := c.DeleteCriterion(ctx, o.ID); err != nil {
+			return fmt.Errorf("remove old criterion %q: %w", o.Body, err)
+		}
+	}
+	return nil
+}
