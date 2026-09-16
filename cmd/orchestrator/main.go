@@ -90,6 +90,7 @@ func usage() {
 
 Flags (daemon only):
   --queue STATE      state to pull from (default: Ready)
+  --runner NAME      default worker: opencode or codex (default: opencode)
   --watch            subscribe to Raenil's event stream; a ticket entering the
                      queue state is picked up at once instead of on the next sweep
   --poll DUR         reconcile sweep interval (default 30s, or 5m with --watch).
@@ -421,6 +422,7 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	escalateModel := fs.String("escalate-model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "stronger model")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	queue := fs.String("queue", "Ready", "state to pull from")
+	runnerName := fs.String("runner", "opencode", "default worker: opencode or codex (a runner: label on the ticket wins)")
 	watch := fs.Bool("watch", false, "subscribe to Raenil's event stream for instant pickup")
 	poll := fs.Duration("poll", 0, "reconcile sweep interval (default 30s, or 5m with --watch)")
 	concurrency := fs.Int("concurrency", 1, "tickets in flight")
@@ -470,8 +472,14 @@ func cmdDaemon(ctx context.Context, args []string) error {
 		o.Judge = orchestrator.NewJudge(oc, jm)
 	}
 	o.Runners = runnerPool(ctx, oc)
+	if r, ok := o.Runners[strings.ToLower(*runnerName)]; ok {
+		o.Runner = r
+	} else if *runnerName != "opencode" {
+		return fmt.Errorf("runner %q is not available (have: %s)", *runnerName, strings.Join(o.Runners.Names(), ", "))
+	}
 	if len(o.Runners) > 1 {
-		o.Log("runners available: %s (a runner: label on a ticket picks one)", strings.Join(o.Runners.Names(), ", "))
+		o.Log("runners available: %s — default %s (a runner: label on a ticket picks another)",
+			strings.Join(o.Runners.Names(), ", "), o.Runner.Name())
 	}
 
 	// With a live event stream the sweep is only a backstop for dropped events,
