@@ -16,14 +16,20 @@ raenil token orchestrator          # on the Raenil host; copy the token
 export RAENIL_URL=https://tracker.example.com
 export RAENIL_TOKEN=...
 export OPENCODE_URL=http://127.0.0.1:4096      # opencode serve --port 4096 &
-export ORCHESTRATOR_MODEL=opencode-go/glm-5.3-flash
-export ORCHESTRATOR_ESCALATE_MODEL=opencode-go/glm-5.3
+export ORCHESTRATOR_MODEL=opencode-go/glm-5.3-flash          # worker
+export ORCHESTRATOR_JUDGE_MODEL=opencode-go/glm-5.3-flash    # judgment criteria
+export ORCHESTRATOR_ESCALATE_MODEL=opencode-go/glm-5.3       # must beat the worker
 
 orchestrator health
 ```
 
 Models need a provider prefix. `glm-5.3-flash` is rejected; `opencode-go/glm-5.3-flash`
 is not.
+
+**The escalation model must be stronger than the worker model.** Triage already
+retries with the failure in context, so pointing escalation at the worker's own model
+just spends the attempt twice and calls it progress. If there is no stronger model
+available, set `--escalate-after 0` to turn escalation off rather than fake it.
 
 ## Commands
 

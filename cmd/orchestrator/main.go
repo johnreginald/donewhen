@@ -112,7 +112,9 @@ Environment:
   RAENIL_WORKSPACE   workspace slug or id, when the token spans several
   OPENCODE_URL       running 'opencode serve', e.g. http://127.0.0.1:4096
   ORCHESTRATOR_MODEL default worker model, e.g. opencode-go/glm-5.3-flash
-  ORCHESTRATOR_ESCALATE_MODEL  stronger model for escalation and judgment
+  ORCHESTRATOR_JUDGE_MODEL     model for judgment criteria (falls back to the escalate model)
+  ORCHESTRATOR_ESCALATE_MODEL  stronger model for escalation — must beat the worker
+                               model, or escalating achieves nothing
 `)
 }
 
@@ -192,7 +194,7 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	attempt := fs.Int("attempt", 1, "attempt number")
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
-	judgeModel := fs.String("judge-model", "", "model for judgment criteria")
+	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -260,7 +262,7 @@ func cmdWork(ctx context.Context, args []string) error {
 	baseRef := fs.String("base", "HEAD", "what the worktree branches from")
 	model := fs.String("model", os.Getenv("ORCHESTRATOR_MODEL"), "provider/model for the worker")
 	escalateModel := fs.String("escalate-model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "stronger model")
-	judgeModel := fs.String("judge-model", "", "model for judgment criteria")
+	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	maxAttempts := fs.Int("max-attempts", 3, "hard stop before handing back")
 	escalateAfter := fs.Int("escalate-after", 2, "attempt after which to escalate")
 	maxCost := fs.Float64("max-cost", 0, "stop once a ticket has cost this much")
@@ -331,7 +333,7 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	baseRef := fs.String("base", "HEAD", "what the worktree branches from")
 	model := fs.String("model", os.Getenv("ORCHESTRATOR_MODEL"), "provider/model for the worker")
 	escalateModel := fs.String("escalate-model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "stronger model")
-	judgeModel := fs.String("judge-model", "", "model for judgment criteria")
+	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	queue := fs.String("queue", "Ready", "state to pull from")
 	poll := fs.Duration("poll", 30*time.Second, "how often to check the queue")
 	concurrency := fs.Int("concurrency", 1, "tickets in flight")
