@@ -34,6 +34,13 @@ type RunRequest struct {
 	// SessionID continues an existing session instead of starting cold, so a
 	// repair attempt keeps the failed attempt in context.
 	SessionID string
+	// DisableTools runs the agent with every tool turned off. A question that
+	// only needs an opinion should not be given a filesystem to wander around
+	// in: doing so is how a judge spends five minutes and returns nothing.
+	DisableTools bool
+	// ReadOnlyTools allows only the tools needed to look at code, never to
+	// change it. Used for review, where a reviewer that can edit is not one.
+	ReadOnlyTools bool
 }
 
 // DefaultRunTimeout bounds an attempt that does not set its own. Every runner

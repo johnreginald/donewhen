@@ -10,6 +10,10 @@ import (
 // implements it; a test can substitute a stub.
 type Asker interface {
 	Ask(ctx context.Context, model, prompt string) (string, error)
+	// AskIn answers from inside a directory, with read-only tools available.
+	// Judgment criteria routinely ask the reviewer to look at the files, so a
+	// judge with no filesystem cannot answer the questions it is actually given.
+	AskIn(ctx context.Context, model, prompt, cwd string) (string, error)
 }
 
 // maxJudgeDiffBytes caps how much diff is sent to a judge. A judgment call is
@@ -22,7 +26,7 @@ const maxJudgeDiffBytes = 40000
 // criterion populate Verdict.Failed. This exists to surface opinions a human
 // should look at, not to hand a model the power to block a ticket.
 func NewJudge(a Asker, model string) JudgeFunc {
-	return func(ctx context.Context, c JudgmentCheck, d Diff) (bool, string, error) {
+	return func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, error) {
 		m := c.Model
 		if m == "" {
 			m = model
@@ -31,7 +35,13 @@ func NewJudge(a Asker, model string) JudgeFunc {
 			return false, "", fmt.Errorf("no model configured for judgment criteria")
 		}
 
-		answer, err := a.Ask(ctx, m, judgePrompt(c, d))
+		var answer string
+		var err error
+		if workDir != "" {
+			answer, err = a.AskIn(ctx, m, judgePrompt(c, d), workDir)
+		} else {
+			answer, err = a.Ask(ctx, m, judgePrompt(c, d))
+		}
 		if err != nil {
 			return false, "", err
 		}
@@ -43,6 +53,8 @@ func judgePrompt(c JudgmentCheck, d Diff) string {
 	var b strings.Builder
 	b.WriteString("You are reviewing a code change against one specific question. ")
 	b.WriteString("Answer on the first line with exactly PASS or FAIL, then one short sentence of reasoning.\n\n")
+	b.WriteString("You are in the worktree being reviewed and may read files with the " +
+		"read, glob and grep tools. You cannot modify anything.\n\n")
 	fmt.Fprintf(&b, "## Question\n\n%s\n\n## Change\n\n", c.Prompt)
 
 	var n int

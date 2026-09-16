@@ -17,6 +17,11 @@ func (s *stubAsker) Ask(_ context.Context, _ string, prompt string) (string, err
 	return s.answer, s.err
 }
 
+func (s *stubAsker) AskIn(_ context.Context, _ string, prompt, _ string) (string, error) {
+	s.gotPrompt = prompt
+	return s.answer, s.err
+}
+
 func TestJudgeParsesVerdicts(t *testing.T) {
 	cases := []struct {
 		answer  string
@@ -33,7 +38,7 @@ func TestJudgeParsesVerdicts(t *testing.T) {
 	}
 	for _, c := range cases {
 		j := NewJudge(&stubAsker{answer: c.answer}, "some/model")
-		ok, reason, err := j(context.Background(), JudgmentCheck{Prompt: "q"}, Diff{})
+		ok, reason, err := j(context.Background(), JudgmentCheck{Prompt: "q"}, Diff{}, "")
 		if (err != nil) != c.wantErr {
 			t.Errorf("answer %q: err = %v, wantErr %v", c.answer, err, c.wantErr)
 			continue
@@ -48,7 +53,7 @@ func TestJudgePromptCarriesTheDiff(t *testing.T) {
 	s := &stubAsker{answer: "PASS\nfine"}
 	j := NewJudge(s, "some/model")
 	d := Diff{Files: []DiffFile{{Path: "src/a.ts", Status: "modified", Insertions: 2, Patch: "+const a = 1"}}}
-	if _, _, err := j(context.Background(), JudgmentCheck{Prompt: "conforms to ADR-42?"}, d); err != nil {
+	if _, _, err := j(context.Background(), JudgmentCheck{Prompt: "conforms to ADR-42?"}, d, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"conforms to ADR-42?", "src/a.ts", "+const a = 1", "PASS or FAIL"} {
@@ -60,7 +65,7 @@ func TestJudgePromptCarriesTheDiff(t *testing.T) {
 
 func TestJudgeNeedsAModel(t *testing.T) {
 	j := NewJudge(&stubAsker{answer: "PASS"}, "")
-	if _, _, err := j(context.Background(), JudgmentCheck{Prompt: "q"}, Diff{}); err == nil {
+	if _, _, err := j(context.Background(), JudgmentCheck{Prompt: "q"}, Diff{}, ""); err == nil {
 		t.Error("expected an error when no model is configured")
 	}
 }

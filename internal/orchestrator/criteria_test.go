@@ -101,7 +101,7 @@ func TestPolicyCriterionEvaluated(t *testing.T) {
 // never moves a ticket's status on its own.
 func TestJudgmentIsAdvisoryOnly(t *testing.T) {
 	e := newEval(t)
-	e.Judge = func(ctx context.Context, c JudgmentCheck, d Diff) (bool, string, error) {
+	e.Judge = func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, error) {
 		return false, "model dislikes this", nil
 	}
 	cs := parse(t, []models.Criterion{

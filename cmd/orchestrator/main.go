@@ -192,6 +192,7 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	attempt := fs.Int("attempt", 1, "attempt number")
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
+	judgeModel := fs.String("judge-model", "", "model for judgment criteria")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -231,6 +232,9 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 			Timeout: *timeout,
 		},
 		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
+	}
+	if *judgeModel != "" {
+		o.Judge = orchestrator.NewJudge(oc, *judgeModel)
 	}
 
 	v, err := o.RunTicket(ctx, ticket, *attempt)

@@ -14,7 +14,7 @@ import (
 // JudgeFunc asks a model about a judgment criterion. The core never supplies one;
 // the judgment plane injects it. Returning ok=false flags the criterion as
 // advisory-failed, which is surfaced to a human but never blocks a ticket.
-type JudgeFunc func(ctx context.Context, c JudgmentCheck, d Diff) (ok bool, detail string, err error)
+type JudgeFunc func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (ok bool, detail string, err error)
 
 // Evaluator turns criteria into evidence. It decides pass/fail; no model does.
 type Evaluator struct {
@@ -148,7 +148,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, criteria []ParsedCriterion, di
 				item.Detail = "judgment criterion — no judge configured, not evaluated"
 				break
 			}
-			ok, detail, err := e.Judge(ctx, *c.Judgment, diff)
+			ok, detail, err := e.Judge(ctx, *c.Judgment, diff, e.WorkDir)
 			if err != nil {
 				item.Err = err.Error()
 				break
@@ -186,7 +186,10 @@ func Summarise(ticket string, attempt int, criteria []ParsedCriterion, ev []Evid
 		e, ok := byIndex[c.Index]
 		switch {
 		case c.Kind == models.CriterionJudgment:
-			if ok && !e.Pass && e.Err == "" && e.Detail != "" {
+			// Flag both a judge that objected and a judge that could not answer.
+			// An unevaluated judgment silently vanishing from the verdict is how
+			// a reviewer comes to believe something was checked when it was not.
+			if ok && !e.Pass && (e.Detail != "" || e.Err != "") {
 				v.AdvisoryFlagged = append(v.AdvisoryFlagged, c.Index)
 			}
 		case !c.Gating():

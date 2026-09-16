@@ -82,6 +82,7 @@ type ocMessage struct {
 			Created   float64 `json:"created"`
 			Completed float64 `json:"completed"`
 		} `json:"time"`
+		Agent  string          `json:"agent"`
 		Finish string          `json:"finish"`
 		Cost   float64         `json:"cost"`
 		Error  json.RawMessage `json:"error"`
@@ -214,6 +215,16 @@ func (r *OpenCodeRunner) Run(ctx context.Context, req RunRequest) (RunResult, er
 	}
 	if r.Agent != "" {
 		prompt["agent"] = r.Agent
+	}
+	switch {
+	case req.DisableTools:
+		if tools, err := r.toolPolicy(ctx, nil); err == nil && len(tools) > 0 {
+			prompt["tools"] = tools
+		}
+	case req.ReadOnlyTools:
+		if tools, err := r.toolPolicy(ctx, readOnlyToolIDs); err == nil && len(tools) > 0 {
+			prompt["tools"] = tools
+		}
 	}
 	if err := r.do(ctx, r.client(), http.MethodPost,
 		"/session/"+sessionID+"/prompt_async", dirQ, prompt, nil); err != nil {
@@ -401,6 +412,25 @@ func (r *OpenCodeRunner) Fork(ctx context.Context, sessionID, cwd string) (strin
 
 var _ Runner = (*OpenCodeRunner)(nil)
 
+// readOnlyToolIDs are the tools a reviewer may use: enough to look, nothing to
+// change. Anything not listed is turned off.
+var readOnlyToolIDs = map[string]bool{"read": true, "glob": true, "grep": true}
+
+// toolPolicy builds a tools map from the server's own tool list, enabling only
+// the named ones. Fetched rather than hardcoded so it stays correct as opencode
+// gains tools — a new write tool defaults to off rather than silently allowed.
+func (r *OpenCodeRunner) toolPolicy(ctx context.Context, allow map[string]bool) (map[string]bool, error) {
+	var ids []string
+	if err := r.do(ctx, r.client(), http.MethodGet, "/experimental/tool/ids", nil, nil, &ids); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = allow[id]
+	}
+	return out, nil
+}
+
 // Ask runs a one-shot prompt and returns the assistant's text. It is the
 // judgment plane's way in: no tools, no worktree, just an opinion.
 func (r *OpenCodeRunner) Ask(ctx context.Context, model, prompt string) (string, error) {
@@ -409,37 +439,77 @@ func (r *OpenCodeRunner) Ask(ctx context.Context, model, prompt string) (string,
 		return "", err
 	}
 	defer os.RemoveAll(dir)
+	return r.askIn(ctx, model, prompt, dir, true)
+}
 
+// AskIn answers from inside a directory with read-only tools available.
+func (r *OpenCodeRunner) AskIn(ctx context.Context, model, prompt, cwd string) (string, error) {
+	return r.askIn(ctx, model, prompt, cwd, false)
+}
+
+func (r *OpenCodeRunner) askIn(ctx context.Context, model, prompt, dir string, noTools bool) (string, error) {
 	res, err := r.Run(ctx, RunRequest{
-		Prompt:  prompt,
-		Cwd:     dir,
-		Model:   model,
-		Timeout: 5 * time.Minute,
+		Prompt:        prompt,
+		Cwd:           dir,
+		Model:         model,
+		Timeout:       5 * time.Minute,
+		DisableTools:  noTools,
+		ReadOnlyTools: !noTools,
 	})
 	if err != nil {
 		return "", err
 	}
-
-	var msgs []ocMessage
-	q := url.Values{"directory": {dir}}
-	if err := r.do(ctx, r.client(), http.MethodGet, "/session/"+res.SessionID+"/message", q, nil, &msgs); err != nil {
-		return "", err
+	// Distinguish "took too long" from "had nothing to say". Collapsing the two
+	// into an empty string is how a timeout gets recorded as an opinion.
+	if res.Aborted {
+		return "", fmt.Errorf("judge timed out (session %s)", res.SessionID)
 	}
-	var text []string
+	if res.AgentError != "" {
+		return "", fmt.Errorf("judge failed: %s", res.AgentError)
+	}
+
+	// A message's completed timestamp can land fractionally before its text parts
+	// are readable, so a single fetch here intermittently sees an answer with no
+	// content. Poll briefly rather than reporting silence the model did not mean.
+	q := url.Values{"directory": {dir}}
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var msgs []ocMessage
+		if err := r.do(ctx, r.client(), http.MethodGet, "/session/"+res.SessionID+"/message", q, nil, &msgs); err != nil {
+			return "", err
+		}
+		if text := lastAssistantText(msgs); text != "" {
+			return text, nil
+		}
+		if time.Now().After(deadline) {
+			return "", nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+// lastAssistantText returns the text of the most recent assistant message that
+// actually said something.
+func lastAssistantText(msgs []ocMessage) string {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Info.Role != "assistant" {
 			continue
 		}
+		var text []string
 		for _, p := range msgs[i].Parts {
 			if p.Type == "text" && strings.TrimSpace(p.Text) != "" {
 				text = append(text, p.Text)
 			}
 		}
 		if len(text) > 0 {
-			break
+			return strings.TrimSpace(strings.Join(text, "\n"))
 		}
 	}
-	return strings.TrimSpace(strings.Join(text, "\n")), nil
+	return ""
 }
 
 // summariseAgentError pulls a readable message out of the agent's error blob.
