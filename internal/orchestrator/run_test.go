@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -282,5 +283,55 @@ func TestBuildPromptShowsTheContract(t *testing.T) {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt missing %q\n---\n%s", want, p)
 		}
+	}
+}
+
+// unreadyRunner reports that it cannot run the requested model.
+type unreadyRunner struct{ reason string }
+
+func (unreadyRunner) Name() string { return "unready" }
+func (unreadyRunner) Run(context.Context, RunRequest) (RunResult, error) {
+	return RunResult{}, errors.New("should never be called")
+}
+func (r unreadyRunner) Ready(context.Context, string) error { return errors.New(r.reason) }
+
+// A misconfigured agent must be discovered before the ticket is claimed. It was
+// discovered at the point of use, which left tickets parked In Progress with an
+// empty worktree and nothing to show.
+func TestUnreadyRunnerNeverClaimsTheTicket(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, unreadyRunner{reason: "provider package not installed"})
+	o.Cfg.Model = "opencode-go/some-model"
+
+	_, _, err := o.RunAttempt(context.Background(), "TST-1", AttemptSpec{Attempt: 1})
+	if err == nil {
+		t.Fatal("expected a refusal before any work started")
+	}
+	if !strings.Contains(err.Error(), "provider package not installed") {
+		t.Errorf("the refusal should name the real cause, got %v", err)
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.states) != 0 {
+		t.Errorf("an unusable runner must not move the ticket, states = %v", f.states)
+	}
+	if f.branch != "" {
+		t.Errorf("an unusable runner must not record a branch, got %q", f.branch)
+	}
+}
+
+// A runner that can work is not blocked by the check.
+func TestReadyRunnerProceeds(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, fixRunner{})
+	o.Cfg.Model = "cheap/model"
+
+	v, _, err := o.RunAttempt(context.Background(), "TST-1", AttemptSpec{Attempt: 1})
+	if err != nil {
+		t.Fatalf("RunAttempt: %v", err)
+	}
+	if v.Status != StatusPassed {
+		t.Errorf("status = %s", v.Status)
 	}
 }

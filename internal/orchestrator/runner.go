@@ -2,7 +2,9 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -41,6 +43,31 @@ type RunRequest struct {
 	// ReadOnlyTools allows only the tools needed to look at code, never to
 	// change it. Used for review, where a reviewer that can edit is not one.
 	ReadOnlyTools bool
+}
+
+// readyChecker is an optional Runner interface for backends that can say
+// whether a model is actually usable right now.
+//
+// A catalog listing is a declaration, not a working path: today a provider was
+// declared in config, its model existed in ollama, and the provider package was
+// never installed — so everything looked right and nothing could run. The only
+// honest check is an end-to-end one through the exact runner and model.
+type readyChecker interface {
+	Ready(ctx context.Context, model string) error
+}
+
+// runnerReady verifies a runner can do the work before a ticket is claimed for
+// it. Runners that cannot answer are assumed ready; the check exists to catch
+// misconfiguration, not to gate backends that have no way to report.
+func runnerReady(ctx context.Context, r Runner, model string) error {
+	rc, ok := r.(readyChecker)
+	if !ok {
+		return nil
+	}
+	if err := rc.Ready(ctx, model); err != nil {
+		return fmt.Errorf("%s cannot run %q: %w", r.Name(), model, err)
+	}
+	return nil
 }
 
 // modelAware is an optional Runner interface for backends that do not take the
@@ -98,4 +125,29 @@ func splitModel(s string) (provider, model string) {
 		return s[:i], s[i+1:]
 	}
 	return "", s
+}
+
+// readyCache remembers which (runner, model) pairs have been proven usable, so
+// a daemon working a queue pays for the check once rather than per ticket.
+type readyCache struct {
+	mu   sync.Mutex
+	seen map[string]error
+}
+
+func (c *readyCache) once(key string, check func() error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.seen == nil {
+		c.seen = map[string]error{}
+	}
+	if err, ok := c.seen[key]; ok {
+		return err
+	}
+	err := check()
+	// Only a success is remembered. A transient failure — the server still
+	// starting, the tailnet briefly down — must not poison the rest of the run.
+	if err == nil {
+		c.seen[key] = nil
+	}
+	return err
 }

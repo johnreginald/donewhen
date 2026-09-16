@@ -130,24 +130,65 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 	o.logf("ticket %s: %s (%d criteria)", issue.Key, issue.Title, len(criteria))
 
-	// 2. Claim it.
+	// 2. Pick the runner and prove it can work — BEFORE claiming the ticket.
+	//
+	// Selecting the runner at the point of use meant a misconfigured agent got
+	// discovered only after the ticket had been moved to In Progress and a
+	// worktree cut, stranding the ticket with nothing to show. Whether the work
+	// is even possible has to be settled before anything is taken.
+	model := cfg.Model
+	if spec.Model != "" {
+		model = spec.Model
+	}
+	runner := o.Runner
+	if len(o.Runners) > 0 {
+		chosen, rerr := o.Runners.RunnerFor(issue, o.Runner)
+		if rerr != nil {
+			return v, nil, rerr
+		}
+		runner = chosen
+	}
+	if runner == nil {
+		return v, nil, fmt.Errorf("no runner configured")
+	}
+	if err := runnerReady(ctx, runner, model); err != nil {
+		return v, nil, fmt.Errorf("not starting %s: %w", issue.Key, err)
+	}
+
+	// 3. Claim it.
 	branch := fmt.Sprintf("ticket/%s-attempt-%d", strings.ToLower(issue.Key), attempt)
 	if err := o.Raenil.SetState(ctx, issue.ID, cfg.StateInProgress); err != nil {
 		return v, nil, fmt.Errorf("claim issue: %w", err)
+	}
+	// From here on the ticket is ours; anything that stops us before work
+	// begins has to give it back rather than leave it parked In Progress.
+	releaseClaim := func(why string) {
+		name, nerr := o.Raenil.StateName(context.WithoutCancel(ctx), issue.StateID)
+		if nerr != nil || name == "" {
+			o.logf("warning: could not work out where %s came from, leaving it In Progress: %v", issue.Key, nerr)
+			return
+		}
+		if err := o.Raenil.SetState(context.WithoutCancel(ctx), issue.ID, name); err != nil {
+			o.logf("warning: could not return %s to %s: %v", issue.Key, name, err)
+			return
+		}
+		o.logf("returned %s to %s (%s)", issue.Key, name, why)
 	}
 	if err := o.Raenil.SetDev(ctx, issue.ID, branch, ""); err != nil {
 		o.logf("warning: could not record branch: %v", err)
 	}
 
-	// 3. Isolate. The worker writes freely in here and nowhere else.
+	// 4. Isolate. The worker writes freely in here and nowhere else.
 	runDir, err := NewRunDir(cfg.RunRoot, issue.Key, attempt)
 	if err != nil {
+		releaseClaim("could not create the run directory")
 		return v, nil, err
 	}
 	wtPath := filepath.Join(cfg.RunRoot, "worktrees", fmt.Sprintf("%s-%d", issue.Key, attempt))
 	_ = os.RemoveAll(wtPath)
 	wt, err := AddWorktree(ctx, cfg.Repo, wtPath, branch, cfg.BaseRef)
 	if err != nil {
+		releaseClaim("could not create a worktree")
 		return v, nil, fmt.Errorf("create worktree: %w", err)
 	}
 	keepBranch := false
@@ -165,25 +206,13 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		_ = wt.Remove(context.WithoutCancel(ctx))
 	}()
 
-	// 4. Hand the work over.
+	// 5. Hand the work over.
 	prompt := BuildPrompt(issue, criteria)
 	if spec.PriorVerdict != nil {
 		prompt = BuildRepairPrompt(issue, criteria, *spec.PriorVerdict, spec.PriorEvidence)
 	}
 	if err := os.WriteFile(runDir.File("context.md"), []byte(prompt), 0o644); err != nil {
 		return v, nil, err
-	}
-	model := cfg.Model
-	if spec.Model != "" {
-		model = spec.Model
-	}
-	runner := o.Runner
-	if len(o.Runners) > 0 {
-		chosen, rerr := o.Runners.RunnerFor(issue, o.Runner)
-		if rerr != nil {
-			return v, nil, rerr
-		}
-		runner = chosen
 	}
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
 	res, runErr := runner.Run(ctx, RunRequest{
@@ -212,7 +241,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 			strings.Join(res.Questions, "\n> ")+"\n\nAttempt "+fmt.Sprint(attempt)+" stopped here.")
 	}
 
-	// 5. See what it actually did.
+	// 6. See what it actually did.
 	diff, err := StageAndDiff(ctx, wtPath, cfg.BaseRef)
 	if err != nil {
 		return v, nil, fmt.Errorf("read diff: %w", err)
@@ -221,7 +250,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		_ = os.WriteFile(runDir.File("diff.patch"), []byte(patch), 0o644)
 	}
 
-	// 6. Decide, ticking each criterion the moment it is met.
+	// 7. Decide, ticking each criterion the moment it is met.
 	byIndex := map[int]models.Criterion{}
 	for i, c := range stored {
 		byIndex[i] = c
@@ -261,7 +290,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", "worker timed out"
 	}
 
-	// 7. Record the outcome.
+	// 8. Record the outcome.
 	//
 	// In handoff mode the orchestrator stops here regardless of the verdict: the
 	// worker's work is committed so a reviewer can see exactly what it produced,

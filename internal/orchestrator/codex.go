@@ -23,6 +23,31 @@ type CodexRunner struct {
 	// Sandbox overrides the policy for work runs. Empty means workspace-write,
 	// which is the least authority a worker can have and still edit files.
 	Sandbox string
+
+	ready readyCache
+}
+
+// Ready proves Codex is installed, logged in, and will accept this model,
+// before a ticket is claimed for it.
+func (r *CodexRunner) Ready(ctx context.Context, model string) error {
+	return r.ready.once(model, func() error {
+		if err := r.Available(ctx); err != nil {
+			return err
+		}
+		dir, err := os.MkdirTemp("", "raenil-ready-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+		answer, _, err := r.askIn(ctx, model, "Reply with exactly: ok", dir)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(answer) == "" {
+			return fmt.Errorf("codex produced no output")
+		}
+		return nil
+	})
 }
 
 // Name implements Runner.

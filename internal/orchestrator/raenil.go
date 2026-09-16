@@ -228,3 +228,17 @@ func (c *RaenilClient) ReplaceCriteria(ctx context.Context, issueRef string, ite
 	}
 	return nil
 }
+
+// StateName resolves a workflow state id to its name.
+func (c *RaenilClient) StateName(ctx context.Context, stateID string) (string, error) {
+	states, err := c.States(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, s := range states {
+		if s.ID == stateID {
+			return s.Name, nil
+		}
+	}
+	return "", fmt.Errorf("no workflow state with id %s", stateID)
+}

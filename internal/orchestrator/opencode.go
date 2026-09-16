@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -31,6 +32,77 @@ type OpenCodeRunner struct {
 	// PollInterval controls how often pending permissions and questions are
 	// drained while an attempt runs.
 	PollInterval time.Duration
+
+	ready readyCache
+}
+
+// Ready proves this model can actually produce output, before a ticket is
+// claimed for it.
+//
+// Health and catalog membership are checked first because they give a clearer
+// message, but neither is sufficient: a provider can be declared in config,
+// list its models, and still fail to load because its npm package was never
+// installed. Only a completion settles it.
+func (r *OpenCodeRunner) Ready(ctx context.Context, model string) error {
+	provider, m := splitModel(model)
+	if m == "" {
+		return fmt.Errorf("no model given")
+	}
+	if provider == "" {
+		return fmt.Errorf("model %q needs a provider prefix, e.g. opencode-go/glm-5.3-flash", model)
+	}
+	return r.ready.once(model, func() error {
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+
+		if _, err := r.Health(ctx); err != nil {
+			return fmt.Errorf("server unreachable: %w", err)
+		}
+		if err := r.modelInCatalog(ctx, provider, m); err != nil {
+			return err
+		}
+		dir, err := os.MkdirTemp("", "raenil-ready-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+		answer, _, err := r.askIn(ctx, model, "Reply with exactly: ok", dir, true)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(answer) == "" {
+			return fmt.Errorf("model produced no output")
+		}
+		return nil
+	})
+}
+
+// modelInCatalog reports whether the server actually offers this model.
+func (r *OpenCodeRunner) modelInCatalog(ctx context.Context, provider, model string) error {
+	var cat struct {
+		Providers []struct {
+			ID     string                     `json:"id"`
+			Models map[string]json.RawMessage `json:"models"`
+		} `json:"providers"`
+	}
+	if err := r.do(ctx, r.client(), http.MethodGet, "/config/providers", nil, nil, &cat); err != nil {
+		return fmt.Errorf("could not read the provider catalog: %w", err)
+	}
+	for _, p := range cat.Providers {
+		if p.ID != provider {
+			continue
+		}
+		if _, ok := p.Models[model]; ok {
+			return nil
+		}
+		have := make([]string, 0, len(p.Models))
+		for k := range p.Models {
+			have = append(have, k)
+		}
+		sort.Strings(have)
+		return fmt.Errorf("provider %q does not offer %q (offers: %s)", provider, model, strings.Join(have, ", "))
+	}
+	return fmt.Errorf("provider %q is not configured", provider)
 }
 
 // PermissionDecision is the reply to a pending permission request.
