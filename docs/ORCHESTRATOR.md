@@ -151,6 +151,32 @@ existing labels are preserved.
 The loop always terminates. Every path passes, exhausts attempts, breaches the cost
 ceiling, or bounces.
 
+## Senior review: Claude Code as the reviewer
+
+A cheap worker gets code that passes the checks. It does not get code that meets a
+standard — exit codes cannot see over-abstraction, poor naming, or a helper nobody
+needed. For that, hand the work to a stronger model that may edit it.
+
+```bash
+orchestrator work PP-179 --handoff   # worker runs, criteria run, work committed,
+                                     # worktree KEPT, ticket left alone
+#   → read the diff, review it, fix what is below standard, in that worktree
+orchestrator verify PP-179           # re-run the criteria on your version, no agent
+orchestrator finish PP-179           # commit review fixes separately, record, In Review
+```
+
+The property this must not break: **a reviewer may improve the code, but deciding it
+is acceptable stays with the checks.** `finish` re-verifies first and refuses while a
+gating criterion fails, so a senior cannot wave work through any more than a junior
+can — exactly as a senior's own fix still has to pass CI.
+
+`verify` also un-ticks a criterion that no longer passes, so a fix that broke something
+else cannot leave a stale green on the record.
+
+Provenance is two commits: the worker's, then `PP-179: review fixes`. Both are linked
+to the ticket, so the gap between what the cheap model produced and what shipped stays
+visible — which is the signal for tuning the worker model and the criteria.
+
 ## Do you need the daemon?
 
 Probably not, if you drive from Claude Code and review everything yourself.

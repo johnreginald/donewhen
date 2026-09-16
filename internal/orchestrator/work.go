@@ -100,6 +100,13 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 			if hint := alwaysFailing(failures, names, attempts); hint != "" {
 				d.Reason += "\n\n" + hint
 			}
+			// In handoff mode a reviewer is waiting for this. Bouncing it to a
+			// human with needs-info would be telling the senior to go away.
+			if o.Cfg.Handoff {
+				o.logf("not bouncing: %s — handing to the reviewer instead", d.Reason)
+				last.Next = "review"
+				return last, nil
+			}
 			if err := o.bounce(ctx, ref, wc, d.Reason); err != nil {
 				o.logf("warning: bounce incomplete: %v", err)
 			}
@@ -126,6 +133,11 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 	reason := fmt.Sprintf("%d attempts did not satisfy the criteria", wc.Triage.MaxAttempts)
 	if hint := alwaysFailing(failures, names, attempts); hint != "" {
 		reason += "\n\n" + hint
+	}
+	if o.Cfg.Handoff {
+		o.logf("not bouncing: %s — handing to the reviewer instead", reason)
+		last.Next = "review"
+		return last, nil
 	}
 	if err := o.bounce(ctx, ref, wc, reason); err != nil {
 		o.logf("warning: bounce incomplete: %v", err)

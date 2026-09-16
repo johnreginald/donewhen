@@ -53,6 +53,10 @@ func main() {
 		err = cmdBench(ctx, args)
 	case "propose":
 		err = cmdPropose(ctx, args)
+	case "verify":
+		err = cmdReview(ctx, args, false)
+	case "finish":
+		err = cmdReview(ctx, args, true)
 	case "health":
 		err = cmdHealth(ctx)
 	case "-h", "--help", "help":
@@ -78,6 +82,8 @@ func usage() {
   orchestrator check <TICKET>         evaluate the criteria against the repo as it
                                       stands, without running an agent
   orchestrator propose <TICKET>       draft a typed done-when checklist for a ticket
+  orchestrator verify  <TICKET>       re-run the criteria against the kept worktree
+  orchestrator finish  <TICKET>       commit review fixes, record, move to In Review
   orchestrator daemon                 work the Ready queue unattended
   orchestrator status                 show held leases and the kill switch
   orchestrator bench                  compare models over the fixture tasks
@@ -92,6 +98,10 @@ Flags (daemon only):
   --max-cost-hour U  halt once spend in a rolling hour exceeds this
   --stop-file PATH   kill switch; the daemon halts while it exists
   --require-label L  only take issues carrying this label (e.g. ready-for-agent)
+
+Flags (run/work):
+  --handoff          stop after the worker: commit its work, keep the worktree,
+                     and leave the ticket alone so a reviewer takes it from there
 
 Flags (work only):
   --max-attempts N   hard stop before handing back to a human (default: 3)
@@ -199,6 +209,7 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
+	handoff := fs.Bool("handoff", false, "stop after the worker: commit its work, keep the worktree, leave the ticket alone")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -236,6 +247,7 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 			BaseRef: *baseRef,
 			Model:   *model,
 			Timeout: *timeout,
+			Handoff: *handoff,
 		},
 		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
@@ -272,6 +284,7 @@ func cmdWork(ctx context.Context, args []string) error {
 	maxCost := fs.Float64("max-cost", 0, "stop once a ticket has cost this much")
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
+	handoff := fs.Bool("handoff", false, "stop after the worker: commit its work, keep the worktree, leave the ticket alone")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -301,7 +314,7 @@ func cmdWork(ctx context.Context, args []string) error {
 		Runner: oc,
 		Cfg: orchestrator.Config{
 			RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
-			Model: *model, Timeout: *timeout,
+			Model: *model, Timeout: *timeout, Handoff: *handoff,
 		},
 		// Claim the ticket for the duration of the run. Without this, two
 		// terminals working the same ticket each cut a worktree and a branch and
@@ -602,6 +615,63 @@ func cmdStatus(args []string) error {
 	for _, l := range held {
 		age := time.Since(l.Heartbeat).Round(time.Second)
 		fmt.Printf("%-12s %-8d %-18s %s ago\n", l.Ticket, l.PID, l.Host, age)
+	}
+	return nil
+}
+
+// cmdReview backs `verify` and `finish`: the reviewer's half of the loop, where
+// the code may have been written by anyone and the checks decide regardless.
+func cmdReview(ctx context.Context, args []string, finish bool) error {
+	name := "verify"
+	if finish {
+		name = "finish"
+	}
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository the ticket is worked in")
+	runRoot := fs.String("run-root", ".orchestrator", "where run directories live")
+	baseRef := fs.String("base", "HEAD", "what the worktree branched from")
+	attempt := fs.Int("attempt", 90, "run directory to write evidence into")
+	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
+	asJSON := fs.Bool("json", false, "print the verdict as JSON")
+	pos, err := parsePermuted(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 1 {
+		return fmt.Errorf("a ticket key is required, e.g. PP-42")
+	}
+
+	rc, oc, err := clients()
+	if err != nil {
+		return err
+	}
+	o := &orchestrator.Orchestrator{
+		Raenil: rc,
+		Runner: noopRunner{},
+		Cfg: orchestrator.Config{
+			RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
+		},
+		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
+	}
+	if *judgeModel != "" && oc.BaseURL != "" {
+		o.Judge = orchestrator.NewJudge(oc, *judgeModel)
+	}
+
+	var v orchestrator.Verdict
+	if finish {
+		v, err = o.Finish(ctx, pos[0], *attempt)
+	} else {
+		v, _, err = o.Verify(ctx, pos[0], *attempt)
+	}
+	if err != nil {
+		return err
+	}
+	if *asJSON {
+		b, _ := json.MarshalIndent(v, "", "  ")
+		fmt.Println(string(b))
+	}
+	if v.Status != orchestrator.StatusPassed {
+		os.Exit(3)
 	}
 	return nil
 }

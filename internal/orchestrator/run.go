@@ -26,6 +26,10 @@ type Config struct {
 	// StateInProgress and StateInReview name the workflow states to move through.
 	StateInProgress string
 	StateInReview   string
+	// Handoff stops after the worker and the criteria have run: the work is
+	// committed, the worktree is kept, and the tracker is left alone so a
+	// reviewer decides what happens next.
+	Handoff bool
 }
 
 func (c Config) withDefaults() Config {
@@ -145,6 +149,12 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 	keepBranch := false
 	defer func() {
+		// Handoff keeps the checkout itself, not just the branch: a reviewer
+		// needs somewhere to read the code, run the checks and make a fix.
+		// Detach would remove the directory and leave them with a branch name.
+		if cfg.Handoff {
+			return
+		}
 		if keepBranch {
 			_ = wt.Detach(context.WithoutCancel(ctx))
 			return
@@ -236,6 +246,29 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 
 	// 7. Record the outcome.
+	//
+	// In handoff mode the orchestrator stops here regardless of the verdict: the
+	// worker's work is committed so a reviewer can see exactly what it produced,
+	// the worktree is kept so they can work in it, and nothing moves on the
+	// tracker. A reviewer arriving to find the worktree deleted has nothing to
+	// review, and a verdict already filed as In Review pre-empts them.
+	if cfg.Handoff {
+		sha, cerr := Commit(ctx, wtPath, fmt.Sprintf("%s: %s", issue.Key, issue.Title))
+		switch {
+		case cerr != nil:
+			o.logf("worker changed nothing to commit (%v)", cerr)
+		default:
+			_ = o.Raenil.LinkCommit(ctx, issue.ID, sha, issue.Title+" (worker)")
+			o.logf("worker commit %s on %s", sha[:min(8, len(sha))], branch)
+		}
+		keepBranch = true
+		o.logf("verdict: %s — handing over, worktree kept at %s", v.Status, wtPath)
+		if err := runDir.WriteVerdict(v); err != nil {
+			return v, evidence, err
+		}
+		return v, evidence, nil
+	}
+
 	if v.Status == StatusPassed {
 		sha, cerr := Commit(ctx, wtPath, fmt.Sprintf("%s: %s", issue.Key, issue.Title))
 		if cerr != nil {
