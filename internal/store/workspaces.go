@@ -264,7 +264,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO label_groups (workspace_id, name, exclusive) VALUES
 			($1,'repo',true),($1,'platform',true),($1,'type',true),
-			($1,'domain',true),($1,'triage',true)`, w.ID); err != nil {
+			($1,'domain',true),($1,'triage',true),($1,'runner',true)`, w.ID); err != nil {
 		return models.Workspace{}, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -275,7 +275,8 @@ func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, 
 			('chore','#94A3B8','type'),('tech-debt','#FBBF24','type'),
 			('needs-triage','#a1a1aa','triage'),('needs-info','#fbbf24','triage'),
 			('ready-for-agent','#38bdf8','triage'),('ready-for-human','#c084fc','triage'),
-			('wontfix','#f87171','triage')
+			('wontfix','#f87171','triage'),
+			('runner:opencode','#38bdf8','runner'),('runner:codex','#8b87ff','runner')
 		) AS v(name,color,grp)
 		JOIN label_groups g ON g.workspace_id = $1 AND g.name = v.grp`, w.ID); err != nil {
 		return models.Workspace{}, err
