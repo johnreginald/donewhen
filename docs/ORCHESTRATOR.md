@@ -261,6 +261,26 @@ a work item, and the tracker's actual state is the only thing trusted to say wha
 doing. A lost event costs latency and nothing else. With `--watch` the sweep can be
 slow (5m by default); without it, the sweep is the only way work is ever noticed.
 
+### Labels: which repo, which runner
+
+Both route on **group membership**, the convention this tracker already uses — the
+`type` group holds `bug`, not `type:bug`. So a `repo` group holding `api-server` and a
+`runner` group holding `codex` are what the orchestrator reads. A `group:value` name is
+also accepted and stripped, so both spellings work.
+
+```bash
+orchestrator work API-42 \
+  --repos api-mobile=~/Project/LaosCareApp/api-mobile,api-server=~/Project/LaosCareApp/api-server
+```
+
+A ticket naming a repo or runner with no configuration here is **refused**, never worked
+with the fallback. In a two-repo project that is the failure that matters: the work
+would be written, committed and verified in the wrong codebase, and every check would
+pass.
+
+The workspace needs no flag — an unpinned token takes it from the ticket key, since key
+prefixes are unique per workspace.
+
 ### Which tickets the daemon takes
 
 By default it takes everything in the queue, and reports once on any ticket it cannot
