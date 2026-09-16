@@ -225,7 +225,8 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 
 	v = Summarise(issue.Key, attempt, criteria, evidence, diff)
 	v.Runner, v.Model = o.Runner.Name(), model
-	v.CostUSD, v.DurationS = res.CostUSD, int64(res.Duration.Seconds())
+	v.CostUSD += res.CostUSD // Summarise already counted what evaluation spent
+	v.DurationS = int64(res.Duration.Seconds())
 	v.SessionID, v.Questions = res.SessionID, res.Questions
 	if res.Aborted {
 		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", "worker timed out"

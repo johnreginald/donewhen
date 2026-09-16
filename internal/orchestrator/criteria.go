@@ -14,7 +14,7 @@ import (
 // JudgeFunc asks a model about a judgment criterion. The core never supplies one;
 // the judgment plane injects it. Returning ok=false flags the criterion as
 // advisory-failed, which is surfaced to a human but never blocks a ticket.
-type JudgeFunc func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (ok bool, detail string, err error)
+type JudgeFunc func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (ok bool, detail string, costUSD float64, err error)
 
 // Evaluator turns criteria into evidence. It decides pass/fail; no model does.
 type Evaluator struct {
@@ -148,7 +148,8 @@ func (e *Evaluator) Evaluate(ctx context.Context, criteria []ParsedCriterion, di
 				item.Detail = "judgment criterion — no judge configured, not evaluated"
 				break
 			}
-			ok, detail, err := e.Judge(ctx, *c.Judgment, diff, e.WorkDir)
+			ok, detail, cost, err := e.Judge(ctx, *c.Judgment, diff, e.WorkDir)
+			item.CostUSD = cost
 			if err != nil {
 				item.Err = err.Error()
 				break
@@ -180,6 +181,9 @@ func Summarise(ticket string, attempt int, criteria []ParsedCriterion, ev []Evid
 	byIndex := make(map[int]Evidence, len(ev))
 	for _, e := range ev {
 		byIndex[e.CriterionIndex] = e
+		// Evaluation spends money too. Counting only the worker is how a budget
+		// ceiling comes to sit above the actual bill.
+		v.CostUSD += e.CostUSD
 	}
 
 	for _, c := range criteria {

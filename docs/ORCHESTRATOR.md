@@ -157,6 +157,21 @@ ceiling, or bounces.
 orchestrator daemon --repo ~/Project/my-project --max-cost-hour 5.00 --max-cost 2.00
 ```
 
+### What it actually costs
+
+A ticket's cost is the worker **plus** every judgment criterion, because judging calls
+a model too. Measured on my-project: the worker is around $0.006 for a small ticket on
+`glm-5.3-flash`, while a single judgment on the larger `glm-5.3` can cost many times
+that — it reads files and reasons over them.
+
+Two consequences:
+
+- **Judge on Flash.** Measured 3/3 correct in 5-19s against 67-77s on non-Flash, for a
+  fraction of the spend.
+- **Judgment criteria are not free.** A checklist with three of them costs three model
+  calls every attempt. Use them where a human would genuinely have to read the code,
+  not as a garnish on checks a command already covers.
+
 `--max-cost-hour` is **required**. Unattended, plus a paid API, plus no ceiling is how
 people wake up to a four-figure bill, so it is refused rather than warned about.
 

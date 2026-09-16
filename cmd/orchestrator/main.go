@@ -441,10 +441,11 @@ func cmdPropose(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("drafting criteria for %s with %s\n\n", issue.Key, *model)
 
-	items, err := orchestrator.Propose(ctx, oc, *model, issue, facts)
+	items, cost, err := orchestrator.Propose(ctx, oc, *model, issue, facts)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w (spent $%.4f)", err, cost)
 	}
+	fmt.Printf("drafted in %s for $%.4f\n\n", *model, cost)
 	for i, it := range items {
 		fmt.Printf("%d. [%s] %s\n", i+1, it.Kind, it.Text)
 		if len(it.Check) > 0 {

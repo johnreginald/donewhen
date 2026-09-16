@@ -139,9 +139,11 @@ type ProposedCriterion struct {
 // The model writes the draft; it does not get to approve it. Everything it
 // returns is parsed through the same ParseCriteria the orchestrator uses, so a
 // criterion that would not have gated anything never reaches the ticket.
-func Propose(ctx context.Context, a Asker, model string, issue models.Issue, facts RepoFacts) ([]ProposedCriterion, error) {
+// Propose returns the drafted checklist and what drafting it cost.
+func Propose(ctx context.Context, a Asker, model string, issue models.Issue, facts RepoFacts) ([]ProposedCriterion, float64, error) {
+	var costUSD float64
 	if model == "" {
-		return nil, fmt.Errorf("a model is required to draft criteria")
+		return nil, 0, fmt.Errorf("a model is required to draft criteria")
 	}
 
 	// Models occasionally return a truncated or prose-wrapped reply. One retry
@@ -155,9 +157,10 @@ func Propose(ctx context.Context, a Asker, model string, issue models.Issue, fac
 				"\nYour previous reply could not be parsed. Reply with the raw JSON array only: " +
 				"no prose, no code fence, no trailing commentary.\n"
 		}
-		answer, err := a.Ask(ctx, model, prompt)
+		answer, cost, err := a.Ask(ctx, model, prompt)
+		costUSD += cost
 		if err != nil {
-			return nil, err
+			return nil, costUSD, err
 		}
 		raw, err := extractJSONArray(answer)
 		if err != nil {
@@ -174,21 +177,21 @@ func Propose(ctx context.Context, a Asker, model string, issue models.Issue, fac
 		break
 	}
 	if lastErr != nil {
-		return nil, lastErr
+		return nil, costUSD, lastErr
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("model proposed no criteria")
+		return nil, costUSD, fmt.Errorf("model proposed no criteria")
 	}
 
 	// Validate through the real parser. A draft that cannot gate is not a draft.
-	if _, err := ParseCriteria(proposedToModels(out)); err != nil {
-		return nil, fmt.Errorf("drafted criteria are unusable: %w", err)
+	parsed, err := ParseCriteria(proposedToModels(out))
+	if err != nil {
+		return nil, costUSD, fmt.Errorf("drafted criteria are unusable: %w", err)
 	}
-	parsed, _ := ParseCriteria(proposedToModels(out))
 	if !anyGating(parsed) {
-		return nil, fmt.Errorf("drafted criteria contain nothing machine-checkable")
+		return nil, costUSD, fmt.Errorf("drafted criteria contain nothing machine-checkable")
 	}
-	return out, nil
+	return out, costUSD, nil
 }
 
 func proposedToModels(in []ProposedCriterion) []models.Criterion {

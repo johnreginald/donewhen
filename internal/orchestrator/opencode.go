@@ -433,21 +433,24 @@ func (r *OpenCodeRunner) toolPolicy(ctx context.Context, allow map[string]bool) 
 
 // Ask runs a one-shot prompt and returns the assistant's text. It is the
 // judgment plane's way in: no tools, no worktree, just an opinion.
-func (r *OpenCodeRunner) Ask(ctx context.Context, model, prompt string) (string, error) {
+func (r *OpenCodeRunner) Ask(ctx context.Context, model, prompt string) (string, float64, error) {
 	dir, err := os.MkdirTemp("", "raenil-judge-")
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	defer os.RemoveAll(dir)
 	return r.askIn(ctx, model, prompt, dir, true)
 }
 
 // AskIn answers from inside a directory with read-only tools available.
-func (r *OpenCodeRunner) AskIn(ctx context.Context, model, prompt, cwd string) (string, error) {
+func (r *OpenCodeRunner) AskIn(ctx context.Context, model, prompt, cwd string) (string, float64, error) {
 	return r.askIn(ctx, model, prompt, cwd, false)
 }
 
-func (r *OpenCodeRunner) askIn(ctx context.Context, model, prompt, dir string, noTools bool) (string, error) {
+// askIn returns the answer and what it cost. The cost is returned rather than
+// discarded because a judge that spends money invisibly defeats the budget
+// guard: the ceiling can only stop what it can see.
+func (r *OpenCodeRunner) askIn(ctx context.Context, model, prompt, dir string, noTools bool) (string, float64, error) {
 	res, err := r.Run(ctx, RunRequest{
 		Prompt:        prompt,
 		Cwd:           dir,
@@ -457,15 +460,15 @@ func (r *OpenCodeRunner) askIn(ctx context.Context, model, prompt, dir string, n
 		ReadOnlyTools: !noTools,
 	})
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	// Distinguish "took too long" from "had nothing to say". Collapsing the two
 	// into an empty string is how a timeout gets recorded as an opinion.
 	if res.Aborted {
-		return "", fmt.Errorf("judge timed out (session %s)", res.SessionID)
+		return "", res.CostUSD, fmt.Errorf("judge timed out (session %s)", res.SessionID)
 	}
 	if res.AgentError != "" {
-		return "", fmt.Errorf("judge failed: %s", res.AgentError)
+		return "", res.CostUSD, fmt.Errorf("judge failed: %s", res.AgentError)
 	}
 
 	// A message's completed timestamp can land fractionally before its text parts
@@ -476,17 +479,17 @@ func (r *OpenCodeRunner) askIn(ctx context.Context, model, prompt, dir string, n
 	for {
 		var msgs []ocMessage
 		if err := r.do(ctx, r.client(), http.MethodGet, "/session/"+res.SessionID+"/message", q, nil, &msgs); err != nil {
-			return "", err
+			return "", res.CostUSD, err
 		}
 		if text := lastAssistantText(msgs); text != "" {
-			return text, nil
+			return text, res.CostUSD, nil
 		}
 		if time.Now().After(deadline) {
-			return "", nil
+			return "", res.CostUSD, nil
 		}
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return "", res.CostUSD, ctx.Err()
 		case <-time.After(250 * time.Millisecond):
 		}
 	}

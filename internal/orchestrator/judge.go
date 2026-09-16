@@ -9,11 +9,11 @@ import (
 // Asker is anything that can answer a one-shot question. OpenCodeRunner
 // implements it; a test can substitute a stub.
 type Asker interface {
-	Ask(ctx context.Context, model, prompt string) (string, error)
+	Ask(ctx context.Context, model, prompt string) (answer string, costUSD float64, err error)
 	// AskIn answers from inside a directory, with read-only tools available.
 	// Judgment criteria routinely ask the reviewer to look at the files, so a
 	// judge with no filesystem cannot answer the questions it is actually given.
-	AskIn(ctx context.Context, model, prompt, cwd string) (string, error)
+	AskIn(ctx context.Context, model, prompt, cwd string) (answer string, costUSD float64, err error)
 }
 
 // maxJudgeDiffBytes caps how much diff is sent to a judge. A judgment call is
@@ -26,26 +26,28 @@ const maxJudgeDiffBytes = 40000
 // criterion populate Verdict.Failed. This exists to surface opinions a human
 // should look at, not to hand a model the power to block a ticket.
 func NewJudge(a Asker, model string) JudgeFunc {
-	return func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, error) {
+	return func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, float64, error) {
 		m := c.Model
 		if m == "" {
 			m = model
 		}
 		if m == "" {
-			return false, "", fmt.Errorf("no model configured for judgment criteria")
+			return false, "", 0, fmt.Errorf("no model configured for judgment criteria")
 		}
 
 		var answer string
+		var cost float64
 		var err error
 		if workDir != "" {
-			answer, err = a.AskIn(ctx, m, judgePrompt(c, d), workDir)
+			answer, cost, err = a.AskIn(ctx, m, judgePrompt(c, d), workDir)
 		} else {
-			answer, err = a.Ask(ctx, m, judgePrompt(c, d))
+			answer, cost, err = a.Ask(ctx, m, judgePrompt(c, d))
 		}
 		if err != nil {
-			return false, "", err
+			return false, "", cost, err
 		}
-		return parseJudgement(answer)
+		ok, detail, perr := parseJudgement(answer)
+		return ok, detail, cost, perr
 	}
 }
 

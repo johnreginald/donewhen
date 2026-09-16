@@ -101,8 +101,8 @@ func TestPolicyCriterionEvaluated(t *testing.T) {
 // never moves a ticket's status on its own.
 func TestJudgmentIsAdvisoryOnly(t *testing.T) {
 	e := newEval(t)
-	e.Judge = func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, error) {
-		return false, "model dislikes this", nil
+	e.Judge = func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, float64, error) {
+		return false, "model dislikes this", 0.02, nil
 	}
 	cs := parse(t, []models.Criterion{
 		{Body: "build passes", Kind: models.CriterionDeterministic, CheckSpec: json.RawMessage(`{"cmd":"exit 0"}`)},
@@ -179,5 +179,48 @@ func TestParseCriteriaRejectsBadSpecs(t *testing.T) {
 		if _, err := ParseCriteria([]models.Criterion{c}); err == nil {
 			t.Errorf("expected %q to be rejected, not silently skipped", c.Body)
 		}
+	}
+}
+
+// The budget guard can only stop spending it can see. Evaluating a judgment
+// criterion calls a model, and that cost has to reach the verdict — counting
+// only the worker is how a ceiling comes to sit above the actual bill.
+func TestJudgmentCostReachesTheVerdict(t *testing.T) {
+	e := newEval(t)
+	e.Judge = func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, float64, error) {
+		return true, "fine", 0.25, nil
+	}
+	cs := parse(t, []models.Criterion{
+		{Body: "build passes", Kind: models.CriterionDeterministic, CheckSpec: json.RawMessage(`{"cmd":"exit 0"}`)},
+		{Body: "conforms to ADR-42", Kind: models.CriterionJudgment, CheckSpec: json.RawMessage(`{"prompt":"?"}`)},
+	})
+	ev, err := e.Evaluate(context.Background(), cs, Diff{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev[1].CostUSD != 0.25 {
+		t.Errorf("judgment evidence should record its cost, got %v", ev[1].CostUSD)
+	}
+	v := Summarise("TST-1", 1, cs, ev, Diff{})
+	if v.CostUSD != 0.25 {
+		t.Errorf("verdict cost = %v, want the judge's 0.25 — evaluation spend must be counted", v.CostUSD)
+	}
+}
+
+// A judge that failed still spent money; that must be counted too.
+func TestFailedJudgmentStillCosts(t *testing.T) {
+	e := newEval(t)
+	e.Judge = func(ctx context.Context, c JudgmentCheck, d Diff, workDir string) (bool, string, float64, error) {
+		return false, "", 0.10, context.DeadlineExceeded
+	}
+	cs := parse(t, []models.Criterion{
+		{Body: "conforms", Kind: models.CriterionJudgment, CheckSpec: json.RawMessage(`{"prompt":"?"}`)},
+	})
+	ev, _ := e.Evaluate(context.Background(), cs, Diff{})
+	if ev[0].CostUSD != 0.10 {
+		t.Errorf("a failed judge still spent money, got %v", ev[0].CostUSD)
+	}
+	if ev[0].Err == "" {
+		t.Error("the failure should be recorded")
 	}
 }

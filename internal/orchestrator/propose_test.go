@@ -67,20 +67,20 @@ func TestProposeRejectsUngatingDrafts(t *testing.T) {
 
 	// All-manual: nothing an orchestrator could decide.
 	a := &stubAsker{answer: `[{"text":"looks nice","kind":"manual"}]`}
-	if _, err := Propose(context.Background(), a, "m", issue, facts); err == nil ||
+	if _, _, err := Propose(context.Background(), a, "m", issue, facts); err == nil ||
 		!strings.Contains(err.Error(), "machine-checkable") {
 		t.Errorf("expected an all-manual draft to be refused, got %v", err)
 	}
 
 	// A deterministic criterion with no command cannot gate either.
 	a = &stubAsker{answer: `[{"text":"builds","kind":"deterministic","check":{}}]`}
-	if _, err := Propose(context.Background(), a, "m", issue, facts); err == nil {
+	if _, _, err := Propose(context.Background(), a, "m", issue, facts); err == nil {
 		t.Error("expected a check with no cmd to be refused")
 	}
 
 	// Prose instead of JSON.
 	a = &stubAsker{answer: `I would suggest making sure the build passes.`}
-	if _, err := Propose(context.Background(), a, "m", issue, facts); err == nil {
+	if _, _, err := Propose(context.Background(), a, "m", issue, facts); err == nil {
 		t.Error("expected a non-JSON reply to be refused")
 	}
 }
@@ -90,7 +90,7 @@ func TestProposeAcceptsAUsableDraft(t *testing.T) {
 	  {"text":"build passes","kind":"deterministic","check":{"cmd":"npm run build","expect_exit":0}},
 	  {"text":"scoped","kind":"policy","check":{"policy":"paths_within","args":["src/**"]}}
 	]` + "\n```"}
-	items, err := Propose(context.Background(), a, "m", models.Issue{Key: "T-1"}, RepoFacts{})
+	items, _, err := Propose(context.Background(), a, "m", models.Issue{Key: "T-1"}, RepoFacts{})
 	if err != nil {
 		t.Fatalf("Propose: %v", err)
 	}

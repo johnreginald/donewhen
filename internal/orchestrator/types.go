@@ -61,6 +61,9 @@ type Evidence struct {
 	OutputPath   string `json:"output_path,omitempty"`
 	OutputSHA256 string `json:"output_sha256,omitempty"`
 
+	// CostUSD is what evaluating this criterion cost. Non-zero only for judgment
+	// criteria, which call a model.
+	CostUSD    float64   `json:"cost_usd,omitempty"`
 	DurationMS int64     `json:"duration_ms"`
 	Timestamp  time.Time `json:"ts"`
 	// Err records why evaluation itself failed (timeout, unknown policy). An
