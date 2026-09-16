@@ -151,6 +151,26 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 	if err := o.Raenil.SetState(ctx, issue.ID, cfg.StateInReview); err != nil {
 		return v, fmt.Errorf("could not move to %s: %w", cfg.StateInReview, err)
 	}
+
+	// Release the checkout but keep the branch. A worktree left behind holds the
+	// branch checked out, and git refuses to merge a branch that is checked out
+	// somewhere else — so the reviewer's own worktree would block the merge.
+	wt := &Worktree{Repo: cfg.Repo, Path: wtPath, Branch: branchForWorktree(wtPath)}
+	if err := wt.Detach(context.WithoutCancel(ctx)); err != nil {
+		o.logf("warning: could not release the worktree at %s: %v", wtPath, err)
+	} else {
+		o.logf("released the worktree; branch kept for merging")
+	}
+
 	o.logf("%s → %s", issue.Key, cfg.StateInReview)
 	return v, nil
+}
+
+// branchForWorktree reads the branch a worktree has checked out.
+func branchForWorktree(path string) string {
+	out, err := git(context.Background(), path, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }
