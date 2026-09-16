@@ -163,10 +163,16 @@ func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *stri
 	if len(checkSpec) > 0 {
 		spec = checkSpec
 	}
+	// Evidence belongs to the tick. Un-ticking a criterion clears it, because a
+	// criterion that reads "not met" while still citing a previous run's evidence
+	// is a record that lies.
 	c, err := scanCriterion(s.pool.QueryRow(ctx, `
 		UPDATE issue_criteria c SET body=coalesce($2,c.body), done=coalesce($3,c.done),
 			kind=coalesce($5,c.kind), check_spec=coalesce($6,c.check_spec),
-			evidence_ref=coalesce($7,c.evidence_ref)
+			evidence_ref = CASE
+				WHEN $3 IS NOT NULL AND $3 = false THEN $7
+				ELSE coalesce($7, c.evidence_ref)
+			END
 		FROM issues i
 		WHERE c.id=$1 AND i.id = c.issue_id AND i.workspace_id=$4
 		RETURNING `+criterionCols, id, body, done, wsID, kind, spec, evidenceRef))

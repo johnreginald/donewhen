@@ -11,8 +11,24 @@ import (
 
 // ---- commits ----
 
+// issueID resolves the {id} path segment, which callers may give as a human key
+// (PP-42) or a UUID. The store only accepts UUIDs, so a handler that passes the
+// raw path value rejects every key with an opaque "invalid input syntax for type
+// uuid" — which is what /api/issues/{id} itself does not do.
+func (s *Server) issueID(r *http.Request) (string, error) {
+	is, err := s.resolveIssue(r, r.PathValue("id"))
+	if err != nil {
+		return "", err
+	}
+	return is.ID, nil
+}
+
 func (s *Server) handleListCommits(w http.ResponseWriter, r *http.Request) {
-	cs, err := s.store.ListCommits(r.Context(), ws(r), r.PathValue("id"))
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
+	cs, err := s.store.ListCommits(r.Context(), ws(r), id)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -29,7 +45,10 @@ func (s *Server) handleAddCommit(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "sha required")
 		return
 	}
-	id := r.PathValue("id")
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
 	c, err := s.store.AddCommit(r.Context(), ws(r), id, body.Sha, body.Message, strPtr(body.URL))
 	if handleStoreErr(w, err) {
 		return
@@ -62,7 +81,11 @@ func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	is, err := s.store.SetIssueDev(r.Context(), ws(r), r.PathValue("id"), strPtr(body.GitBranch), strPtr(body.PrURL))
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
+	is, err := s.store.SetIssueDev(r.Context(), ws(r), id, strPtr(body.GitBranch), strPtr(body.PrURL))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -91,7 +114,11 @@ func validateCriterionSpec(kind string, spec json.RawMessage) error {
 }
 
 func (s *Server) handleListCriteria(w http.ResponseWriter, r *http.Request) {
-	cs, err := s.store.ListCriteria(r.Context(), ws(r), r.PathValue("id"))
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
+	cs, err := s.store.ListCriteria(r.Context(), ws(r), id)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -112,7 +139,11 @@ func (s *Server) handleAddCriterion(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	c, err := s.store.AddCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Kind, body.CheckSpec)
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
+	c, err := s.store.AddCriterion(r.Context(), ws(r), id, body.Body, body.Kind, body.CheckSpec)
 	if handleStoreErr(w, err) {
 		return
 	}
