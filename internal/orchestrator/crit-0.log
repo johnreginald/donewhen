@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import server; assert server.port()==9999, server.port()
+                          ^^^^^^^^^^^^^^^^^^^
+AssertionError: 8080
