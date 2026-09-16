@@ -140,6 +140,10 @@ type ProposedCriterion struct {
 // returns is parsed through the same ParseCriteria the orchestrator uses, so a
 // criterion that would not have gated anything never reaches the ticket.
 // Propose returns the drafted checklist and what drafting it cost.
+//
+// It drafts from inside the repository with read-only tools, because criteria
+// are written about file contents. Given only a summary, a model asked to check
+// "the /* block is preserved" has to guess what that block currently says.
 func Propose(ctx context.Context, a Asker, model string, issue models.Issue, facts RepoFacts) ([]ProposedCriterion, float64, error) {
 	var costUSD float64
 	if model == "" {
@@ -157,7 +161,14 @@ func Propose(ctx context.Context, a Asker, model string, issue models.Issue, fac
 				"\nYour previous reply could not be parsed. Reply with the raw JSON array only: " +
 				"no prose, no code fence, no trailing commentary.\n"
 		}
-		answer, cost, err := a.Ask(ctx, model, prompt)
+		var answer string
+		var cost float64
+		var err error
+		if facts.Root != "" {
+			answer, cost, err = a.AskIn(ctx, model, prompt, facts.Root)
+		} else {
+			answer, cost, err = a.Ask(ctx, model, prompt)
+		}
 		costUSD += cost
 		if err != nil {
 			return nil, costUSD, err
@@ -205,6 +216,8 @@ func proposedToModels(in []ProposedCriterion) []models.Criterion {
 func proposePrompt(issue models.Issue, facts RepoFacts) string {
 	var b strings.Builder
 	b.WriteString("Write the done-when acceptance checklist for the ticket below.\n\n")
+	b.WriteString("You are in the repository and may read files with the read, glob and grep " +
+		"tools. Read whatever you need, then reply with the JSON array as your final message.\n\n")
 	b.WriteString("An orchestrator will run these checks mechanically to decide whether an " +
 		"agent's work is acceptable. Nothing the agent claims counts; only these do.\n\n")
 
@@ -235,6 +248,21 @@ max_diff_lines, tests_not_weakened. Globs take * within a segment and ** across.
 - Include a paths_within policy scoping the work, and tests_not_weakened
   whenever the repository has tests.
 - Prefer three to six criteria. Each must be independently checkable.
+
+## Write commands that can actually succeed
+
+A check that cannot pass is worse than no check: the work gets done, the ticket
+fails anyway, and every attempt is spent proving nothing.
+
+- Use the simplest command that expresses the check. grep -q, "grep -A1 PATTERN
+  FILE | grep -q PATTERN", test -f, and a build or test command cover nearly
+  everything.
+- Do not reach for awk, sed or multi-clause shell when grep or test will do.
+  An awk program of the form /x/{exit 0} END{exit 1} never exits 0, because
+  awk's exit runs the END block and the END block's exit code wins.
+- Before writing a command, ask what it returns on a repository where the work
+  IS already done. If you cannot say with confidence that it exits 0 there,
+  choose a simpler command.
 `)
 	return b.String()
 }

@@ -84,7 +84,10 @@ func usage() {
 
 Flags (daemon only):
   --queue STATE      state to pull from (default: Ready)
-  --poll DUR         how often to check the queue (default: 30s)
+  --watch            subscribe to Raenil's event stream; a ticket entering the
+                     queue state is picked up at once instead of on the next sweep
+  --poll DUR         reconcile sweep interval (default 30s, or 5m with --watch).
+                     The sweep is what makes a dropped event cost latency only.
   --concurrency N    tickets in flight (default: 1 — see docs/ORCHESTRATOR.md)
   --max-cost-hour U  halt once spend in a rolling hour exceeds this
   --stop-file PATH   kill switch; the daemon halts while it exists
@@ -113,6 +116,7 @@ Environment:
   OPENCODE_URL       running 'opencode serve', e.g. http://127.0.0.1:4096
   ORCHESTRATOR_MODEL default worker model, e.g. opencode-go/glm-5.3-flash
   ORCHESTRATOR_JUDGE_MODEL     model for judgment criteria (falls back to the escalate model)
+  ORCHESTRATOR_PROPOSE_MODEL   model for drafting criteria (falls back to the judge model)
   ORCHESTRATOR_ESCALATE_MODEL  stronger model for escalation — must beat the worker
                                model, or escalating achieves nothing
 `)
@@ -335,7 +339,8 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	escalateModel := fs.String("escalate-model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "stronger model")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	queue := fs.String("queue", "Ready", "state to pull from")
-	poll := fs.Duration("poll", 30*time.Second, "how often to check the queue")
+	watch := fs.Bool("watch", false, "subscribe to Raenil's event stream for instant pickup")
+	poll := fs.Duration("poll", 0, "reconcile sweep interval (default 30s, or 5m with --watch)")
 	concurrency := fs.Int("concurrency", 1, "tickets in flight")
 	maxAttempts := fs.Int("max-attempts", 3, "hard stop before handing back")
 	escalateAfter := fs.Int("escalate-after", 2, "attempt after which to escalate")
@@ -383,11 +388,21 @@ func cmdDaemon(ctx context.Context, args []string) error {
 		o.Judge = orchestrator.NewJudge(oc, jm)
 	}
 
+	// With a live event stream the sweep is only a backstop for dropped events,
+	// so it can be slow. Without one it is the only way work is ever noticed.
+	sweep := *poll
+	if sweep == 0 {
+		sweep = 30 * time.Second
+		if *watch {
+			sweep = 5 * time.Minute
+		}
+	}
 	d := &orchestrator.Daemon{
 		Orch: o,
 		Cfg: orchestrator.DaemonConfig{
 			ReadyState:    *queue,
-			PollInterval:  *poll,
+			Watch:         *watch,
+			PollInterval:  sweep,
 			MaxConcurrent: *concurrency,
 			MaxUSDPerHour: *maxCostHour,
 			StopFile:      *stopFile,
@@ -405,10 +420,20 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	return d.Run(ctx)
 }
 
+// firstSet returns the first environment variable of those named that is set.
+func firstSet(names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func cmdPropose(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("propose", flag.ExitOnError)
 	repo := fs.String("repo", ".", "repository the ticket will be worked in")
-	model := fs.String("model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "model to draft with")
+	model := fs.String("model", firstSet("ORCHESTRATOR_PROPOSE_MODEL", "ORCHESTRATOR_JUDGE_MODEL", "ORCHESTRATOR_ESCALATE_MODEL"), "model to draft with")
 	apply := fs.Bool("apply", false, "write the checklist to the ticket (default: print only)")
 	skipVerify := fs.Bool("skip-verify", false, "do not check that the criteria fail today")
 	pos, err := parsePermuted(fs, args)

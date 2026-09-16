@@ -265,3 +265,41 @@ func (r idleRunner2) Run(context.Context, RunRequest) (RunResult, error) {
 }
 
 var _ = json.Marshal
+
+// A criterion that fails every single attempt is usually an impossible command,
+// not unfinished work. The bounce has to say so, or a human re-reads the diff
+// looking for a fault that is in the check.
+func TestBounceNamesAlwaysFailingCriteria(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, idleRunner{})
+	o.Cfg.Model = "cheap/model"
+
+	if _, err := o.Work(context.Background(), "TST-1", WorkConfig{Triage: TriagePolicy{MaxAttempts: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	joined := strings.Join(f.comments, "\n")
+	if !strings.Contains(joined, "failed on all 2 attempts") {
+		t.Errorf("bounce should name what never passed:\n%s", joined)
+	}
+	if !strings.Contains(joined, "often the command rather than the code") {
+		t.Errorf("bounce should point at the command:\n%s", joined)
+	}
+}
+
+func TestAlwaysFailingNeedsMoreThanOneAttempt(t *testing.T) {
+	names := map[int]string{0: "build passes"}
+	// One attempt proves nothing about whether the check is satisfiable.
+	if got := alwaysFailing(map[int]int{0: 1}, names, 1); got != "" {
+		t.Errorf("single attempt should not accuse the command, got %q", got)
+	}
+	// Failing twice out of two is the signal.
+	if got := alwaysFailing(map[int]int{0: 2}, names, 2); !strings.Contains(got, "build passes") {
+		t.Errorf("expected the criterion to be named, got %q", got)
+	}
+	// Failing once out of two is ordinary flakiness, not an impossible check.
+	if got := alwaysFailing(map[int]int{0: 1}, names, 2); got != "" {
+		t.Errorf("intermittent failure should not accuse the command, got %q", got)
+	}
+}

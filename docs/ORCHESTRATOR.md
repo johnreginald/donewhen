@@ -195,6 +195,25 @@ is a good way to steal live work from a busy machine.
 On start the daemon reclaims dead leases, returns those tickets to the queue with a
 comment, and removes the worktrees they left behind.
 
+### Event-driven pickup
+
+```bash
+orchestrator daemon --queue "In Progress" --watch --poll 10m ...
+```
+
+`--watch` subscribes to Raenil's `/api/events`. A ticket entering the queue state is
+picked up in the same second, so moving a card is the trigger — no waiting for a poll.
+
+Pointing `--queue` at `In Progress` makes the board the interface: you or Claude Code
+drag a ticket across, the orchestrator takes it from there and moves it to `In Review`.
+
+**The sweep still matters, and `--watch` does not replace it.** Raenil's bus drops
+events for a slow consumer by design, and a dropped connection loses whatever happened
+while it was down. So an event only ever *wakes a sweep*; it is never itself treated as
+a work item, and the tracker's actual state is the only thing trusted to say what needs
+doing. A lost event costs latency and nothing else. With `--watch` the sweep can be
+slow (5m by default); without it, the sweep is the only way work is ever noticed.
+
 ### Which tickets the daemon takes
 
 By default it takes everything in the queue, and reports once on any ticket it cannot

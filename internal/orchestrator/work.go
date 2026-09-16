@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -43,6 +44,12 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 	var last Verdict
 	var spec AttemptSpec
 	var totalCost float64
+	// Which criteria failed, and how often. A criterion that fails on every
+	// attempt while the rest pass is usually an unsatisfiable check rather than
+	// unfinished work, and saying so saves a human re-reading the diff.
+	failures := map[int]int{}
+	names := map[int]string{}
+	attempts := 0
 
 	for attempt := 1; attempt <= wc.Triage.MaxAttempts; attempt++ {
 		spec.Attempt = attempt
@@ -53,6 +60,13 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 		}
 		last = v
 		totalCost += v.CostUSD
+		attempts++
+		for _, e := range ev {
+			names[e.CriterionIndex] = e.CriterionText
+		}
+		for _, i := range v.Failed {
+			failures[i]++
+		}
 
 		d := wc.Triage.Decide(v, ev)
 
@@ -69,6 +83,9 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 			return v, nil
 
 		case ActionBounce:
+			if hint := alwaysFailing(failures, names, attempts); hint != "" {
+				d.Reason += "\n\n" + hint
+			}
 			if err := o.bounce(ctx, ref, wc, d.Reason); err != nil {
 				o.logf("warning: bounce incomplete: %v", err)
 			}
@@ -92,8 +109,11 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 
 	// Falling out of the loop means the last attempt asked to continue but there
 	// are no attempts left.
-	if err := o.bounce(ctx, ref, wc,
-		fmt.Sprintf("%d attempts did not satisfy the criteria", wc.Triage.MaxAttempts)); err != nil {
+	reason := fmt.Sprintf("%d attempts did not satisfy the criteria", wc.Triage.MaxAttempts)
+	if hint := alwaysFailing(failures, names, attempts); hint != "" {
+		reason += "\n\n" + hint
+	}
+	if err := o.bounce(ctx, ref, wc, reason); err != nil {
 		o.logf("warning: bounce incomplete: %v", err)
 	}
 	last.Next = string(ActionBounce)
@@ -124,4 +144,29 @@ func (o *Orchestrator) bounce(ctx context.Context, ref string, wc WorkConfig, re
 		return fmt.Errorf("%s", strings.Join(problems, "; "))
 	}
 	return nil
+}
+
+// alwaysFailing names criteria that failed on every single attempt.
+//
+// Work that is simply hard fails intermittently; a check that is impossible
+// fails identically every time. Naming the difference is the difference between
+// a human re-reading the code and a human re-reading the command.
+func alwaysFailing(failures map[int]int, names map[int]string, attempts int) string {
+	if attempts < 2 {
+		return ""
+	}
+	var stuck []string
+	for idx, n := range failures {
+		if n == attempts {
+			stuck = append(stuck, fmt.Sprintf("  - %q", names[idx]))
+		}
+	}
+	if len(stuck) == 0 {
+		return ""
+	}
+	sort.Strings(stuck)
+	return fmt.Sprintf("These failed on all %d attempts:\n%s\n\n"+
+		"A criterion that never once passes is often the command rather than the code. "+
+		"Check it exits 0 on a repository where the work is already done.",
+		attempts, strings.Join(stuck, "\n"))
 }

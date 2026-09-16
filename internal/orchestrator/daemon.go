@@ -31,6 +31,14 @@ type DaemonConfig struct {
 	// canonical value is "ready-for-agent": a ticket can be Ready for a human
 	// without being work an orchestrator should take.
 	RequireLabel string
+	// Watch subscribes to Raenil's event stream so a ticket entering the queue
+	// state is picked up at once rather than on the next sweep.
+	//
+	// An event only ever wakes a sweep; it is never itself treated as a work
+	// item. Raenil's bus drops events for a slow consumer by design, and a
+	// dropped connection loses whatever happened while it was down — so a lost
+	// event has to cost latency and nothing else.
+	Watch bool
 	// Work configures each ticket's attempt loop.
 	Work WorkConfig
 }
@@ -89,67 +97,103 @@ func (d *Daemon) Run(ctx context.Context) error {
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
 
-	d.Orch.logf("daemon up: queue=%q poll=%s concurrency=%d budget=$%.2f/h stop=%s",
+	d.Orch.logf("daemon up: queue=%q sweep=%s concurrency=%d budget=$%.2f/h stop=%s",
 		cfg.ReadyState, cfg.PollInterval, cfg.MaxConcurrent, cfg.MaxUSDPerHour, cfg.StopFile)
+
+	// A buffered wake channel: many events close together collapse into one
+	// sweep, which is all any of them would have caused anyway.
+	wake := make(chan string, 64)
+	if cfg.Watch {
+		go func() {
+			err := d.Orch.Raenil.WatchIssues(ctx, func(e IssueEvent) {
+				if !e.EnteredState(cfg.ReadyState) || e.Key() == "" {
+					return
+				}
+				select {
+				case wake <- e.Key():
+				default: // a sweep is already pending; nothing to add
+				}
+			})
+			if err != nil && ctx.Err() == nil {
+				d.Orch.logf("event stream stopped: %v (sweeps continue)", err)
+			}
+		}()
+		d.Orch.logf("watching for tickets entering %q", cfg.ReadyState)
+	}
 
 	for {
 		if halt, reason := d.shouldHalt(cfg); halt {
 			d.Orch.logf("halting: %s", reason)
 			return nil
 		}
-
-		issues, err := d.Orch.Raenil.IssuesInState(ctx, cfg.ReadyState, 50)
-		if err != nil {
-			d.Orch.logf("queue read failed: %v", err)
-		}
-		for _, issue := range issues {
-			if d.undecidable[issue.Key] {
-				continue
-			}
-			if cfg.RequireLabel != "" && !hasLabel(issue, cfg.RequireLabel) {
-				continue
-			}
-			if halt, reason := d.shouldHalt(cfg); halt {
-				d.Orch.logf("halting: %s", reason)
-				return nil
-			}
-			lease, err := d.Leases.Acquire(issue.Key)
-			if errors.Is(err, ErrLeased) {
-				continue
-			}
-			if err != nil {
-				d.Orch.logf("lease %s failed: %v", issue.Key, err)
-				continue
-			}
-
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				_ = lease.Release()
-				return ctx.Err()
-			}
-
-			wg.Add(1)
-			go func(key string, l *Lease) {
-				defer wg.Done()
-				defer func() { <-sem }()
-				defer l.Release()
-
-				stop := make(chan struct{})
-				defer close(stop)
-				go l.KeepAlive(stop)
-
-				d.workOne(ctx, key, cfg)
-			}(issue.Key, lease)
+		if stop := d.sweep(ctx, cfg, sem, &wg); stop {
+			return nil
 		}
 
 		select {
 		case <-ctx.Done():
 			d.Orch.logf("shutting down, releasing leases")
 			return nil
+		case key := <-wake:
+			d.Orch.logf("woken by %s", key)
 		case <-ticker.C:
 		}
 	}
+}
+
+// sweep claims and starts every workable ticket currently in the queue state,
+// returning true when the daemon should stop.
+//
+// Event-driven or not, everything goes through here: the tracker's actual state
+// is the only thing trusted to say what needs doing, so a lost event costs a
+// little latency and never a missed ticket.
+func (d *Daemon) sweep(ctx context.Context, cfg DaemonConfig, sem chan struct{}, wg *sync.WaitGroup) bool {
+	issues, err := d.Orch.Raenil.IssuesInState(ctx, cfg.ReadyState, 50)
+	if err != nil {
+		d.Orch.logf("queue read failed: %v", err)
+		return false
+	}
+	for _, issue := range issues {
+		if d.undecidable[issue.Key] {
+			continue
+		}
+		if cfg.RequireLabel != "" && !hasLabel(issue, cfg.RequireLabel) {
+			continue
+		}
+		if halt, reason := d.shouldHalt(cfg); halt {
+			d.Orch.logf("halting: %s", reason)
+			return true
+		}
+		lease, err := d.Leases.Acquire(issue.Key)
+		if errors.Is(err, ErrLeased) {
+			continue
+		}
+		if err != nil {
+			d.Orch.logf("lease %s failed: %v", issue.Key, err)
+			continue
+		}
+
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			_ = lease.Release()
+			return true
+		}
+
+		wg.Add(1)
+		go func(key string, l *Lease) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			defer l.Release()
+
+			stop := make(chan struct{})
+			defer close(stop)
+			go l.KeepAlive(stop)
+
+			d.workOne(ctx, key, cfg)
+		}(issue.Key, lease)
+	}
+	return false
 }
 
 // workOne runs a single ticket to completion, serialised per repository.
