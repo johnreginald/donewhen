@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"raenil/internal/models"
 )
 
 // DaemonConfig tunes unattended operation.
@@ -25,6 +27,10 @@ type DaemonConfig struct {
 	// StopFile halts the daemon when it exists — a kill switch that needs no
 	// signal, no port, and no access to the process.
 	StopFile string
+	// RequireLabel, when set, restricts the queue to issues carrying it. The
+	// canonical value is "ready-for-agent": a ticket can be Ready for a human
+	// without being work an orchestrator should take.
+	RequireLabel string
 	// Work configures each ticket's attempt loop.
 	Work WorkConfig
 }
@@ -54,6 +60,11 @@ type Daemon struct {
 	Cfg    DaemonConfig
 
 	spend spendWindow
+	// undecidable remembers tickets that failed pre-flight, so the daemon logs
+	// the reason once instead of re-attempting them on every poll. A ticket the
+	// orchestrator cannot decide is not necessarily a broken ticket — it may
+	// simply be a human's to do — so it is skipped, not bounced.
+	undecidable map[string]bool
 	// repoLock serialises work on one repository. Concurrency across separate
 	// repositories is safe; concurrency within one is not.
 	repoLock sync.Mutex
@@ -92,6 +103,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 			d.Orch.logf("queue read failed: %v", err)
 		}
 		for _, issue := range issues {
+			if d.undecidable[issue.Key] {
+				continue
+			}
+			if cfg.RequireLabel != "" && !hasLabel(issue, cfg.RequireLabel) {
+				continue
+			}
 			if halt, reason := d.shouldHalt(cfg); halt {
 				d.Orch.logf("halting: %s", reason)
 				return nil
@@ -149,7 +166,13 @@ func (d *Daemon) workOne(ctx context.Context, key string, cfg DaemonConfig) {
 	d.Orch.logf("--- %s", key)
 	v, err := d.Orch.Work(ctx, key, cfg.Work)
 	if err != nil {
-		d.Orch.logf("%s failed: %v", key, err)
+		d.Orch.logf("%s skipped: %v", key, err)
+		// Pre-flight refusals are a property of the ticket, not a transient
+		// failure, so stop reconsidering it until the daemon restarts.
+		if d.undecidable == nil {
+			d.undecidable = map[string]bool{}
+		}
+		d.undecidable[key] = true
 		return
 	}
 	d.spend.add(v.CostUSD)
@@ -278,4 +301,14 @@ func (w *spendWindow) total(window time.Duration) float64 {
 	}
 	w.entries = kept
 	return sum
+}
+
+// hasLabel reports whether an issue carries a label by name.
+func hasLabel(issue models.Issue, name string) bool {
+	for _, l := range issue.Labels {
+		if strings.EqualFold(l.Name, name) {
+			return true
+		}
+	}
+	return false
 }

@@ -100,6 +100,10 @@ type BenchOptions struct {
 	Timeout time.Duration
 	// RunRoot receives per-run evidence, if set.
 	RunRoot string
+	// HideGuards removes the policy criteria and the anti-cheating rule from the
+	// worker's prompt. Research only: it measures whether models behave honestly
+	// because they are honest or because they were told they are being watched.
+	HideGuards bool
 	// Log receives progress lines.
 	Log func(string, ...any)
 }
@@ -183,8 +187,12 @@ func runOneBench(ctx context.Context, task BenchTask, model string, runner Runne
 	if runDir != nil {
 		logPath = runDir.File("worker.log")
 	}
+	prompt := BuildPrompt(issue, parsed)
+	if opts.HideGuards {
+		prompt = BuildPromptWithoutGuards(issue, parsed)
+	}
 	rr, runErr := runner.Run(ctx, RunRequest{
-		Prompt:  BuildPrompt(issue, parsed),
+		Prompt:  prompt,
 		Cwd:     work,
 		Model:   model,
 		Timeout: opts.Timeout,

@@ -188,3 +188,54 @@ func waitFor(t *testing.T, limit time.Duration, cond func() bool, what string) {
 	}
 	t.Fatalf("timed out waiting for %s", what)
 }
+
+// A ticket the orchestrator cannot decide must be reported once and then left
+// alone, not re-attempted on every poll.
+func TestDaemonSkipsUndecidableTicketsAfterOneReport(t *testing.T) {
+	f := &fakeRaenil{
+		criteria: []models.Criterion{{ID: "cr-1", Body: "someone looks at it", Kind: models.CriterionManual}},
+		queue:    queued(),
+	}
+	d := newDaemon(t, f, fixRunner{})
+	d.Cfg.PollInterval = 10 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	_ = d.Run(ctx)
+
+	if !d.undecidable["TST-1"] {
+		t.Error("an undecidable ticket should be remembered")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.states) != 0 {
+		t.Errorf("an undecidable ticket must not be claimed or moved, states = %v", f.states)
+	}
+}
+
+func TestDaemonRequireLabelFiltersTheQueue(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria(), queue: queued()} // queued issue has no labels
+	d := newDaemon(t, f, fixRunner{})
+	d.Cfg.PollInterval = 10 * time.Millisecond
+	d.Cfg.RequireLabel = "ready-for-agent"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_ = d.Run(ctx)
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.states) != 0 {
+		t.Errorf("an unlabelled ticket must be left alone, states = %v", f.states)
+	}
+}
+
+func TestHasLabel(t *testing.T) {
+	is := models.Issue{Labels: []models.Label{{Name: "repo:web"}, {Name: "ready-for-agent"}}}
+	if !hasLabel(is, "ready-for-agent") || !hasLabel(is, "READY-FOR-AGENT") {
+		t.Error("label match should be case-insensitive")
+	}
+	if hasLabel(is, "needs-info") {
+		t.Error("unexpected match")
+	}
+}

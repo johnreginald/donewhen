@@ -30,6 +30,7 @@ is not.
 | command | what it does |
 |---|---|
 | `health` | tracker and agent reachable? |
+| `propose <TICKET>` | draft a typed checklist for a ticket (`--apply` to write it) |
 | `check <TICKET>` | evaluate the criteria against the repo as it stands — no agent, no cost |
 | `run <TICKET>` | one attempt |
 | `work <TICKET>` | attempt, triage, retry/escalate, or hand back |
@@ -42,6 +43,25 @@ Start with `check`. It runs the whole flow with no agent, so a checklist can be
 validated against a real repository before any money is spent on it.
 
 ## Writing done-when criteria
+
+Writing these by hand is the slow part — an agent fixed a ticket in 31 seconds
+for under a cent, while its criteria took far longer to write. `orchestrator
+propose` drafts them:
+
+```bash
+orchestrator propose PP-176 --repo ~/Project/my-project          # print only
+orchestrator propose PP-176 --repo ~/Project/my-project --apply  # write to the ticket
+```
+
+It reads the repository's real build surface first — package.json scripts, Makefile
+targets, lockfile, whether a test script exists at all — because a model asked to write
+verification commands without that invents plausible ones that do not exist.
+
+The model drafts; it does not approve. Every draft goes through the same parser the
+orchestrator uses, a draft with nothing machine-checkable is refused, and the
+deterministic checks are then run against the repository as it stands. Each should
+**fail** — a criterion that already passes gates nothing.
+
 
 A criterion says not just what "done" means but how that is verified.
 
@@ -153,6 +173,18 @@ is a good way to steal live work from a busy machine.
 
 On start the daemon reclaims dead leases, returns those tickets to the queue with a
 comment, and removes the worktrees they left behind.
+
+### Which tickets the daemon takes
+
+By default it takes everything in the queue, and reports once on any ticket it cannot
+decide — a ticket can be Ready for a human without being work an orchestrator should
+take. Those are skipped thereafter rather than re-attempted every poll.
+
+To be explicit instead, use the canonical triage label:
+
+```bash
+orchestrator daemon --require-label ready-for-agent ...
+```
 
 ### Concurrency
 

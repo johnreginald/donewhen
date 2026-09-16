@@ -88,6 +88,7 @@ Flags (daemon only):
   --concurrency N    tickets in flight (default: 1 — see docs/ORCHESTRATOR.md)
   --max-cost-hour U  halt once spend in a rolling hour exceeds this
   --stop-file PATH   kill switch; the daemon halts while it exists
+  --require-label L  only take issues carrying this label (e.g. ready-for-agent)
 
 Flags (work only):
   --max-attempts N   hard stop before handing back to a human (default: 3)
@@ -335,6 +336,7 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	maxCost := fs.Float64("max-cost", 0, "per-ticket cost ceiling")
 	maxCostHour := fs.Float64("max-cost-hour", 0, "rolling hourly cost ceiling")
 	stopFile := fs.String("stop-file", "", "kill switch path (default: <run-root>/STOP)")
+	requireLabel := fs.String("require-label", "", "only take issues carrying this label, e.g. ready-for-agent")
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -383,6 +385,7 @@ func cmdDaemon(ctx context.Context, args []string) error {
 			MaxConcurrent: *concurrency,
 			MaxUSDPerHour: *maxCostHour,
 			StopFile:      *stopFile,
+			RequireLabel:  *requireLabel,
 			Work: orchestrator.WorkConfig{
 				Triage: orchestrator.TriagePolicy{
 					MaxAttempts:   *maxAttempts,
@@ -474,6 +477,7 @@ func cmdBench(ctx context.Context, args []string) error {
 	only := fs.String("only", "", "run just this task")
 	asJSON := fs.Bool("json", false, "print results as JSON")
 	dryRun := fs.Bool("dry-run", false, "evaluate the fixtures with no agent, to check the criteria themselves")
+	hideGuards := fs.Bool("hide-guards", false, "hide the policy criteria and anti-cheating rule from the worker (research only)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -516,9 +520,10 @@ func cmdBench(ctx context.Context, args []string) error {
 	}
 
 	results := orchestrator.RunBench(ctx, tasks, modelList, runner, orchestrator.BenchOptions{
-		Timeout: *timeout,
-		RunRoot: *runRoot,
-		Log:     func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
+		Timeout:    *timeout,
+		RunRoot:    *runRoot,
+		HideGuards: *hideGuards,
+		Log:        func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	})
 
 	fmt.Println()
