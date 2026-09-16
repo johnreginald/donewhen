@@ -99,6 +99,11 @@ Flags (daemon only):
   --stop-file PATH   kill switch; the daemon halts while it exists
   --require-label L  only take issues carrying this label (e.g. ready-for-agent)
 
+Flags (work/verify/finish/propose):
+  --runner NAME      default worker: opencode or codex. A runner: label on the
+                     ticket overrides it, so a ticket can pick its own agent.
+  --asker NAME       who answers judgment criteria and drafts checklists
+
 Flags (run/work):
   --handoff          stop after the worker: commit its work, keep the worktree,
                      and leave the ticket alone so a reviewer takes it from there
@@ -170,6 +175,35 @@ func parsePermuted(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// runnerPool builds every runner this machine can drive. A ticket picks one with
+// a runner: label; anything unlabelled uses the default.
+func runnerPool(ctx context.Context, oc *orchestrator.OpenCodeRunner) orchestrator.RunnerSet {
+	set := orchestrator.RunnerSet{}
+	if oc != nil && oc.BaseURL != "" {
+		set["opencode"] = oc
+	}
+	cx := &orchestrator.CodexRunner{}
+	if err := cx.Available(ctx); err == nil {
+		set["codex"] = cx
+	}
+	return set
+}
+
+// pickAsker chooses who answers judgment criteria and drafts checklists.
+func pickAsker(name string, oc *orchestrator.OpenCodeRunner) (orchestrator.Asker, error) {
+	switch strings.ToLower(name) {
+	case "", "opencode":
+		if oc == nil || oc.BaseURL == "" {
+			return nil, fmt.Errorf("OPENCODE_URL must be set to use the opencode asker")
+		}
+		return oc, nil
+	case "codex":
+		return &orchestrator.CodexRunner{}, nil
+	default:
+		return nil, fmt.Errorf("unknown asker %q (opencode, codex)", name)
+	}
+}
+
 func cmdHealth(ctx context.Context) error {
 	rc, oc, err := clients()
 	if err != nil {
@@ -193,6 +227,13 @@ func cmdHealth(ctx context.Context) error {
 	} else {
 		fmt.Printf("opencode  %-10s %s (%s)\n", "ok", oc.BaseURL, v)
 	}
+	cx := &orchestrator.CodexRunner{}
+	if err := cx.Available(ctx); err != nil {
+		fmt.Printf("codex     %-10s %s\n", "SKIP", err)
+	} else {
+		fmt.Printf("codex     %-10s installed and logged in\n", "ok")
+	}
+
 	if !ok {
 		return fmt.Errorf("one or more dependencies are unreachable")
 	}
@@ -210,6 +251,8 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	handoff := fs.Bool("handoff", false, "stop after the worker: commit its work, keep the worktree, leave the ticket alone")
+	runnerName := fs.String("runner", "opencode", "default worker: opencode or codex (a runner: label on the ticket wins)")
+	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode or codex")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -234,6 +277,12 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	}
 
 	var runner orchestrator.Runner = oc
+	pool := runnerPool(ctx, oc)
+	if r, ok := pool[strings.ToLower(*runnerName)]; ok {
+		runner = r
+	} else if *runnerName != "opencode" {
+		return fmt.Errorf("runner %q is not available (have: %s)", *runnerName, strings.Join(pool.Names(), ", "))
+	}
 	if checkOnly {
 		runner = noopRunner{}
 	}
@@ -252,7 +301,11 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
 	if *judgeModel != "" {
-		o.Judge = orchestrator.NewJudge(oc, *judgeModel)
+		asker, aerr := pickAsker(*askerName, oc)
+		if aerr != nil {
+			return aerr
+		}
+		o.Judge = orchestrator.NewJudge(asker, *judgeModel)
 	}
 
 	v, err := o.RunTicket(ctx, ticket, *attempt)
@@ -285,6 +338,8 @@ func cmdWork(ctx context.Context, args []string) error {
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	handoff := fs.Bool("handoff", false, "stop after the worker: commit its work, keep the worktree, leave the ticket alone")
+	runnerName := fs.String("runner", "opencode", "default worker: opencode or codex (a runner: label on the ticket wins)")
+	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode or codex")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -322,8 +377,18 @@ func cmdWork(ctx context.Context, args []string) error {
 		Leases: &orchestrator.LeaseManager{Dir: filepath.Join(*runRoot, "leases")},
 		Log:    func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
+	o.Runners = runnerPool(ctx, oc)
+	if r, ok := o.Runners[strings.ToLower(*runnerName)]; ok {
+		o.Runner = r
+	} else if *runnerName != "opencode" {
+		return fmt.Errorf("runner %q is not available (have: %s)", *runnerName, strings.Join(o.Runners.Names(), ", "))
+	}
 	if jm != "" {
-		o.Judge = orchestrator.NewJudge(oc, jm)
+		asker, aerr := pickAsker(*askerName, oc)
+		if aerr != nil {
+			return aerr
+		}
+		o.Judge = orchestrator.NewJudge(asker, jm)
 	}
 
 	v, err := o.Work(ctx, ticket, orchestrator.WorkConfig{
@@ -404,6 +469,10 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	if jm != "" {
 		o.Judge = orchestrator.NewJudge(oc, jm)
 	}
+	o.Runners = runnerPool(ctx, oc)
+	if len(o.Runners) > 1 {
+		o.Log("runners available: %s (a runner: label on a ticket picks one)", strings.Join(o.Runners.Names(), ", "))
+	}
 
 	// With a live event stream the sweep is only a backstop for dropped events,
 	// so it can be slow. Without one it is the only way work is ever noticed.
@@ -453,6 +522,7 @@ func cmdPropose(ctx context.Context, args []string) error {
 	model := fs.String("model", firstSet("ORCHESTRATOR_PROPOSE_MODEL", "ORCHESTRATOR_JUDGE_MODEL", "ORCHESTRATOR_ESCALATE_MODEL"), "model to draft with")
 	apply := fs.Bool("apply", false, "write the checklist to the ticket (default: print only)")
 	skipVerify := fs.Bool("skip-verify", false, "do not check that the criteria fail today")
+	askerName := fs.String("asker", "opencode", "who drafts: opencode or codex")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -483,7 +553,11 @@ func cmdPropose(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("drafting criteria for %s with %s\n\n", issue.Key, *model)
 
-	items, cost, err := orchestrator.Propose(ctx, oc, *model, issue, facts)
+	asker, aerr := pickAsker(*askerName, oc)
+	if aerr != nil {
+		return aerr
+	}
+	items, cost, err := orchestrator.Propose(ctx, asker, *model, issue, facts)
 	if err != nil {
 		return fmt.Errorf("%w (spent $%.4f)", err, cost)
 	}
@@ -632,6 +706,7 @@ func cmdReview(ctx context.Context, args []string, finish bool) error {
 	baseRef := fs.String("base", "HEAD", "what the worktree branched from")
 	attempt := fs.Int("attempt", 90, "run directory to write evidence into")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
+	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode or codex")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
@@ -653,8 +728,12 @@ func cmdReview(ctx context.Context, args []string, finish bool) error {
 		},
 		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) },
 	}
-	if *judgeModel != "" && oc.BaseURL != "" {
-		o.Judge = orchestrator.NewJudge(oc, *judgeModel)
+	if *judgeModel != "" {
+		asker, aerr := pickAsker(*askerName, oc)
+		if aerr != nil {
+			return aerr
+		}
+		o.Judge = orchestrator.NewJudge(asker, *judgeModel)
 	}
 
 	var v orchestrator.Verdict

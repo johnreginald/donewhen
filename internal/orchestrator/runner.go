@@ -43,6 +43,22 @@ type RunRequest struct {
 	ReadOnlyTools bool
 }
 
+// modelAware is an optional Runner interface for backends that do not take the
+// configured model string at face value. Reporting what a runner will actually
+// use keeps the log honest: "running codex on opencode-go/glm-5.3-flash" names
+// a model Codex never sees.
+type modelAware interface {
+	EffectiveModel(requested string) string
+}
+
+// effectiveModel reports the model a runner will really use.
+func effectiveModel(r Runner, requested string) string {
+	if m, ok := r.(modelAware); ok {
+		return m.EffectiveModel(requested)
+	}
+	return requested
+}
+
 // DefaultRunTimeout bounds an attempt that does not set its own. Every runner
 // call is bounded: an unbounded one wedges the daemon with no diagnostic.
 const DefaultRunTimeout = 30 * time.Minute
@@ -63,6 +79,10 @@ type RunResult struct {
 	// CostUSD and Tokens feed the verdict and the daemon's budget guard.
 	CostUSD float64
 	Tokens  int
+	// CostUnknown means this runner cannot report what it spent — Codex bills
+	// against a subscription, not per call. A budget ceiling cannot police what
+	// it cannot see, so this is surfaced rather than passed off as zero.
+	CostUnknown bool
 	// Questions holds anything the agent asked. A daemon cannot answer, so these
 	// become the escalation payload rather than a hang.
 	Questions []string

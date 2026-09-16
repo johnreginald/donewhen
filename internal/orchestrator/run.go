@@ -63,6 +63,9 @@ type Orchestrator struct {
 	// Leases, when set, claims a ticket for the duration of Work so two runs
 	// cannot take the same one. The daemon always sets it; a hand-run should too.
 	Leases *LeaseManager
+	// Runners is the pool a ticket may choose from with a runner: label. Empty
+	// means every ticket uses Runner.
+	Runners RunnerSet
 	// Log receives progress lines. Nil discards them.
 	Log func(string, ...any)
 }
@@ -174,8 +177,16 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if spec.Model != "" {
 		model = spec.Model
 	}
-	o.logf("running %s on %s", o.Runner.Name(), model)
-	res, runErr := o.Runner.Run(ctx, RunRequest{
+	runner := o.Runner
+	if len(o.Runners) > 0 {
+		chosen, rerr := o.Runners.RunnerFor(issue, o.Runner)
+		if rerr != nil {
+			return v, nil, rerr
+		}
+		runner = chosen
+	}
+	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
+	res, runErr := runner.Run(ctx, RunRequest{
 		Prompt:    prompt,
 		Cwd:       wtPath,
 		Model:     model,
@@ -186,8 +197,13 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if runErr != nil {
 		o.logf("runner error: %v", runErr)
 	}
-	o.logf("worker finished: exit=%d aborted=%v cost=$%.4f tokens=%d",
-		res.Exit, res.Aborted, res.CostUSD, res.Tokens)
+	if res.CostUnknown {
+		o.logf("worker finished: exit=%d aborted=%v cost=UNREPORTED (%s bills against a subscription) tokens=%d",
+			res.Exit, res.Aborted, runner.Name(), res.Tokens)
+	} else {
+		o.logf("worker finished: exit=%d aborted=%v cost=$%.4f tokens=%d",
+			res.Exit, res.Aborted, res.CostUSD, res.Tokens)
+	}
 
 	// A question the worker asked is the escalation payload, not a stall.
 	if len(res.Questions) > 0 {
@@ -237,7 +253,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 
 	v = Summarise(issue.Key, attempt, criteria, evidence, diff)
-	v.Runner, v.Model = o.Runner.Name(), model
+	v.Runner, v.Model = runner.Name(), model
 	v.CostUSD += res.CostUSD // Summarise already counted what evaluation spent
 	v.DurationS = int64(res.Duration.Seconds())
 	v.SessionID, v.Questions = res.SessionID, res.Questions
