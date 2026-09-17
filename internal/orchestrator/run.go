@@ -226,6 +226,34 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		return v, nil, err
 	}
 	wtPath := filepath.Join(cfg.RunRoot, "worktrees", fmt.Sprintf("%s-%d", issue.Key, attempt))
+	// ABSOLUTE, against the repo, and the reason is a silent failure worth
+	// keeping written down.
+	//
+	// RunRoot defaults to ".orchestrator", so this path is relative. Every
+	// git call below is fine with that — `git -C <repo> worktree add` and the
+	// later commands resolve it against the REPO, which is where the worktree
+	// really lands. But the same string is handed to the worker as its `Cwd`,
+	// and a runner resolves it against ITS OWN working directory. Running the
+	// orchestrator from anywhere other than the repo therefore pointed the
+	// worker at a directory that did not exist.
+	//
+	// opencode does not refuse that. It creates the session, accepts the
+	// prompt with a 204, records the user message — and the assistant comes
+	// back with zero parts, zero tokens and no error, so the poll loop spins
+	// to the timeout and the ticket looks like a slow agent rather than a
+	// broken one. Two models and two projects burned an hour each that way.
+	//
+	// `os.RemoveAll` below had the same bug with worse consequences: a
+	// relative path there deletes whatever sits at that name under the
+	// orchestrator's own cwd.
+	if !filepath.IsAbs(wtPath) {
+		abs, aerr := filepath.Abs(filepath.Join(cfg.Repo, wtPath))
+		if aerr != nil {
+			releaseClaim("could not resolve the worktree path")
+			return v, nil, fmt.Errorf("resolve worktree path: %w", aerr)
+		}
+		wtPath = abs
+	}
 	_ = os.RemoveAll(wtPath)
 	wt, err := AddWorktree(ctx, cfg.Repo, wtPath, branch, cfg.BaseRef)
 	if err != nil {
