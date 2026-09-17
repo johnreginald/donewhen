@@ -164,20 +164,36 @@ func (d *Daemon) sweep(ctx context.Context, cfg DaemonConfig, sem chan struct{},
 			d.Orch.logf("halting: %s", reason)
 			return true
 		}
-		lease, err := d.Leases.Acquire(issue.Key)
-		if errors.Is(err, ErrLeased) {
-			continue
-		}
-		if err != nil {
-			d.Orch.logf("lease %s failed: %v", issue.Key, err)
-			continue
-		}
-
+		// Take the slot BEFORE claiming the ticket. Claiming first means
+		// holding a lease you cannot start, and nothing beats that lease:
+		// KeepAlive only runs inside the worker goroutine below, so the
+		// heartbeat sits frozen at the moment of acquisition.
+		//
+		// Two costs. `status` shows a lease going ever more stale for a
+		// ticket that is merely queued, which is indistinguishable from a
+		// crashed worker — exactly the reading that sent somebody looking
+		// for a bug that was not there. And `stale()` judges ANOTHER host's
+		// lease on the heartbeat alone, having no process to check, so past
+		// the TTL a second machine would reclaim a ticket this one is about
+		// to work.
+		//
+		// It also explains the arithmetic: with --concurrency 2 the daemon
+		// claimed three tickets in the same microsecond, because acquisition
+		// was never the thing being limited.
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
-			_ = lease.Release()
 			return true
+		}
+
+		lease, err := d.Leases.Acquire(issue.Key)
+		if err != nil {
+			<-sem
+			if errors.Is(err, ErrLeased) {
+				continue
+			}
+			d.Orch.logf("lease %s failed: %v", issue.Key, err)
+			continue
 		}
 
 		wg.Add(1)
