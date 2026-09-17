@@ -302,7 +302,9 @@ func VerifyCriteriaFailToday(ctx context.Context, repo string, items []ProposedC
 	}
 	defer os.RemoveAll(dir)
 
-	ev := &Evaluator{WorkDir: repo, Dir: nil}
+	// WorkDir and RepoDir are the same here: propose verifies criteria against
+	// the repository as it stands, with no worktree in between.
+	ev := &Evaluator{WorkDir: repo, RepoDir: repo, Dir: nil}
 	var out []string
 	for _, c := range parsed {
 		if c.Kind != models.CriterionDeterministic {

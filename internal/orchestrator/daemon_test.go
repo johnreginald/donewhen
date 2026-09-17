@@ -249,9 +249,12 @@ type blockingRunner struct {
 	once    sync.Once
 }
 
-func (blockingRunner) Name() string                           { return "blocking" }
-func (blockingRunner) Ready(context.Context, string) error    { return nil }
-func (blockingRunner) Health(context.Context) (string, error) { return "ok", nil }
+// Pointer receivers throughout: the struct holds a sync.Once, and a value
+// receiver copies it — `go vet` calls that out, and it would silently give
+// each call its own Once.
+func (*blockingRunner) Name() string                           { return "blocking" }
+func (*blockingRunner) Ready(context.Context, string) error    { return nil }
+func (*blockingRunner) Health(context.Context) (string, error) { return "ok", nil }
 
 func (r *blockingRunner) Run(ctx context.Context, _ RunRequest) (RunResult, error) {
 	r.once.Do(func() { close(r.started) })

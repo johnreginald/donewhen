@@ -340,6 +340,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 	ev := &Evaluator{
 		WorkDir: wtPath,
+		RepoDir: cfg.Repo,
 		Dir:     runDir,
 		Judge:   o.Judge,
 		OnEvidence: func(e Evidence) {

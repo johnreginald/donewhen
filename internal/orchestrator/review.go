@@ -77,6 +77,7 @@ func (o *Orchestrator) Verify(ctx context.Context, ref string, attempt int) (Ver
 	}
 	ev := &Evaluator{
 		WorkDir: wtPath,
+		RepoDir: cfg.Repo,
 		Dir:     runDir,
 		Judge:   o.Judge,
 		OnEvidence: func(e Evidence) {
