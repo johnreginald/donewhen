@@ -36,6 +36,20 @@ func (c Config) withDefaults() Config {
 	if c.RunRoot == "" {
 		c.RunRoot = ".orchestrator"
 	}
+	// Absolute, against the repo, once — so runs, leases and worktrees all
+	// name the same place whatever directory the process was started from.
+	//
+	// The default is relative, and a relative RunRoot means every consumer
+	// resolves it against its own cwd. That is how `orchestrator status`
+	// came to report "no tickets held" while three leases were live: it was
+	// run from a different directory and read an empty leases folder. A
+	// status command that answers confidently and wrongly is worse than one
+	// that fails, because nobody re-checks it.
+	if !filepath.IsAbs(c.RunRoot) && c.Repo != "" {
+		if abs, err := filepath.Abs(filepath.Join(c.Repo, c.RunRoot)); err == nil {
+			c.RunRoot = abs
+		}
+	}
 	if c.BaseRef == "" {
 		c.BaseRef = "HEAD"
 	}
