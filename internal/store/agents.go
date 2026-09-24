@@ -15,13 +15,13 @@ import (
 )
 
 const agentCols = `id, name, slug, role, harness, model, effort, instructions_md, allowed_tools,
-	max_turns, heartbeat_minutes, status, created_at, updated_at`
+	max_turns, heartbeat_minutes, budget_tokens, budget_usd::float8, status, created_at, updated_at`
 
 func scanAgent(row pgx.Row) (models.Agent, error) {
 	var a models.Agent
 	var allowed []byte
 	err := row.Scan(&a.ID, &a.Name, &a.Slug, &a.Role, &a.Harness, &a.Model, &a.Effort, &a.InstructionsMD,
-		&allowed, &a.MaxTurns, &a.HeartbeatMinutes, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+		&allowed, &a.MaxTurns, &a.HeartbeatMinutes, &a.BudgetTokens, &a.BudgetUSD, &a.Status, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return a, err
 	}
@@ -43,6 +43,8 @@ type AgentInput struct {
 	SetAllowed     bool
 	MaxTurns       *int
 	Heartbeat      *int // minutes; 0 turns it off
+	BudgetTokens   *int64
+	BudgetUSD      *float64
 	Status         *string
 }
 
@@ -66,6 +68,9 @@ func validateAgent(in AgentInput) error {
 	}
 	if in.MaxTurns != nil && *in.MaxTurns < 0 {
 		return invalid("max turns cannot be negative")
+	}
+	if (in.BudgetTokens != nil && *in.BudgetTokens < 0) || (in.BudgetUSD != nil && *in.BudgetUSD < 0) {
+		return invalid("a budget cannot be negative")
 	}
 	if in.Heartbeat != nil && (*in.Heartbeat < 0 || (*in.Heartbeat > 0 && *in.Heartbeat < 5)) {
 		return invalid("a heartbeat is off (0) or at least every 5 minutes")
@@ -157,6 +162,12 @@ func (s *Store) UpdateAgent(ctx context.Context, wsID, id string, in AgentInput)
 	}
 	if in.Heartbeat != nil {
 		set("heartbeat_minutes", *in.Heartbeat)
+	}
+	if in.BudgetTokens != nil {
+		set("budget_tokens", *in.BudgetTokens)
+	}
+	if in.BudgetUSD != nil {
+		set("budget_usd", *in.BudgetUSD)
 	}
 	if in.Status != nil {
 		set("status", *in.Status)

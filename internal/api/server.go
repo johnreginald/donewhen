@@ -190,6 +190,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.wsGuard(s.handleAddComment))
 
 	mux.HandleFunc("GET /api/dashboard", s.wsGuard(s.handleDashboard))
+	mux.HandleFunc("GET /api/costs", s.wsGuard(s.handleCosts))
+	mux.HandleFunc("GET /api/budgets", s.wsGuard(s.handleBudgets))
 
 	// Agents, the machines that run them, and the work queued between.
 	mux.HandleFunc("GET /api/agents", s.wsGuard(s.handleListAgents))

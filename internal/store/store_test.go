@@ -853,3 +853,47 @@ func TestRoutinesAndHeartbeats(t *testing.T) {
 }
 
 func str2int(n int) *int { return &n }
+
+func TestCostsAndBudgets(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	is, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "t", StateName: "Ready", AgentID: &a.ID})
+	for _, f := range []RunFinish{
+		{Status: "succeeded", Billing: "subscription", NotionalUSD: 0.5, Tokens: models.RunTokens{Input: 100, CacheRead: 900}},
+		{Status: "failed", Billing: "api", CostUSD: 0.25, Tokens: models.RunTokens{Input: 50, Output: 50}},
+	} {
+		run, _ := s.StartRun(ctx, ws, RunStart{IssueID: is.ID, AgentID: a.ID, Runner: "claude"})
+		if _, err := s.FinishRun(ctx, ws, run.ID, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := s.Costs(ctx, ws, MonthStart(time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Total.Runs != 2 || c.Total.Tokens != 1100 || c.Total.CacheRead != 900 || c.Total.CostUSD != 0.25 ||
+		c.Total.NotionalUSD != 0.5 || c.Total.SubscriptionRuns != 1 || c.Total.APIRuns != 1 {
+		t.Errorf("total = %+v", c.Total)
+	}
+	if len(c.ByAgent) != 1 || c.ByAgent[0].Name != "Eng" || len(c.ByTicket) != 1 || c.ByTicket[0].Key != is.Key {
+		t.Errorf("by agent %+v, by ticket %+v", c.ByAgent, c.ByTicket)
+	}
+	u, _ := s.AgentMonthUsage(ctx, ws, a.ID, time.Now())
+	if share := BudgetShare(2000, 0, u); share < 0.54 || share > 0.56 {
+		t.Errorf("token share = %v, want 0.55", share)
+	}
+	if share := BudgetShare(0, 0.2, u); share < 1 {
+		t.Errorf("dollar share = %v, want over 1", share)
+	}
+
+	// A paused agent's queued work is not handed to a host.
+	j, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID})
+	paused := "paused"
+	s.UpdateAgent(ctx, ws, a.ID, AgentInput{Status: &paused})
+	if got, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"}); ok && got.ID == j.ID {
+		t.Error("a paused agent's job was handed out")
+	}
+}

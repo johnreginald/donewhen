@@ -112,6 +112,7 @@ func (s *Server) handleFinishRun(w http.ResponseWriter, r *http.Request) {
 			Actor: auth.ActorAI, Kind: "ran", Detail: detail,
 		})
 	}
+	s.checkBudget(r.Context(), ws(r), run)
 	run.LogTail = "" // the event is a notification, not the transcript
 	s.publishRun(r, "run.finished", run)
 	writeJSON(w, 200, run)

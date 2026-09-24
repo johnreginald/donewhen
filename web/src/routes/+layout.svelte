@@ -20,7 +20,7 @@
 		{ label: 'Home', href: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
 		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
 		{ label: 'Tasks', href: '/tasks', icon: CircleCheckBig, match: (p) => ['/tasks', '/list', '/board'].includes(p) },
-		{ label: 'Audit', href: '/log', icon: History, match: (p) => p === '/log' },
+		{ label: 'Audit', href: '/log', icon: History, match: (p) => p === '/log' || p.startsWith('/audit') },
 	];
 
 	let { children } = $props();

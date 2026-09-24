@@ -157,7 +157,7 @@ func (s *Store) ClaimJob(ctx context.Context, wsID, host string, harnesses []str
 		UPDATE jobs SET status = 'claimed', host = $2, claimed_at = now()
 		WHERE id = (
 			SELECT j.id FROM jobs j JOIN agents a ON a.id = j.agent_id
-			WHERE j.workspace_id = $1 AND j.status = 'queued' AND a.harness = ANY($3)
+			WHERE j.workspace_id = $1 AND j.status = 'queued' AND a.harness = ANY($3) AND a.status = 'active'
 			ORDER BY j.created_at
 			FOR UPDATE OF j SKIP LOCKED
 			LIMIT 1

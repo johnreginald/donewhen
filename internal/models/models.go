@@ -280,10 +280,14 @@ type Agent struct {
 	MaxTurns       int      `json:"maxTurns"`
 	// HeartbeatMinutes wakes the agent this often to answer what is waiting
 	// for it on its tickets. Zero is never.
-	HeartbeatMinutes int       `json:"heartbeatMinutes"`
-	Status           string    `json:"status"` // active | paused
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	HeartbeatMinutes int `json:"heartbeatMinutes"`
+	// Monthly caps: tokens on any billing, dollars of metered spend. Zero is
+	// no cap. Reaching one pauses the agent.
+	BudgetTokens int64     `json:"budgetTokens"`
+	BudgetUSD    float64   `json:"budgetUsd"`
+	Status       string    `json:"status"` // active | paused
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 // Harnesses an agent can run on.

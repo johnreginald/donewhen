@@ -245,7 +245,7 @@
 		<a href="/connectors" class="nav-item" class:active={$page.url.pathname === '/connectors'} onclick={onnavigate}>
 			<span class="icon"><Plug size={16} strokeWidth={2} /></span>Connectors
 		</a>
-		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log'} onclick={onnavigate}>
+		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log' || $page.url.pathname.startsWith('/audit')} onclick={onnavigate}>
 			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
 		</a>
 	</div>
