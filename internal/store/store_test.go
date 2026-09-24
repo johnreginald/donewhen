@@ -508,3 +508,50 @@ func TestRunLifecycle(t *testing.T) {
 		t.Fatalf("another workspace sees %d runs", len(other))
 	}
 }
+
+func TestDashboard(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	a, err := s.CreateIssue(ctx, ws, IssueInput{Title: "a", StateName: "In Progress"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateIssue(ctx, ws, IssueInput{Title: "b", StateName: "Done"}); err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.StartRun(ctx, ws, RunStart{IssueID: a.ID, Runner: "claude", Model: "haiku"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FinishRun(ctx, ws, run.ID, RunFinish{Status: "succeeded", Verdict: "passed",
+		Tokens: models.RunTokens{Total: 1000}, NotionalUSD: 0.5, CostUSD: 0.25, Billing: "api"}); err != nil {
+		t.Fatal(err)
+	}
+
+	yangon, _ := time.LoadLocation("Asia/Yangon")
+	d, err := s.Dashboard(ctx, ws, yangon)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Days) != 14 {
+		t.Fatalf("days = %d, want 14", len(d.Days))
+	}
+	today := d.Days[13]
+	if today.Date != time.Now().In(yangon).Format("2006-01-02") {
+		t.Errorf("last day = %s, want today in Yangon", today.Date)
+	}
+	if today.RunsSucceeded != 1 || today.Passed != 1 || today.Finished != 1 {
+		t.Errorf("today = %+v, want one succeeded, passed run", today)
+	}
+	k := d.KPIs
+	if k.InProgress != 1 || k.Open != 1 || k.RunnersActive != 1 || k.MonthTokens != 1000 || k.MonthCostUSD != 0.25 {
+		t.Errorf("kpis = %+v", k)
+	}
+	if len(d.Agents) != 1 || d.Agents[0].Runner != "claude" || d.Agents[0].IssueKey != a.Key {
+		t.Errorf("agents = %+v", d.Agents)
+	}
+	if len(d.Recent) != 2 {
+		t.Errorf("recent tasks = %d, want 2", len(d.Recent))
+	}
+}

@@ -183,6 +183,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/issues/{id}/comments", s.wsGuard(s.handleListComments))
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.wsGuard(s.handleAddComment))
 
+	mux.HandleFunc("GET /api/dashboard", s.wsGuard(s.handleDashboard))
+
 	// Runs — each agent attempt, recorded by the machine that ran it.
 	mux.HandleFunc("GET /api/runs", s.wsGuard(s.handleListRuns))
 	mux.HandleFunc("POST /api/runs", s.wsGuard(s.handleStartRun))

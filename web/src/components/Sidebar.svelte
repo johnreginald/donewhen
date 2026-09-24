@@ -20,7 +20,7 @@
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check,
-		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut
+		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut, LayoutDashboard
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -167,6 +167,9 @@
 		<button class="nav-item" onclick={() => paletteOpen.set(true)}>
 			<span class="icon"><Search size={16} strokeWidth={2} /></span>Search<kbd class="kbd">⌘K</kbd>
 		</button>
+		<a href="/dashboard" class="nav-item" class:active={$page.url.pathname === '/dashboard'} onclick={onnavigate}>
+			<span class="icon"><LayoutDashboard size={16} strokeWidth={2} /></span>Dashboard
+		</a>
 		<a href="/inbox" class="nav-item" class:active={$page.url.pathname === '/inbox'} onclick={onnavigate}>
 			<span class="icon"><Inbox size={16} strokeWidth={2} /></span>Inbox
 			{#if $inboxCount > 0}<span class="badge">{$inboxCount}</span>{/if}

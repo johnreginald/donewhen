@@ -135,6 +135,7 @@ export const api = {
 	addCriterion: (id, body) => request('POST', `/issues/${id}/criteria`, { body }),
 	updateCriterion: (id, b) => request('PATCH', `/criteria/${id}`, b),
 	deleteCriterion: (id) => request('DELETE', `/criteria/${id}`),
+	dashboard: (tz) => request('GET', '/dashboard' + (tz ? `?tz=${encodeURIComponent(tz)}` : '')),
 	// runs — each agent attempt
 	runs: (q = {}) => {
 		const p = new URLSearchParams(Object.entries(q).filter(([, v]) => v));
