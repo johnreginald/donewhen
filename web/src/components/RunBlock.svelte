@@ -5,6 +5,7 @@
 	import { api } from '$lib/api.js';
 	import { rel, tokens, duration, usd } from '$lib/format.js';
 	import { Check, X, LoaderCircle, CircleSlash, ChevronRight, ExternalLink } from '@lucide/svelte';
+	import LiveTranscript from './LiveTranscript.svelte';
 
 	let { run } = $props();
 	let open = $state(false);
@@ -94,12 +95,8 @@
 				</ul>
 			{/if}
 
-			{#if full?.logTail}
-				<div class="sub">Transcript (end)</div>
-				<pre class="log">{full.logTail}</pre>
-			{:else if !run.finishedAt}
-				<div class="faint">Still running — the transcript arrives when it finishes.</div>
-			{/if}
+			<div class="sub">{run.finishedAt ? 'Transcript' : 'Live transcript'}</div>
+			<LiveTranscript runId={run.id} fallback={full?.logTail || ''} />
 
 			<a class="open-run" href="/runs/{run.id}">Open run <ExternalLink size={12} strokeWidth={2} /></a>
 		</div>
@@ -242,21 +239,6 @@
 		margin: 0;
 		padding-left: 16px;
 		color: var(--text-dim);
-	}
-	.log {
-		margin: 0;
-		max-height: 320px;
-		overflow: auto;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		padding: 8px 10px;
-		font-family: var(--mono);
-		font-size: 11.5px;
-		line-height: 1.55;
-		color: var(--text-dim);
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
 	}
 	.faint {
 		color: var(--text-faint);

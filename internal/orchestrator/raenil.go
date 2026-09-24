@@ -199,6 +199,11 @@ type RunOutcome struct {
 	LogTail     string         `json:"logTail,omitempty"`
 }
 
+// AppendRunEvents posts lines of a run's live transcript.
+func (c *RaenilClient) AppendRunEvents(ctx context.Context, runID string, lines []string) error {
+	return c.do(ctx, http.MethodPost, "/api/runs/"+runID+"/events", map[string]any{"lines": lines}, nil)
+}
+
 // FinishRun closes a run with what the attempt produced.
 func (c *RaenilClient) FinishRun(ctx context.Context, runID string, o RunOutcome) error {
 	return c.do(ctx, http.MethodPatch, "/api/runs/"+runID, o, nil)

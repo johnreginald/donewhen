@@ -7,6 +7,7 @@
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel, tokens, duration, usd } from '$lib/format.js';
 	import { Check, X, LoaderCircle, CircleSlash } from '@lucide/svelte';
+	import LiveTranscript from '$components/LiveTranscript.svelte';
 
 	let run = $state(null);
 	let missing = $state(false);
@@ -133,14 +134,8 @@
 			{/if}
 
 			<section class="card">
-				<h3>Transcript <span class="faint">end of run · redacted</span></h3>
-				{#if run.logTail}
-					<pre class="log">{run.logTail}</pre>
-				{:else if !run.finishedAt}
-					<div class="faint">Still running — the transcript arrives when it finishes.</div>
-				{:else}
-					<div class="faint">No transcript was recorded.</div>
-				{/if}
+				<h3>Transcript <span class="faint">{run.finishedAt ? 'redacted' : 'live · redacted'}</span></h3>
+				{#key run.id}<LiveTranscript runId={run.id} fallback={run.logTail || ''} maxHeight="60vh" />{/key}
 			</section>
 		</div>
 	</div>
@@ -346,21 +341,6 @@
 		margin: 0;
 		padding-left: 18px;
 		color: var(--text-dim);
-	}
-	.log {
-		margin: 0;
-		max-height: 60vh;
-		overflow: auto;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		padding: 10px 12px;
-		font-family: var(--mono);
-		font-size: 12px;
-		line-height: 1.6;
-		color: var(--text-dim);
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
 	}
 	.empty {
 		padding: 40px;

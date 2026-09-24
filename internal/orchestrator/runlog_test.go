@@ -1,8 +1,16 @@
 package orchestrator
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestRedact(t *testing.T) {
@@ -36,5 +44,42 @@ func TestClaudeReadable(t *testing.T) {
 	}
 	if strings.Contains(got, `"type"`) {
 		t.Errorf("raw JSON leaked into the readable transcript:\n%s", got)
+	}
+}
+
+func TestStreamLogPostsRenderedLinesAsTheyArrive(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b struct{ Lines []string }
+		json.NewDecoder(r.Body).Decode(&b)
+		mu.Lock()
+		got = append(got, b.Lines...)
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	c := &RaenilClient{BaseURL: srv.URL, Token: "t", Workspace: "w"}
+
+	raw, _ := os.ReadFile("testdata/claude/denied.jsonl")
+	lines := strings.SplitAfter(string(raw), "\n")
+	half := len(lines) / 2
+	path := filepath.Join(t.TempDir(), "run.jsonl")
+	os.WriteFile(path, []byte(strings.Join(lines[:half], "")), 0o644)
+
+	stop := streamLog(context.Background(), c, "run-1", path, "claude")
+	time.Sleep(1700 * time.Millisecond) // one tick sees the first half
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+	f.WriteString(strings.Join(lines[half:], ""))
+	f.Close()
+	stop()
+
+	mu.Lock()
+	defer mu.Unlock()
+	text := strings.Join(got, "\n")
+	if strings.Contains(text, `"type"`) {
+		t.Errorf("raw JSON was streamed:\n%s", text)
+	}
+	if want := claudeReadable(path); strings.TrimSpace(text) != strings.TrimSpace(want) {
+		t.Errorf("streamed transcript differs from the whole-file render:\ngot:\n%s\nwant:\n%s", text, want)
 	}
 }

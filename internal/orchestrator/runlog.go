@@ -2,12 +2,17 @@ package orchestrator
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 )
 
 // maxRunLogTail is how much of a transcript leaves this machine with a run
@@ -87,82 +92,90 @@ func claudeReadable(path string) string {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1024*1024), 64*1024*1024)
 	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		if line[0] != '{' {
-			b.WriteString(string(line) + "\n") // the CLI's own stderr
-			continue
-		}
-		var ev struct {
-			Type      string  `json:"type"`
-			Subtype   string  `json:"subtype"`
-			Model     string  `json:"model"`
-			NumTurns  int     `json:"num_turns"`
-			Result    string  `json:"result"`
-			IsError   bool    `json:"is_error"`
-			CostUSD   float64 `json:"total_cost_usd"`
-			SessionID string  `json:"session_id"`
-			Message   struct {
-				Content json.RawMessage `json:"content"`
-			} `json:"message"`
-		}
-		if json.Unmarshal(line, &ev) != nil {
-			continue
-		}
-		switch ev.Type {
-		case "system":
-			if ev.Subtype == "init" {
-				fmt.Fprintf(&b, "· session %s · %s\n", ev.SessionID, ev.Model)
-			}
-		case "assistant":
-			var parts []struct {
-				Type  string          `json:"type"`
-				Text  string          `json:"text"`
-				Name  string          `json:"name"`
-				Input json.RawMessage `json:"input"`
-			}
-			if json.Unmarshal(ev.Message.Content, &parts) != nil {
-				continue
-			}
-			for _, p := range parts {
-				switch p.Type {
-				case "text":
-					if t := strings.TrimSpace(p.Text); t != "" {
-						b.WriteString(t + "\n")
-					}
-				case "tool_use":
-					fmt.Fprintf(&b, "→ %s %s\n", p.Name, trunc(claudeToolInput(p.Input), 300))
-				}
-			}
-		case "user":
-			var parts []struct {
-				Type    string          `json:"type"`
-				Content json.RawMessage `json:"content"`
-				IsError bool            `json:"is_error"`
-			}
-			if json.Unmarshal(ev.Message.Content, &parts) != nil {
-				continue
-			}
-			for _, p := range parts {
-				if p.Type != "tool_result" {
-					continue
-				}
-				mark := "←"
-				if p.IsError {
-					mark = "✗"
-				}
-				fmt.Fprintf(&b, "%s %s\n", mark, trunc(oneLine(toolResultText(p.Content)), 300))
-			}
-		case "result":
-			fmt.Fprintf(&b, "· %s · %d turns\n", ev.Subtype, ev.NumTurns)
-			if ev.IsError && ev.Result != "" {
-				b.WriteString(trunc(ev.Result, 500) + "\n")
-			}
+		for _, l := range claudeLine(sc.Bytes()) {
+			b.WriteString(l + "\n")
 		}
 	}
 	return b.String()
+}
+
+// claudeLine renders one raw log line. A line that is not JSON is the CLI's
+// own output and is kept as written; an event nobody needs to read is dropped.
+func claudeLine(line []byte) []string {
+	if len(line) == 0 {
+		return nil
+	}
+	if line[0] != '{' {
+		return []string{string(line)}
+	}
+	var ev struct {
+		Type      string  `json:"type"`
+		Subtype   string  `json:"subtype"`
+		Model     string  `json:"model"`
+		NumTurns  int     `json:"num_turns"`
+		Result    string  `json:"result"`
+		IsError   bool    `json:"is_error"`
+		CostUSD   float64 `json:"total_cost_usd"`
+		SessionID string  `json:"session_id"`
+		Message   struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &ev) != nil {
+		return nil
+	}
+	var out []string
+	switch ev.Type {
+	case "system":
+		if ev.Subtype == "init" {
+			out = append(out, fmt.Sprintf("· session %s · %s", ev.SessionID, ev.Model))
+		}
+	case "assistant":
+		var parts []struct {
+			Type  string          `json:"type"`
+			Text  string          `json:"text"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
+		}
+		if json.Unmarshal(ev.Message.Content, &parts) != nil {
+			return nil
+		}
+		for _, p := range parts {
+			switch p.Type {
+			case "text":
+				if t := strings.TrimSpace(p.Text); t != "" {
+					out = append(out, t)
+				}
+			case "tool_use":
+				out = append(out, fmt.Sprintf("→ %s %s", p.Name, trunc(claudeToolInput(p.Input), 300)))
+			}
+		}
+	case "user":
+		var parts []struct {
+			Type    string          `json:"type"`
+			Content json.RawMessage `json:"content"`
+			IsError bool            `json:"is_error"`
+		}
+		if json.Unmarshal(ev.Message.Content, &parts) != nil {
+			return nil
+		}
+		for _, p := range parts {
+			if p.Type != "tool_result" {
+				continue
+			}
+			mark := "←"
+			if p.IsError {
+				mark = "✗"
+			}
+			out = append(out, fmt.Sprintf("%s %s", mark, trunc(oneLine(toolResultText(p.Content)), 300)))
+		}
+	case "result":
+		out = append(out, fmt.Sprintf("· %s · %d turns", ev.Subtype, ev.NumTurns))
+		if ev.IsError && ev.Result != "" {
+			out = append(out, trunc(ev.Result, 500))
+		}
+	}
+	return out
 }
 
 // toolResultText reads a tool result's content, which is either a string or a
@@ -187,4 +200,73 @@ func toolResultText(raw json.RawMessage) string {
 
 func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// streamLog posts a run's transcript to Raenil as it grows — rendered for
+// Claude, redacted here before it leaves the machine — until stop is called,
+// which flushes what is left. A tracker that cannot take a batch is not
+// retried: the full log stays on disk and its tail goes with the run record.
+func streamLog(ctx context.Context, c *RaenilClient, runID, path, runner string) (stop func()) {
+	if c == nil || runID == "" || path == "" {
+		return func() {}
+	}
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		var offset int64
+		var partial []byte
+		flush := func(final bool) {
+			f, err := os.Open(path)
+			if err != nil {
+				return
+			}
+			defer f.Close()
+			if _, err := f.Seek(offset, io.SeekStart); err != nil {
+				return
+			}
+			chunk, _ := io.ReadAll(io.LimitReader(f, 4<<20))
+			offset += int64(len(chunk))
+			data := append(partial, chunk...)
+			parts := bytes.Split(data, []byte("\n"))
+			partial = append([]byte(nil), parts[len(parts)-1]...)
+			parts = parts[:len(parts)-1]
+			if final && len(partial) > 0 {
+				parts, partial = append(parts, partial), nil
+			}
+			var lines []string
+			for _, p := range parts {
+				if runner == "claude" {
+					for _, l := range claudeLine(p) {
+						lines = append(lines, redact(l))
+					}
+				} else if t := strings.TrimRight(string(p), "\r"); t != "" {
+					lines = append(lines, redact(t))
+				}
+			}
+			for len(lines) > 0 {
+				n := min(len(lines), 200)
+				_ = c.AppendRunEvents(context.WithoutCancel(ctx), runID, lines[:n])
+				lines = lines[n:]
+			}
+		}
+		t := time.NewTicker(1500 * time.Millisecond)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				flush(true)
+				return
+			case <-t.C:
+				flush(false)
+			}
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			close(done)
+			<-finished
+		})
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -200,6 +201,75 @@ func (s *Store) ListRuns(ctx context.Context, wsID string, f RunFilter) ([]model
 			r.LogTail = ""
 		}
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// maxRunEvents caps a run's live transcript. Past it, lines are dropped: the
+// full log stays on the machine that ran it.
+const maxRunEvents = 3000
+
+// RunEvent is one line of a run's live transcript.
+type RunEvent struct {
+	Seq  int       `json:"seq"`
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
+}
+
+// AppendRunEvents adds lines to an open run's transcript, numbering them on.
+func (s *Store) AppendRunEvents(ctx context.Context, wsID, runID string, lines []string) ([]RunEvent, error) {
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var next int
+	// Locking the run row serialises appends from one run, so seq stays dense.
+	err = tx.QueryRow(ctx, `
+		SELECT coalesce((SELECT max(seq) FROM run_events WHERE run_id = r.id), 0)
+		FROM runs r WHERE r.id::text = $2 AND r.workspace_id = $1 AND r.finished_at IS NULL
+		FOR UPDATE`, wsID, runID).Scan(&next)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("run %s is not open: %w", runID, ErrConflict)
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []RunEvent
+	for _, l := range lines {
+		if next >= maxRunEvents {
+			break
+		}
+		next++
+		var ev RunEvent
+		if err := tx.QueryRow(ctx, `INSERT INTO run_events (run_id, seq, text) VALUES ($1::uuid, $2, $3) RETURNING seq, text, at`,
+			runID, next, l).Scan(&ev.Seq, &ev.Text, &ev.At); err != nil {
+			return nil, err
+		}
+		out = append(out, ev)
+	}
+	return out, tx.Commit(ctx)
+}
+
+// ListRunEvents lists a run's transcript lines after a sequence number.
+func (s *Store) ListRunEvents(ctx context.Context, wsID, runID string, after int) ([]RunEvent, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.seq, e.text, e.at FROM run_events e JOIN runs r ON r.id = e.run_id
+		WHERE r.workspace_id = $1 AND r.id::text = $2 AND e.seq > $3 ORDER BY e.seq LIMIT 1000`, wsID, runID, after)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RunEvent
+	for rows.Next() {
+		var ev RunEvent
+		if err := rows.Scan(&ev.Seq, &ev.Text, &ev.At); err != nil {
+			return nil, err
+		}
+		out = append(out, ev)
 	}
 	return out, rows.Err()
 }

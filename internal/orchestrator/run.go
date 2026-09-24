@@ -290,6 +290,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}()
 
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
+	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), runner.Name())
 	res, runErr = runner.Run(ctx, RunRequest{
 		Prompt:    prompt,
 		Cwd:       wtPath,
@@ -298,6 +299,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		LogPath:   runDir.File("worker.log"),
 		SessionID: spec.SessionID,
 	})
+	stopStream()
 	if runErr != nil {
 		o.logf("runner error: %v", runErr)
 	}

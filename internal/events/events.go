@@ -34,7 +34,11 @@ type Event struct {
 	Host        *models.RunnerHost    `json:"host,omitempty"`
 	Agent       *models.Agent         `json:"agent,omitempty"`
 	Interaction *models.Interaction   `json:"interaction,omitempty"`
-	At          time.Time             `json:"at"`
+	// RunID and Lines carry a run's live transcript.
+	RunID string    `json:"runId,omitempty"`
+	Lines []string  `json:"lines,omitempty"`
+	Seq   int       `json:"seq,omitempty"` // of the first line
+	At    time.Time `json:"at"`
 }
 
 type subscriber struct {

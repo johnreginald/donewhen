@@ -124,3 +124,44 @@ func (s *Server) publishRun(r *http.Request, kind string, run models.Run) {
 	}
 	s.bus.Publish(e)
 }
+
+func (s *Server) handleListRunEvents(w http.ResponseWriter, r *http.Request) {
+	after, _ := strconv.Atoi(r.URL.Query().Get("after"))
+	evs, err := s.store.ListRunEvents(r.Context(), ws(r), r.PathValue("id"), after)
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, 200, orEmpty(evs))
+}
+
+// handleAppendRunEvents takes a batch of transcript lines from the machine
+// running the run, and passes them on live.
+func (s *Server) handleAppendRunEvents(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Lines []string `json:"lines"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	run, err := s.store.GetRun(r.Context(), ws(r), r.PathValue("id"))
+	if handleStoreErr(w, err) {
+		return
+	}
+	evs, err := s.store.AppendRunEvents(r.Context(), ws(r), run.ID, body.Lines)
+	if handleStoreErr(w, err) {
+		return
+	}
+	if len(evs) > 0 {
+		lines := make([]string, len(evs))
+		for i, e := range evs {
+			lines[i] = e.Text
+		}
+		e := events.Event{Type: "run.events", WorkspaceID: ws(r), Actor: auth.ActorAI, RunID: run.ID, Lines: lines, Seq: evs[0].Seq}
+		if run.IssueID != nil {
+			e.IssueID = *run.IssueID
+		}
+		s.bus.Publish(e)
+	}
+	writeJSON(w, 200, map[string]int{"accepted": len(evs)})
+}

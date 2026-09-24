@@ -130,6 +130,7 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 	}
 	res.RunID = rec.ID
 
+	stopStream := streamLog(ctx, c, rec.ID, req.LogPath, runner.Name())
 	out, runErr := runner.Run(ctx, req)
 	// A session that cannot be resumed (expired, moved) is retried cold, once.
 	if res.Resumed && (runErr != nil || out.Exit != 0) && out.Answer == "" {
@@ -137,6 +138,7 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 		req.SessionID, req.Prompt, res.Resumed = "", chatBrief(*a, issue, criteria, comments, interactions, in), false
 		out, runErr = runner.Run(ctx, req)
 	}
+	stopStream()
 	if rec.ID != "" {
 		o.finishRun(context.WithoutCancel(ctx), rec.ID, runner.Name(), req.LogPath, out, runErr, "")
 	}

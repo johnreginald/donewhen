@@ -21,6 +21,7 @@ export function connectSSE(onEvent) {
 			'comment.added',
 			'run.started',
 			'run.finished',
+			'run.events',
 			'job.updated',
 			'host.updated',
 			'agent.saved',
