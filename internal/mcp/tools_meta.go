@@ -12,8 +12,10 @@ import (
 func (d *deps) registerMeta(s *server.MCPServer) {
 	// ---- projects ----
 	s.AddTool(mcp.NewTool("list_projects",
-		mcp.WithDescription("List projects (epics), optionally within an initiative."),
+		mcp.WithDescription("List projects (epics), optionally within an initiative. Rows carry no description; "+
+			"use get_project for it."),
 		mcp.WithString("initiative", mcp.Description("Initiative id filter")),
+		verboseArg(),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
@@ -24,7 +26,10 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return jsonResult(items)
+		if req.GetBool("verbose", false) {
+			return jsonResult(items)
+		}
+		return jsonResult(projectRows(items))
 	})
 
 	s.AddTool(mcp.NewTool("get_project",
@@ -169,7 +174,9 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 
 	// ---- labels ----
 	s.AddTool(mcp.NewTool("list_issue_labels",
-		mcp.WithDescription("List labels and their exclusive groups."),
+		mcp.WithDescription("List label names by group (\"\" = ungrouped), merged across your workspaces; "+
+			"an exclusive group allows one label per issue. Pass workspace to see one workspace's labels."),
+		verboseArg(),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
@@ -181,7 +188,10 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		groups, _ := d.store.ListLabelGroupsAcross(ctx, wsIDs)
-		return jsonResult(map[string]any{"labels": labels, "groups": groups})
+		if req.GetBool("verbose", false) {
+			return jsonResult(map[string]any{"labels": labels, "groups": groups})
+		}
+		return jsonResult(labelCatalog(labels, groups))
 	})
 
 	s.AddTool(mcp.NewTool("create_issue_label",

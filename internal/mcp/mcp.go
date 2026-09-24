@@ -188,10 +188,12 @@ func buildServer(d *deps) *server.MCPServer {
 			"Raenil issue tracker. Continuous-flow Kanban: Triage → Backlog → Aligning → "+
 				"Ready → In Progress → In Review → Done → Canceled. Hierarchy is "+
 				"Workspace → Project (initiative) → Epic (project) → Issue. Listing tools "+
-				"span every workspace you can reach (each row carries workspaceId), and a "+
+				"span every workspace you can reach (an issue key's prefix names its workspace), and a "+
 				"call that names an issue/epic/initiative infers the workspace from it — so "+
 				"you rarely need the 'workspace' argument. Pass it when creating something "+
 				"with no parent. list_workspaces shows what you can reach. "+
+				"List tools return slim rows, newest first, capped at 50 (a 'more' note says when rows "+
+				"were left out); fetch one item's full detail with the get_* tool. "+
 				"Use save_issue to create/move issues (pass 'state' as a status name). "+
 				"Backend-labeled issues should include a ```mermaid diagram in the description.",
 		),
@@ -233,7 +235,8 @@ func requireBearer(st *store.Store, next http.Handler) http.Handler {
 }
 
 func jsonResult(v any) (*mcp.CallToolResult, error) {
-	b, err := json.MarshalIndent(v, "", "  ")
+	// Compact: indentation is whitespace a model pays for and does not read.
+	b, err := json.Marshal(v)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -343,35 +346,44 @@ func isUUID(s string) bool {
 func (d *deps) register(s *server.MCPServer) {
 	// ---- list_issues ----
 	s.AddTool(mcp.NewTool("list_issues",
-		mcp.WithDescription("List issues, optionally filtered by state name, project (epic) id, initiative id, label id, parent issue key, and/or a text query."),
+		mcp.WithDescription("List issues, newest-updated first, optionally filtered by state name, project (epic) id, "+
+			"initiative id, label name, parent issue key, and/or a text query. Rows are slim (key, title, state, labels, ...); "+
+			"use get_issue for the description."),
 		mcp.WithString("state", mcp.Description("Workflow state name, e.g. 'In Review'")),
 		mcp.WithString("project", mcp.Description("Project (epic) id — issues in this epic")),
 		mcp.WithString("initiative", mcp.Description("Initiative id — all issues whose epic belongs to this initiative")),
-		mcp.WithString("label", mcp.Description("Label id — issues carrying this label")),
+		mcp.WithString("label", mcp.Description("Label name (or id) — issues carrying this label")),
 		mcp.WithString("parent", mcp.Description("Parent issue key (e.g. R-8) — its sub-issues")),
 		mcp.WithString("query", mcp.Description("Text search over title/key")),
-		mcp.WithNumber("limit", mcp.Description("Max results")),
+		limitArg(),
+		verboseArg(),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		limit := listLimit(req)
 		f := store.IssueFilter{
 			WorkspaceIDs: wsIDs,
 			StateName:    req.GetString("state", ""),
 			ProjectID:    req.GetString("project", ""),
 			InitiativeID: req.GetString("initiative", ""),
-			LabelID:      req.GetString("label", ""),
 			ParentKey:    req.GetString("parent", ""),
 			Query:        req.GetString("query", ""),
-			Limit:        req.GetInt("limit", 0),
+			Limit:        limit + 1,
+			NewestFirst:  true,
+		}
+		if label := req.GetString("label", ""); isUUID(label) {
+			f.LabelID = label
+		} else {
+			f.LabelName = label
 		}
 		issues, err := d.store.ListIssues(ctx, f)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return jsonResult(issues)
+		return d.issueList(ctx, req, wsIDs, issues, limit)
 	})
 
 	// ---- get_issue ----
@@ -555,6 +567,22 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	return jsonResult(is)
+}
+
+// issueList renders issues as a list result: slim rows unless verbose.
+func (d *deps) issueList(ctx context.Context, req mcp.CallToolRequest, wsIDs []string, issues []models.Issue, limit int) (*mcp.CallToolResult, error) {
+	if req.GetBool("verbose", false) {
+		return jsonResult(page("issues", issues, limit))
+	}
+	states, err := d.store.ListStatesAcross(ctx, wsIDs)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	names := make(map[string]string, len(states))
+	for _, st := range states {
+		names[st.ID] = st.Name
+	}
+	return jsonResult(page("issues", issueRows(issues, names), limit))
 }
 
 func strp(s string) *string {

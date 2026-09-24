@@ -295,6 +295,42 @@ func TestListIssuesSpansWorkspaces(t *testing.T) {
 	}
 }
 
+// An agent asks by label name and wants what changed last: both must work
+// across workspaces, where a label id or board position would not.
+func TestListIssuesByLabelNameNewestFirst(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	wsA, wsB := newWorkspace(t, s), newWorkspace(t, s)
+
+	old, err := s.CreateIssue(ctx, wsA, IssueInput{Title: "old", StateName: "Backlog", LabelNames: []string{"Tagged"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateIssue(ctx, wsA, IssueInput{Title: "untagged", StateName: "Backlog"}); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := s.CreateIssue(ctx, wsB, IssueInput{Title: "fresh", StateName: "Backlog", LabelNames: []string{"tagged"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	title := "old, touched last"
+	if _, err := s.UpdateIssue(ctx, wsA, old.ID, IssuePatch{Title: &title}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.ListIssues(ctx, IssueFilter{WorkspaceIDs: []string{wsA, wsB}, LabelName: "tagged", NewestFirst: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != old.ID || got[1].ID != fresh.ID {
+		keys := make([]string, len(got))
+		for i, is := range got {
+			keys[i] = is.Key
+		}
+		t.Fatalf("got %v, want [%s %s]: both tagged issues, last updated first", keys, old.Key, fresh.Key)
+	}
+}
+
 // Derivation: a bare key or id is enough to find the owning workspace, which is
 // what lets a caller say "R-289" instead of naming a workspace.
 func TestWorkspaceDerivation(t *testing.T) {

@@ -73,9 +73,13 @@ type IssueFilter struct {
 	ProjectID    string
 	InitiativeID string // all issues whose epic belongs to this Project (initiative)
 	LabelID      string // all issues carrying this label
+	LabelName    string // same, by name, so it works across workspaces
 	Query        string
 	ParentKey    string // list sub-issues of this epic key
 	Limit        int
+	// NewestFirst orders by last update instead of board position, so a
+	// capped list keeps the issues someone is most likely asking about.
+	NewestFirst bool
 }
 
 const issueCols = `i.id, i.workspace_id, i.number, i.key, i.title, i.description_md, i.state_id,
@@ -128,6 +132,11 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 		q += fmt.Sprintf(" AND i.id IN (SELECT issue_id FROM issue_labels WHERE label_id=$%d)", n)
 		args = append(args, f.LabelID)
 	}
+	if f.LabelName != "" {
+		n++
+		q += fmt.Sprintf(" AND i.id IN (SELECT il.issue_id FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE lower(l.name)=lower($%d))", n)
+		args = append(args, f.LabelName)
+	}
 	if f.ParentKey != "" {
 		add("i.parent_key=", f.ParentKey)
 	}
@@ -136,7 +145,11 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 		q += fmt.Sprintf(" AND (i.title ILIKE $%d OR i.key ILIKE $%d)", n, n)
 		args = append(args, "%"+f.Query+"%")
 	}
-	q += " ORDER BY i.position ASC, i.number ASC"
+	if f.NewestFirst {
+		q += " ORDER BY i.updated_at DESC, i.number DESC"
+	} else {
+		q += " ORDER BY i.position ASC, i.number ASC"
+	}
 	if f.Limit > 0 {
 		n++
 		q += fmt.Sprintf(" LIMIT $%d", n)
