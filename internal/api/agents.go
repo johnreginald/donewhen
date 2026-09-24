@@ -25,6 +25,7 @@ type agentReq struct {
 	InstructionsMd *string  `json:"instructionsMd"`
 	AllowedTools   []string `json:"allowedTools"`
 	MaxTurns       *int     `json:"maxTurns"`
+	Heartbeat      *int     `json:"heartbeatMinutes"`
 	Status         *string  `json:"status"`
 }
 
@@ -33,7 +34,7 @@ func (b agentReq) input(raw map[string]json.RawMessage) store.AgentInput {
 	return store.AgentInput{
 		Name: b.Name, Role: b.Role, Harness: b.Harness, Model: b.Model, Effort: b.Effort,
 		InstructionsMD: b.InstructionsMd, AllowedTools: b.AllowedTools, SetAllowed: setAllowed,
-		MaxTurns: b.MaxTurns, Status: b.Status,
+		MaxTurns: b.MaxTurns, Heartbeat: b.Heartbeat, Status: b.Status,
 	}
 }
 

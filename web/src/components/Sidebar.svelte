@@ -20,7 +20,7 @@
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check,
-		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug
+		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, Repeat
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -185,6 +185,9 @@
 			onclick={() => (activeInitiative.set(''), activeProject.set(''), loadIssues(), onnavigate())}
 		>
 			<span class="icon"><CircleCheckBig size={16} strokeWidth={2} /></span>Tasks
+		</a>
+		<a href="/routines" class="nav-item" class:active={$page.url.pathname === '/routines'} onclick={onnavigate}>
+			<span class="icon"><Repeat size={16} strokeWidth={2} /></span>Routines
 		</a>
 		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
 			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts

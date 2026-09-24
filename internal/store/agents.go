@@ -15,13 +15,13 @@ import (
 )
 
 const agentCols = `id, name, slug, role, harness, model, effort, instructions_md, allowed_tools,
-	max_turns, status, created_at, updated_at`
+	max_turns, heartbeat_minutes, status, created_at, updated_at`
 
 func scanAgent(row pgx.Row) (models.Agent, error) {
 	var a models.Agent
 	var allowed []byte
 	err := row.Scan(&a.ID, &a.Name, &a.Slug, &a.Role, &a.Harness, &a.Model, &a.Effort, &a.InstructionsMD,
-		&allowed, &a.MaxTurns, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+		&allowed, &a.MaxTurns, &a.HeartbeatMinutes, &a.Status, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return a, err
 	}
@@ -42,6 +42,7 @@ type AgentInput struct {
 	AllowedTools   []string
 	SetAllowed     bool
 	MaxTurns       *int
+	Heartbeat      *int // minutes; 0 turns it off
 	Status         *string
 }
 
@@ -65,6 +66,9 @@ func validateAgent(in AgentInput) error {
 	}
 	if in.MaxTurns != nil && *in.MaxTurns < 0 {
 		return invalid("max turns cannot be negative")
+	}
+	if in.Heartbeat != nil && (*in.Heartbeat < 0 || (*in.Heartbeat > 0 && *in.Heartbeat < 5)) {
+		return invalid("a heartbeat is off (0) or at least every 5 minutes")
 	}
 	for _, rule := range in.AllowedTools {
 		// Bare Bash pre-approves every shell command, writes anywhere
@@ -150,6 +154,9 @@ func (s *Store) UpdateAgent(ctx context.Context, wsID, id string, in AgentInput)
 	}
 	if in.MaxTurns != nil {
 		set("max_turns", *in.MaxTurns)
+	}
+	if in.Heartbeat != nil {
+		set("heartbeat_minutes", *in.Heartbeat)
 	}
 	if in.Status != nil {
 		set("status", *in.Status)

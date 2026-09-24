@@ -268,19 +268,22 @@ const (
 
 // Agent is a configured worker: a harness, a model, and how it should behave.
 type Agent struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
-	Role           string    `json:"role"`
-	Harness        string    `json:"harness"` // claude | codex | opencode
-	Model          string    `json:"model"`
-	Effort         string    `json:"effort"`
-	InstructionsMD string    `json:"instructionsMd"`
-	AllowedTools   []string  `json:"allowedTools"`
-	MaxTurns       int       `json:"maxTurns"`
-	Status         string    `json:"status"` // active | paused
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Slug           string   `json:"slug"`
+	Role           string   `json:"role"`
+	Harness        string   `json:"harness"` // claude | codex | opencode
+	Model          string   `json:"model"`
+	Effort         string   `json:"effort"`
+	InstructionsMD string   `json:"instructionsMd"`
+	AllowedTools   []string `json:"allowedTools"`
+	MaxTurns       int      `json:"maxTurns"`
+	// HeartbeatMinutes wakes the agent this often to answer what is waiting
+	// for it on its tickets. Zero is never.
+	HeartbeatMinutes int       `json:"heartbeatMinutes"`
+	Status           string    `json:"status"` // active | paused
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // Harnesses an agent can run on.
@@ -365,4 +368,25 @@ type AgentSession struct {
 	Turns       int       `json:"turns"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// Routine makes a ticket on a schedule, optionally queueing its agent's run.
+type Routine struct {
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	AgentID       *string         `json:"agentId"`
+	ProjectID     *string         `json:"projectId"`
+	Title         string          `json:"title"`
+	DescriptionMD string          `json:"descriptionMd"`
+	Criteria      json.RawMessage `json:"criteria"`
+	Schedule      string          `json:"schedule"`
+	Timezone      string          `json:"timezone"`
+	Enabled       bool            `json:"enabled"`
+	AutoRun       bool            `json:"autoRun"`
+	NextRunAt     *time.Time      `json:"nextRunAt"`
+	LastRunAt     *time.Time      `json:"lastRunAt"`
+	LastIssueID   *string         `json:"lastIssueId"`
+	LastIssueKey  string          `json:"lastIssueKey,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
 }

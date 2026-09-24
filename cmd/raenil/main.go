@@ -120,8 +120,9 @@ func runServe() {
 
 	srv := api.NewServer(cfg, st, svc, bus, mcpHandler)
 
-	// Close work whose machine went away: a claimed job or an open run from a
-	// host that stopped reporting would otherwise block its ticket forever.
+	// Each minute: fire due routines and agents' heartbeats, and close work
+	// whose machine went away — a claimed job or an open run from a host that
+	// stopped reporting would otherwise block its ticket forever.
 	go func() {
 		t := time.NewTicker(time.Minute)
 		defer t.Stop()
@@ -130,6 +131,7 @@ func runServe() {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				srv.Tick(ctx)
 				srv.Reap(ctx)
 			}
 		}

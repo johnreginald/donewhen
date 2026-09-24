@@ -58,6 +58,7 @@
 		model: a.model,
 		effort: a.effort,
 		maxTurns: a.maxTurns,
+		heartbeatMinutes: a.heartbeatMinutes || 0,
 		instructionsMd: a.instructionsMd,
 		allowedTools: (a.allowedTools || []).join('\n')
 	});
@@ -69,6 +70,7 @@
 			agent = await api.updateAgent(agent.id, {
 				...form,
 				maxTurns: Number(form.maxTurns) || 0,
+				heartbeatMinutes: Number(form.heartbeatMinutes) || 0,
 				allowedTools: form.allowedTools
 					.split('\n')
 					.map((s) => s.trim())
@@ -273,6 +275,13 @@
 									</label>
 								{/if}
 								<label>Max turns per run<input type="number" min="0" bind:value={form.maxTurns} placeholder="0 = no limit" /></label>
+								<label>Heartbeat
+									<select bind:value={form.heartbeatMinutes}>
+										{#each [[0, 'Off'], [5, 'Every 5 minutes'], [15, 'Every 15 minutes'], [30, 'Every 30 minutes'], [60, 'Every hour']] as [v, l]}
+											<option value={v}>{l}</option>
+										{/each}
+									</select>
+								</label>
 							</div>
 						</section>
 						<section class="block">

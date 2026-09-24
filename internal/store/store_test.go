@@ -761,3 +761,95 @@ func TestReapingWorkOfGoneHosts(t *testing.T) {
 		t.Errorf("the silent host's job was not reaped: %+v", got.Jobs)
 	}
 }
+
+func TestRoutinesAndHeartbeats(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	str := func(v string) *string { return &v }
+	yes := true
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+
+	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("x"), Title: str("t"), Schedule: str("every day")}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a bad schedule was accepted: %v", err)
+	}
+	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("x"), Title: str("t"), Schedule: str("0 9 * * *"),
+		AgentID: &a.ID, SetAgent: true, AutoRun: &yes}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("an auto-run routine with nothing to check was accepted: %v", err)
+	}
+	rt, err := s.CreateRoutine(ctx, ws, RoutineInput{
+		Name: str("Dependency bump"), Title: str("Bump deps {date}"), Schedule: str("0 9 * * 1"), Timezone: str("Asia/Yangon"),
+		AgentID: &a.ID, SetAgent: true, AutoRun: &yes, SetCriteria: true,
+		Criteria: []ProposedCriterion{{Text: "tests pass", Kind: "deterministic", Check: json.RawMessage(`{"cmd":"go test ./..."}`)}},
+	})
+	if err != nil || rt.NextRunAt == nil || !rt.NextRunAt.After(time.Now()) {
+		t.Fatalf("create: %v %+v", err, rt.NextRunAt)
+	}
+	if got := RoutineTitle(rt, time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)); got != "Bump deps 2026-09-28" {
+		t.Errorf("title = %q", got)
+	}
+
+	// Make it due; one claim takes it and moves it on.
+	s.pool.Exec(ctx, `UPDATE routines SET next_run_at = now() - interval '1 minute' WHERE id = $1`, rt.ID)
+	due, err := s.ClaimDueRoutines(ctx, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := 0
+	for _, d := range due {
+		if d.ID == rt.ID {
+			mine++
+		}
+	}
+	if mine != 1 {
+		t.Fatalf("claimed %d times", mine)
+	}
+	again, _ := s.ClaimDueRoutines(ctx, time.Now())
+	for _, d := range again {
+		if d.ID == rt.ID {
+			t.Error("a claimed routine was due again at once")
+		}
+	}
+
+	// One open routine ticket at a time.
+	is, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "Bump deps", StateName: "Ready", AgentID: &a.ID})
+	s.RoutineFired(ctx, ws, rt.ID, is.ID)
+	rt, _ = s.GetRoutine(ctx, ws, rt.ID)
+	if open, _ := s.RoutineStillOpen(ctx, rt); !open {
+		t.Error("its ticket is open but the routine would fire again")
+	}
+
+	// Heartbeat: a human message since the agent last spoke is waiting for it.
+	hb := 5
+	s.UpdateAgent(ctx, ws, a.ID, AgentInput{Heartbeat: &hb})
+	if _, err := s.UpdateAgent(ctx, ws, a.ID, AgentInput{Heartbeat: str2int(2)}); err == nil {
+		t.Error("a two-minute heartbeat was accepted")
+	}
+	s.CreateComment(ctx, ws, is.ID, "reply to me", "human", "")
+	beats, _ := s.ClaimDueHeartbeats(ctx, time.Now())
+	found := false
+	for _, b := range beats {
+		found = found || b.AgentID == a.ID
+	}
+	if !found {
+		t.Fatal("a due heartbeat was not claimed")
+	}
+	if b2, _ := s.ClaimDueHeartbeats(ctx, time.Now()); len(b2) > 0 {
+		for _, b := range b2 {
+			if b.AgentID == a.ID {
+				t.Error("a heartbeat fired twice in one interval")
+			}
+		}
+	}
+	waiting, _ := s.WaitingForAgent(ctx, ws, a.ID)
+	if len(waiting) != 1 || waiting[0] != is.ID {
+		t.Errorf("waiting = %v, want the ticket with the new message", waiting)
+	}
+	s.CreateComment(ctx, ws, is.ID, "done", "ai", a.ID)
+	if waiting, _ := s.WaitingForAgent(ctx, ws, a.ID); len(waiting) != 0 {
+		t.Errorf("still waiting after the agent replied: %v", waiting)
+	}
+}
+
+func str2int(n int) *int { return &n }
