@@ -110,6 +110,13 @@ type RunResult struct {
 	// against a subscription, not per call. A budget ceiling cannot police what
 	// it cannot see, so this is surfaced rather than passed off as zero.
 	CostUnknown bool
+	// NotionalCostUSD is what the run would have cost at list price when it ran
+	// on a subscription. It is recorded, never counted: CostUSD is what the
+	// budget guard polices, and a subscription run spends none of it.
+	NotionalCostUSD float64
+	// Usage splits Tokens by kind. One total misleads: a cache read is a tenth
+	// the price of fresh input and most of what a long session consumes.
+	Usage TokenUsage
 	// Questions holds anything the agent asked. A daemon cannot answer, so these
 	// become the escalation payload rather than a hang.
 	Questions []string
@@ -118,6 +125,17 @@ type RunResult struct {
 	DeniedTools []string
 	Duration    time.Duration
 }
+
+// TokenUsage is a run's tokens by kind, for runners that report the split.
+type TokenUsage struct {
+	Input         int `json:"input"`
+	CacheRead     int `json:"cache_read"`
+	CacheCreation int `json:"cache_creation"`
+	Output        int `json:"output"`
+}
+
+// Total is every token the model processed.
+func (u TokenUsage) Total() int { return u.Input + u.CacheRead + u.CacheCreation + u.Output }
 
 // splitModel turns "provider/model" into its parts. A bare name has no provider.
 func splitModel(s string) (provider, model string) {

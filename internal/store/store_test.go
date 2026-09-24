@@ -433,3 +433,23 @@ func TestKeyCollisionStepsOver(t *testing.T) {
 		t.Fatalf("reused the taken key %s", squatter)
 	}
 }
+
+// Every runner the orchestrator can drive is a label a new workspace offers.
+func TestNewWorkspaceOffersEveryRunner(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	labels, err := s.ListLabels(ctx, ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, l := range labels {
+		have[l.Name] = true
+	}
+	for _, runner := range []string{"opencode", "codex", "claude"} {
+		if !have[runner] {
+			t.Errorf("new workspace lacks the %q runner label", runner)
+		}
+	}
+}

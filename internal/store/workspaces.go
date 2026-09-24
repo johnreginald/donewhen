@@ -277,7 +277,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, 
 			('needs-triage','#a1a1aa','triage'),('needs-info','#fbbf24','triage'),
 			('ready-for-agent','#38bdf8','triage'),('ready-for-human','#c084fc','triage'),
 			('wontfix','#f87171','triage'),
-			('opencode','#38bdf8','runner'),('codex','#8b87ff','runner')
+			('opencode','#38bdf8','runner'),('codex','#8b87ff','runner'),('claude','#d97757','runner')
 		) AS v(name,color,grp)
 		JOIN label_groups g ON g.workspace_id = $1 AND g.name = v.grp`, w.ID); err != nil {
 		return models.Workspace{}, err

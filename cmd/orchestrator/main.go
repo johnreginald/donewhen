@@ -90,7 +90,7 @@ func usage() {
 
 Flags (daemon only):
   --queue STATE      state to pull from (default: Ready)
-  --runner NAME      default worker: opencode or codex (default: opencode)
+  --runner NAME      default worker: opencode, codex or claude (default: opencode)
   --watch            subscribe to Raenil's event stream; a ticket entering the
                      queue state is picked up at once instead of on the next sweep
   --poll DUR         reconcile sweep interval (default 30s, or 5m with --watch).
@@ -101,7 +101,7 @@ Flags (daemon only):
   --require-label L  only take issues carrying this label (e.g. ready-for-agent)
 
 Flags (work/verify/finish/propose):
-  --runner NAME      default worker: opencode or codex. A runner: label on the
+  --runner NAME      default worker: opencode, codex or claude. A runner: label on the
                      ticket overrides it, so a ticket can pick its own agent.
   --asker NAME       who answers judgment criteria and drafts checklists
 
@@ -219,7 +219,25 @@ func runnerPool(ctx context.Context, oc *orchestrator.OpenCodeRunner) orchestrat
 	if err := cx.Available(ctx); err == nil {
 		set["codex"] = cx
 	}
+	cl := claudeRunner()
+	if err := cl.Available(ctx); err == nil {
+		set["claude"] = cl
+	}
 	return set
+}
+
+// claudeRunner builds the Claude Code runner. CLAUDE_ALLOWED_TOOLS lists the
+// extra commands a worker may run without asking, as Claude Code permission
+// rules separated by ";" — e.g. "Bash(go test *);Bash(go build *)". Bare Bash is
+// never granted: it would approve writes anywhere on the machine.
+func claudeRunner() *orchestrator.ClaudeRunner {
+	var allowed []string
+	for _, rule := range strings.Split(os.Getenv("CLAUDE_ALLOWED_TOOLS"), ";") {
+		if rule = strings.TrimSpace(rule); rule != "" {
+			allowed = append(allowed, rule)
+		}
+	}
+	return &orchestrator.ClaudeRunner{AllowedTools: allowed}
 }
 
 // pickAsker chooses who answers judgment criteria and drafts checklists.
@@ -232,8 +250,10 @@ func pickAsker(name string, oc *orchestrator.OpenCodeRunner) (orchestrator.Asker
 		return oc, nil
 	case "codex":
 		return &orchestrator.CodexRunner{}, nil
+	case "claude":
+		return claudeRunner(), nil
 	default:
-		return nil, fmt.Errorf("unknown asker %q (opencode, codex)", name)
+		return nil, fmt.Errorf("unknown asker %q (opencode, codex, claude)", name)
 	}
 }
 
@@ -285,8 +305,8 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	handoff := fs.Bool("handoff", false, "stop after the worker: commit its work, keep the worktree, leave the ticket alone")
-	runnerName := fs.String("runner", "opencode", "default worker: opencode or codex (a runner: label on the ticket wins)")
-	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode or codex")
+	runnerName := fs.String("runner", "opencode", "default worker: opencode, codex or claude (a runner: label on the ticket wins)")
+	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode, codex or claude")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -378,8 +398,8 @@ func cmdWork(ctx context.Context, args []string) error {
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	handoff := fs.Bool("handoff", false, "stop after the worker: commit its work, keep the worktree, leave the ticket alone")
-	runnerName := fs.String("runner", "opencode", "default worker: opencode or codex (a runner: label on the ticket wins)")
-	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode or codex")
+	runnerName := fs.String("runner", "opencode", "default worker: opencode, codex or claude (a runner: label on the ticket wins)")
+	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode, codex or claude")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -467,7 +487,7 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	escalateModel := fs.String("escalate-model", os.Getenv("ORCHESTRATOR_ESCALATE_MODEL"), "stronger model")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
 	queue := fs.String("queue", "Ready", "state to pull from")
-	runnerName := fs.String("runner", "opencode", "default worker: opencode or codex (a runner: label on the ticket wins)")
+	runnerName := fs.String("runner", "opencode", "default worker: opencode, codex or claude (a runner: label on the ticket wins)")
 	watch := fs.Bool("watch", false, "subscribe to Raenil's event stream for instant pickup")
 	poll := fs.Duration("poll", 0, "reconcile sweep interval (default 30s, or 5m with --watch)")
 	concurrency := fs.Int("concurrency", 1, "tickets in flight")
@@ -580,7 +600,7 @@ func cmdPropose(ctx context.Context, args []string) error {
 	model := fs.String("model", firstSet("ORCHESTRATOR_PROPOSE_MODEL", "ORCHESTRATOR_JUDGE_MODEL", "ORCHESTRATOR_ESCALATE_MODEL"), "model to draft with")
 	apply := fs.Bool("apply", false, "write the checklist to the ticket (default: print only)")
 	skipVerify := fs.Bool("skip-verify", false, "do not check that the criteria fail today")
-	askerName := fs.String("asker", "opencode", "who drafts: opencode or codex")
+	askerName := fs.String("asker", "opencode", "who drafts: opencode, codex or claude")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
 		return err
@@ -765,7 +785,7 @@ func cmdReview(ctx context.Context, args []string, finish bool) error {
 	baseRef := fs.String("base", "HEAD", "what the worktree branched from")
 	attempt := fs.Int("attempt", 90, "run directory to write evidence into")
 	judgeModel := fs.String("judge-model", os.Getenv("ORCHESTRATOR_JUDGE_MODEL"), "model for judgment criteria")
-	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode or codex")
+	askerName := fs.String("asker", "opencode", "who answers judgment criteria: opencode, codex or claude")
 	asJSON := fs.Bool("json", false, "print the verdict as JSON")
 	pos, err := parsePermuted(fs, args)
 	if err != nil {
