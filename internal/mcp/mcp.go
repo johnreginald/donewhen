@@ -192,8 +192,8 @@ func buildServer(d *deps) *server.MCPServer {
 				"call that names an issue/epic/initiative infers the workspace from it — so "+
 				"you rarely need the 'workspace' argument. Pass it when creating something "+
 				"with no parent. list_workspaces shows what you can reach. "+
-				"List tools return slim rows, newest first, capped at 50 (a 'more' note says when rows "+
-				"were left out); fetch one item's full detail with the get_* tool. "+
+				"List tools return slim rows; fetch one item's full detail with the get_* tool. Issue and "+
+				"document lists are newest first and capped at 50 (a 'more' note says when rows were left out). "+
 				"Use save_issue to create/move issues (pass 'state' as a status name). "+
 				"Backend-labeled issues should include a ```mermaid diagram in the description.",
 		),

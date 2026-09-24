@@ -204,8 +204,9 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		// The store numbers oldest first; the gap worth closing is the one just made.
-		slices.Reverse(issues)
+		// The gap worth closing is the one just made. Issue numbers are per
+		// workspace, so only the update time orders them across workspaces.
+		slices.SortFunc(issues, func(a, b models.Issue) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 		return d.issueList(ctx, req, wsIDs, issues, listLimit(req))
 	})
 
