@@ -128,3 +128,26 @@ func TestClaudeRunWithFakeBinary(t *testing.T) {
 		t.Errorf("prompt leaked onto the command line: %s", args)
 	}
 }
+
+// A key in the orchestrator's shell must never reach a subscription CLI.
+func TestClaudeRunDropsAPIKeys(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "sk-should-not-leak")
+	t.Setenv("RAENIL_KEEP_ME", "kept")
+	dir := t.TempDir()
+	fixture, _ := filepath.Abs("testdata/claude/ok.jsonl")
+	bin := filepath.Join(dir, "claude")
+	script := "#!/bin/sh\nenv > \"$(dirname \"$0\")/env.txt\"\ncat >/dev/null\ncat " + fixture + "\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&ClaudeRunner{Bin: bin}).Run(context.Background(), RunRequest{Prompt: "x", Cwd: dir}); err != nil {
+		t.Fatal(err)
+	}
+	env, _ := os.ReadFile(filepath.Join(dir, "env.txt"))
+	if strings.Contains(string(env), "sk-should-not-leak") {
+		t.Error("ANTHROPIC_API_KEY reached the claude process")
+	}
+	if !strings.Contains(string(env), "RAENIL_KEEP_ME=kept") {
+		t.Error("unrelated environment was dropped too")
+	}
+}

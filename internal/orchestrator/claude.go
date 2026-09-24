@@ -39,8 +39,9 @@ type ClaudeRunner struct {
 	// MCPConfig is an MCP config file for work runs. Empty gives the worker no
 	// MCP servers at all; either way the user's own servers are never loaded.
 	MCPConfig string
-	// MaxBudgetUSD stops a single run at this list-price spend. Zero is no cap.
-	// Unlike the daemon's hourly guard it acts during the run, not after.
+	// MaxBudgetUSD is passed as --max-budget-usd. Zero is no cap. Unlike the
+	// daemon's hourly guard it would act during the run; how the CLI applies it
+	// on a subscription is not yet verified.
 	MaxBudgetUSD float64
 
 	ready readyCache
@@ -94,6 +95,7 @@ func (r *ClaudeRunner) Available(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, r.bin(), "auth", "status")
+	cmd.Env = subscriptionEnv(claudeKeyEnv)
 	cmd.Stdin = nil
 	out, err := cmd.Output()
 	if err != nil {
@@ -198,6 +200,7 @@ func (r *ClaudeRunner) run(ctx context.Context, req RunRequest) (string, RunResu
 
 	cmd := exec.CommandContext(ctx, r.bin(), r.args(req, mcpConfig)...)
 	cmd.Dir = req.Cwd
+	cmd.Env = subscriptionEnv(claudeKeyEnv)
 	cmd.Stdin = strings.NewReader(req.Prompt)
 
 	// Always capture output: discarding it is how a failure becomes "claude

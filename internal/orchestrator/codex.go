@@ -91,11 +91,17 @@ func (r *CodexRunner) Available(ctx context.Context) error {
 	if !strings.Contains(strings.ToLower(out), "logged in") {
 		return fmt.Errorf("codex is not logged in: %s", strings.TrimSpace(out))
 	}
+	// An API-key login also says "logged in"; only the ChatGPT one is the
+	// subscription Codex is meant to run on.
+	if !strings.Contains(strings.ToLower(out), "chatgpt") {
+		return fmt.Errorf("codex is not logged in with ChatGPT (%s): run `codex login`", strings.TrimSpace(out))
+	}
 	return nil
 }
 
 func (r *CodexRunner) capture(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, r.bin(), args...)
+	cmd.Env = subscriptionEnv(codexKeyEnv)
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -163,6 +169,7 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 
 	cmd := exec.CommandContext(ctx, r.bin(), args...)
 	cmd.Dir = req.Cwd
+	cmd.Env = subscriptionEnv(codexKeyEnv)
 	// Never inherit a live stdin: a child that blocks on it hangs with no output,
 	// which is exactly how the OpenCode CLI wedged.
 	cmd.Stdin = nil

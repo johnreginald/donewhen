@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -124,6 +126,29 @@ type RunResult struct {
 	// can see the agent was stopped rather than merely unlucky.
 	DeniedTools []string
 	Duration    time.Duration
+}
+
+// Environment variables that would switch a CLI from its subscription login to
+// metered billing or another provider. Claude and Codex run on the subscription
+// only, so a key left in the orchestrator's shell must never reach them. The
+// list follows Paperclip's AI_AUTH_ENV_KEYS for the same two CLIs.
+var (
+	claudeKeyEnv = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+		"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"}
+	codexKeyEnv = []string{"OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"}
+)
+
+// subscriptionEnv is the current environment without the named variables.
+func subscriptionEnv(drop []string) []string {
+	env := os.Environ()
+	out := env[:0:0]
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if !slices.Contains(drop, name) {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // TokenUsage is a run's tokens by kind, for runners that report the split.

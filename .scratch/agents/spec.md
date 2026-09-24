@@ -164,9 +164,11 @@ MCP connector catalog (user: out), multi-company, cloud sandboxes.
 
 ## Slice 1 — Claude runner: done when
 - [x] `ClaudeRunner` implements Runner, Asker, Ready, EffectiveModel (`internal/orchestrator/claude.go`).
-- [x] Prompt on stdin; `--setting-sources project`; `--strict-mcp-config`; no user hooks/settings.
-- [x] Work runs: writes inside the worktree allowed, writes outside refused and reported in `DeniedTools` (live test).
-- [x] Bare `Bash` never pre-approved; per-repo rules via `CLAUDE_ALLOWED_TOOLS`.
+- [x] Prompt on stdin; `--setting-sources project`; `--strict-mcp-config`; user settings not loaded.
+- [ ] **No user hooks at all.** One SessionStart hook still fires (outputs `{}`). `--bare` would skip it but reads only `ANTHROPIC_API_KEY`, never the subscription, and skips CLAUDE.md. Full isolation = temp `CLAUDE_CONFIG_DIR` + `CLAUDE_CODE_OAUTH_TOKEN` from `setup-token` → lands with the Connections slice.
+- [x] Work runs: writes inside the worktree allowed; writes outside by `touch`, shell redirect and `python3 -c` all refused and reported in `DeniedTools` (live test, 2026-09-25).
+- [x] Bare `Bash` never pre-approved; extra rules via `CLAUDE_ALLOWED_TOOLS` (machine-wide for now — per-repo/per-agent comes with the agents entity). Without rules a worker cannot run `go test`; criteria still run the checks themselves.
+- [x] API-key env vars (`ANTHROPIC_API_KEY`, Bedrock/Vertex switches, `OPENAI_API_KEY`, …) stripped from Claude and Codex child processes; Codex must be a ChatGPT login.
 - [x] Reviewer (AskIn) read-only; judge (Ask) no tools.
 - [x] Tokens from `modelUsage` split input / cache-read / cache-creation / output; subscription cost recorded as notional, not billed.
 - [x] Refuses a non-subscription (API-key) login.
