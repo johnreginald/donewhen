@@ -20,6 +20,7 @@ type routineReq struct {
 	Title         *string                   `json:"title"`
 	DescriptionMd *string                   `json:"descriptionMd"`
 	Criteria      []store.ProposedCriterion `json:"criteria"`
+	Labels        []string                  `json:"labels"`
 	Schedule      *string                   `json:"schedule"`
 	Timezone      *string                   `json:"timezone"`
 	Enabled       *bool                     `json:"enabled"`
@@ -39,9 +40,11 @@ func readRoutineReq(r *http.Request) (store.RoutineInput, error) {
 	_, setAgent := raw["agentId"]
 	_, setProject := raw["projectId"]
 	_, setCriteria := raw["criteria"]
+	_, setLabels := raw["labels"]
 	return store.RoutineInput{
 		Name: q.Name, AgentID: q.AgentID, SetAgent: setAgent, ProjectID: q.ProjectID, SetProject: setProject,
 		Title: q.Title, DescriptionMD: q.DescriptionMd, Criteria: q.Criteria, SetCriteria: setCriteria,
+		Labels: q.Labels, SetLabels: setLabels,
 		Schedule: q.Schedule, Timezone: q.Timezone, Enabled: q.Enabled, AutoRun: q.AutoRun,
 	}, nil
 }
@@ -117,6 +120,7 @@ func (s *Server) fireRoutine(ctx context.Context, wsID string, rt models.Routine
 		StateName:     "Ready",
 		ProjectID:     rt.ProjectID,
 		AgentID:       rt.AgentID,
+		LabelNames:    rt.Labels,
 	}, actor)
 	if err != nil {
 		return is, false, err

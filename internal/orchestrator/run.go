@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,6 +76,10 @@ type Orchestrator struct {
 	// Instructions are the agent's own, given ahead of the ticket on every
 	// work run, as a chat turn gets them.
 	Instructions string
+	// MCPConfig and ExtraTools give a work run Raenil's tools — ask_user, so
+	// a worker that needs a decision asks for it instead of guessing.
+	MCPConfig  string
+	ExtraTools []string
 	// HostName names this machine on run records; empty means its hostname.
 	// A runner host sets its own name, so its runs can be matched to it.
 	HostName string
@@ -128,6 +133,10 @@ func (o *Orchestrator) forTicket(ctx context.Context, ref string) (*Orchestrator
 // verdict and evidence so the worker is told exactly what refused it.
 type AttemptSpec struct {
 	Attempt int
+	// Slot names this attempt's branch, worktree and run directory. Zero means
+	// Attempt. Work sets it past the ticket's earlier runs, so running a
+	// handed-back ticket again never collides with the branch it kept.
+	Slot int
 	// SessionID continues a previous attempt's session, keeping its context.
 	SessionID string
 	// Model overrides the configured model, which is how escalation works.
@@ -150,6 +159,10 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	attempt := spec.Attempt
 	if attempt < 1 {
 		attempt = 1
+	}
+	slot := spec.Slot
+	if slot < 1 {
+		slot = attempt
 	}
 	var v Verdict
 
@@ -206,7 +219,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 
 	// 3. Claim it.
-	branch := fmt.Sprintf("ticket/%s-attempt-%d", strings.ToLower(issue.Key), attempt)
+	branch := fmt.Sprintf("ticket/%s-attempt-%d", strings.ToLower(issue.Key), slot)
 	if err := o.Raenil.SetState(ctx, issue.ID, cfg.StateInProgress); err != nil {
 		return v, nil, fmt.Errorf("claim issue: %w", err)
 	}
@@ -229,12 +242,12 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 
 	// 4. Isolate. The worker writes freely in here and nowhere else.
-	runDir, err := NewRunDir(cfg.RunRoot, issue.Key, attempt)
+	runDir, err := NewRunDir(cfg.RunRoot, issue.Key, slot)
 	if err != nil {
 		releaseClaim("could not create the run directory")
 		return v, nil, err
 	}
-	wtPath := filepath.Join(cfg.RunRoot, "worktrees", fmt.Sprintf("%s-%d", issue.Key, attempt))
+	wtPath := filepath.Join(cfg.RunRoot, "worktrees", fmt.Sprintf("%s-%d", issue.Key, slot))
 	_ = os.RemoveAll(wtPath)
 	wt, err := AddWorktree(ctx, cfg.Repo, wtPath, branch, cfg.BaseRef)
 	if err != nil {
@@ -264,6 +277,18 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if in := strings.TrimSpace(o.Instructions); in != "" {
 		prompt = "## Your instructions\n\n" + in + "\n\n" + prompt
 	}
+	// Answers the user already gave on this ticket are part of the brief: a
+	// worker that asked must not be sent back to work without them.
+	if its, err := o.Raenil.Interactions(ctx, issue.ID); err == nil {
+		if d := decisionsMade(its); d != "" {
+			prompt += "\n\n## Decisions already made\n\n" + d
+		}
+	}
+	if o.MCPConfig != "" {
+		prompt += "\n\n## When you need a decision\n\nIf you cannot finish without a decision only the user can make, " +
+			"call the Raenil tool ask_user on " + issue.Key + " with a few concrete options, then end your turn. " +
+			"Do not guess, and do not stop for anything you can decide yourself.\n"
+	}
 	if err := os.WriteFile(runDir.File("context.md"), []byte(prompt), 0o644); err != nil {
 		return v, nil, err
 	}
@@ -274,7 +299,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		host, _ = os.Hostname()
 	}
 	runRec, recErr := o.Raenil.StartRun(ctx, RunStartReq{IssueID: issue.ID, AgentID: o.AgentID, Kind: "work",
-		Runner: runner.Name(), Model: effectiveModel(runner, model), Attempt: attempt, Host: host})
+		Runner: runner.Name(), Model: effectiveModel(runner, model), Attempt: slot, Host: host})
 	if recErr != nil {
 		o.logf("warning: could not record the run: %v", recErr)
 	}
@@ -282,26 +307,35 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		res           RunResult
 		runErr        error
 		verdictStatus string
+		patchText     string
 	)
 	defer func() {
 		if runRec.ID != "" {
-			o.finishRun(context.WithoutCancel(ctx), runRec.ID, runner.Name(), runDir.File("worker.log"), res, runErr, verdictStatus)
+			o.finishRun(context.WithoutCancel(ctx), runRec.ID, runner.Name(), runDir.File("worker.log"), res, runErr, verdictStatus, patchText)
 		}
 	}()
 
+	runStart := time.Now()
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
 	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), runner.Name())
 	res, runErr = runner.Run(ctx, RunRequest{
-		Prompt:    prompt,
-		Cwd:       wtPath,
-		Model:     model,
-		Timeout:   cfg.Timeout,
-		LogPath:   runDir.File("worker.log"),
-		SessionID: spec.SessionID,
+		Prompt:       prompt,
+		Cwd:          wtPath,
+		Model:        model,
+		Timeout:      cfg.Timeout,
+		LogPath:      runDir.File("worker.log"),
+		SessionID:    spec.SessionID,
+		MCPConfig:    o.MCPConfig,
+		AllowedTools: o.ExtraTools,
 	})
 	stopStream()
 	if runErr != nil {
 		o.logf("runner error: %v", runErr)
+	}
+	// Questions the agent asked on the ticket during this run stop the
+	// attempts: they wait for the answers, not for another try.
+	if o.AgentID != "" {
+		res.Questions = append(res.Questions, o.questionsAskedSince(ctx, issue.ID, runStart)...)
 	}
 	if res.CostUnknown {
 		o.logf("worker finished: exit=%d aborted=%v cost=UNREPORTED (%s bills against a subscription) tokens=%d",
@@ -325,6 +359,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 	if patch, derr := gitRaw(ctx, wtPath, "diff", "--cached", cfg.BaseRef); derr == nil {
 		_ = os.WriteFile(runDir.File("diff.patch"), []byte(patch), 0o644)
+		patchText = redact(patch)
 	}
 
 	// 7. Decide, ticking each criterion the moment it is met.
@@ -565,7 +600,7 @@ func Commit(ctx context.Context, dir, message string) (string, error) {
 
 // finishRun closes the run record with what the attempt produced. The log tail
 // is rendered and redacted here, on the machine that ran it, before it leaves.
-func (o *Orchestrator) finishRun(ctx context.Context, runID, runner, logPath string, res RunResult, runErr error, verdict string) {
+func (o *Orchestrator) finishRun(ctx context.Context, runID, runner, logPath string, res RunResult, runErr error, verdict, diff string) {
 	out := RunOutcome{
 		Status:      runOutcomeStatus(res, runErr),
 		Verdict:     verdict,
@@ -576,6 +611,7 @@ func (o *Orchestrator) finishRun(ctx context.Context, runID, runner, logPath str
 		Billing:     res.Billing,
 		DeniedTools: res.DeniedTools,
 		LogTail:     runLogTail(logPath, runner),
+		Diff:        diff,
 		Tokens: map[string]int{
 			"input": res.Usage.Input, "cacheRead": res.Usage.CacheRead,
 			"cacheCreation": res.Usage.CacheCreation, "output": res.Usage.Output, "total": res.Tokens,
@@ -604,4 +640,38 @@ func runOutcomeStatus(res RunResult, runErr error) string {
 	default:
 		return "succeeded"
 	}
+}
+
+// questionsAskedSince returns the questions this orchestrator's agent posted
+// on a ticket, still open, since a moment.
+func (o *Orchestrator) questionsAskedSince(ctx context.Context, issueID string, since time.Time) []string {
+	its, err := o.Raenil.Interactions(ctx, issueID)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, it := range its {
+		if it.Kind != "questions" || it.Status != "open" || it.AgentID == nil || *it.AgentID != o.AgentID || it.CreatedAt.Before(since) {
+			continue
+		}
+		var p struct {
+			Questions []models.Question `json:"questions"`
+		}
+		_ = json.Unmarshal(it.Payload, &p)
+		for _, q := range p.Questions {
+			out = append(out, q.Text)
+		}
+	}
+	return out
+}
+
+// decisionsMade lists the questions answered on a ticket, question → answer.
+func decisionsMade(its []models.Interaction) string {
+	var b strings.Builder
+	for _, it := range its {
+		if it.Kind == "questions" && it.Status == "answered" {
+			b.WriteString(strings.TrimPrefix(renderResponse(it), "**User answered:**\n"))
+		}
+	}
+	return strings.TrimSpace(b.String())
 }

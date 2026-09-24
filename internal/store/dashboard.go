@@ -18,21 +18,25 @@ type Dashboard struct {
 	Recent   []DashboardTask   `json:"recentTasks"`
 }
 
-// DashboardAgent is one runner and the last thing it did. Until agents exist
-// as their own records, a runner that has run here is the agent.
+// DashboardAgent is one agent and the last thing it did.
 type DashboardAgent struct {
-	Runner     string     `json:"runner"`
-	Model      string     `json:"model"`
-	Status     string     `json:"status"` // the latest run's status
-	IssueKey   string     `json:"issueKey"`
-	IssueTitle string     `json:"issueTitle"`
-	StartedAt  time.Time  `json:"startedAt"`
-	FinishedAt *time.Time `json:"finishedAt"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Slug        string     `json:"slug"`
+	AgentStatus string     `json:"agentStatus"` // active | paused
+	Runner      string     `json:"runner"`
+	Model       string     `json:"model"`
+	Status      string     `json:"status"` // the latest run's; "" if it never ran
+	IssueKey    string     `json:"issueKey"`
+	IssueTitle  string     `json:"issueTitle"`
+	StartedAt   *time.Time `json:"startedAt"`
+	FinishedAt  *time.Time `json:"finishedAt"`
 }
 
 // DashboardKPIs are the four headline cards.
 type DashboardKPIs struct {
-	RunnersActive   int     `json:"runnersActive"`    // runners that ran in the last 14 days
+	AgentsActive    int     `json:"agentsActive"` // agents not paused
+	AgentsPaused    int     `json:"agentsPaused"`
 	RunsRunning     int     `json:"runsRunning"`      // right now
 	InProgress      int     `json:"inProgress"`       // tickets in a started state
 	Open            int     `json:"open"`             // tickets not done or canceled
@@ -76,19 +80,25 @@ func (s *Store) Dashboard(ctx context.Context, wsID string, tz *time.Location) (
 	var d Dashboard
 	zone := tz.String()
 
-	// Agents: each runner's most recent run.
+	// Agents, each with its most recent run.
 	rows, err := s.pool.Query(ctx, `
-		SELECT DISTINCT ON (r.runner) r.runner, r.model, r.status, coalesce(i.key, ''), coalesce(i.title, ''),
-		       r.started_at, r.finished_at
-		FROM runs r LEFT JOIN issues i ON i.id = r.issue_id
-		WHERE r.workspace_id = $1
-		ORDER BY r.runner, r.started_at DESC`, wsID)
+		SELECT a.id, a.name, a.slug, a.status, a.harness, coalesce(lr.model, a.model),
+		       coalesce(lr.status, ''), coalesce(lr.key, ''), coalesce(lr.title, ''), lr.started_at, lr.finished_at
+		FROM agents a
+		LEFT JOIN LATERAL (
+			SELECT r.model, r.status, i.key, i.title, r.started_at, r.finished_at
+			FROM runs r LEFT JOIN issues i ON i.id = r.issue_id
+			WHERE r.agent_id = a.id ORDER BY r.started_at DESC LIMIT 1
+		) lr ON true
+		WHERE a.workspace_id = $1
+		ORDER BY lr.started_at DESC NULLS LAST, a.name`, wsID)
 	if err != nil {
 		return d, err
 	}
 	for rows.Next() {
 		var a DashboardAgent
-		if err := rows.Scan(&a.Runner, &a.Model, &a.Status, &a.IssueKey, &a.IssueTitle, &a.StartedAt, &a.FinishedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Name, &a.Slug, &a.AgentStatus, &a.Runner, &a.Model, &a.Status, &a.IssueKey,
+			&a.IssueTitle, &a.StartedAt, &a.FinishedAt); err != nil {
 			rows.Close()
 			return d, err
 		}
@@ -112,13 +122,17 @@ func (s *Store) Dashboard(ctx context.Context, wsID string, tz *time.Location) (
 		return d, err
 	}
 	err = s.pool.QueryRow(ctx, `
-		SELECT count(DISTINCT runner) FILTER (WHERE started_at >= now() - interval '14 days'),
-		       count(*) FILTER (WHERE status IN ('running', 'queued')),
+		SELECT count(*) FILTER (WHERE status IN ('running', 'queued')),
 		       coalesce(sum(cost_usd) FILTER (WHERE started_at >= date_trunc('month', now() AT TIME ZONE $2) AT TIME ZONE $2), 0)::float8,
 		       coalesce(sum(notional_cost_usd) FILTER (WHERE started_at >= date_trunc('month', now() AT TIME ZONE $2) AT TIME ZONE $2), 0)::float8,
 		       coalesce(sum(tokens_total) FILTER (WHERE started_at >= date_trunc('month', now() AT TIME ZONE $2) AT TIME ZONE $2), 0)
 		FROM runs WHERE workspace_id = $1`, wsID, zone).
-		Scan(&k.RunnersActive, &k.RunsRunning, &k.MonthCostUSD, &k.MonthNotionalUS, &k.MonthTokens)
+		Scan(&k.RunsRunning, &k.MonthCostUSD, &k.MonthNotionalUS, &k.MonthTokens)
+	if err != nil {
+		return d, err
+	}
+	err = s.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE status = 'active'), count(*) FILTER (WHERE status = 'paused')
+		FROM agents WHERE workspace_id = $1`, wsID).Scan(&k.AgentsActive, &k.AgentsPaused)
 	if err != nil {
 		return d, err
 	}

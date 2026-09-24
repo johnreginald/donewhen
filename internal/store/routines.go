@@ -13,17 +13,20 @@ import (
 	"raenil/internal/models"
 )
 
-const routineCols = `r.id, r.name, r.agent_id, r.project_id, r.title, r.description_md, r.criteria, r.schedule,
+const routineCols = `r.id, r.name, r.agent_id, r.project_id, r.title, r.description_md, r.criteria, r.labels, r.schedule,
 	r.timezone, r.enabled, r.auto_run, r.next_run_at, r.last_run_at, r.last_issue_id, coalesce(i.key, ''),
 	r.created_at, r.updated_at`
 
 func scanRoutine(row pgx.Row) (models.Routine, error) {
 	var r models.Routine
-	var crit []byte
-	err := row.Scan(&r.ID, &r.Name, &r.AgentID, &r.ProjectID, &r.Title, &r.DescriptionMD, &crit, &r.Schedule,
+	var crit, labels []byte
+	err := row.Scan(&r.ID, &r.Name, &r.AgentID, &r.ProjectID, &r.Title, &r.DescriptionMD, &crit, &labels, &r.Schedule,
 		&r.Timezone, &r.Enabled, &r.AutoRun, &r.NextRunAt, &r.LastRunAt, &r.LastIssueID, &r.LastIssueKey,
 		&r.CreatedAt, &r.UpdatedAt)
 	r.Criteria = json.RawMessage(crit)
+	if json.Unmarshal(labels, &r.Labels) != nil || r.Labels == nil {
+		r.Labels = []string{}
+	}
 	return r, err
 }
 
@@ -51,6 +54,8 @@ type RoutineInput struct {
 	DescriptionMD *string
 	Criteria      []ProposedCriterion
 	SetCriteria   bool
+	Labels        []string
+	SetLabels     bool
 	Schedule      *string
 	Timezone      *string
 	Enabled       *bool
@@ -87,23 +92,26 @@ func checkRoutine(r models.Routine) error {
 
 // CreateRoutine adds a routine and schedules its first run.
 func (s *Store) CreateRoutine(ctx context.Context, wsID string, in RoutineInput) (models.Routine, error) {
-	r := models.Routine{Timezone: "UTC", Enabled: true, Criteria: json.RawMessage(`[]`)}
+	r := models.Routine{Timezone: "UTC", Enabled: true, Criteria: json.RawMessage(`[]`), Labels: []string{}}
 	applyRoutine(&r, in)
 	if err := checkRoutine(r); err != nil {
+		return r, err
+	}
+	if err := s.checkRepoLabel(ctx, wsID, r.Labels); err != nil {
 		return r, err
 	}
 	next, _ := NextRun(r.Schedule, r.Timezone, time.Now())
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO routines (workspace_id, name, agent_id, project_id, title, description_md, criteria, schedule,
-		                      timezone, enabled, auto_run, next_run_at)
+		                      timezone, enabled, auto_run, next_run_at, labels)
 		VALUES ($1, $2,
 		        (SELECT id FROM agents WHERE id::text = $3 AND workspace_id = $1),
 		        (SELECT id FROM projects WHERE id::text = $4 AND workspace_id = $1),
-		        $5, $6, $7, $8, $9, $10, $11, $12)
+		        $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id`,
 		wsID, r.Name, deref(r.AgentID), deref(r.ProjectID), r.Title, r.DescriptionMD, []byte(r.Criteria),
-		r.Schedule, r.Timezone, r.Enabled, r.AutoRun, next).Scan(&id)
+		r.Schedule, r.Timezone, r.Enabled, r.AutoRun, next, mustJSON(r.Labels)).Scan(&id)
 	if err != nil {
 		return r, err
 	}
@@ -120,16 +128,19 @@ func (s *Store) UpdateRoutine(ctx context.Context, wsID, id string, in RoutineIn
 	if err := checkRoutine(r); err != nil {
 		return r, err
 	}
+	if err := s.checkRepoLabel(ctx, wsID, r.Labels); err != nil {
+		return r, err
+	}
 	next, _ := NextRun(r.Schedule, r.Timezone, time.Now())
 	_, err = s.pool.Exec(ctx, `
 		UPDATE routines SET name = $3,
 		       agent_id = (SELECT id FROM agents WHERE id::text = $4 AND workspace_id = $1),
 		       project_id = (SELECT id FROM projects WHERE id::text = $5 AND workspace_id = $1),
 		       title = $6, description_md = $7, criteria = $8, schedule = $9, timezone = $10,
-		       enabled = $11, auto_run = $12, next_run_at = $13, updated_at = now()
+		       enabled = $11, auto_run = $12, next_run_at = $13, labels = $14, updated_at = now()
 		WHERE workspace_id = $1 AND id::text = $2`,
 		wsID, r.ID, r.Name, deref(r.AgentID), deref(r.ProjectID), r.Title, r.DescriptionMD, []byte(r.Criteria),
-		r.Schedule, r.Timezone, r.Enabled, r.AutoRun, next)
+		r.Schedule, r.Timezone, r.Enabled, r.AutoRun, next, mustJSON(r.Labels))
 	if err != nil {
 		return r, err
 	}
@@ -164,6 +175,12 @@ func applyRoutine(r *models.Routine, in RoutineInput) {
 			b = []byte(`[]`)
 		}
 		r.Criteria = b
+	}
+	if in.SetLabels {
+		r.Labels = in.Labels
+		if r.Labels == nil {
+			r.Labels = []string{}
+		}
 	}
 	if in.Schedule != nil {
 		r.Schedule = strings.TrimSpace(*in.Schedule)
@@ -249,7 +266,8 @@ func (s *Store) ClaimDueRoutines(ctx context.Context, now time.Time) ([]DueRouti
 	for rows.Next() {
 		var d DueRoutine
 		var crit []byte
-		err := rows.Scan(&d.WorkspaceID, &d.ID, &d.Name, &d.AgentID, &d.ProjectID, &d.Title, &d.DescriptionMD, &crit,
+		var labels []byte
+		err := rows.Scan(&d.WorkspaceID, &d.ID, &d.Name, &d.AgentID, &d.ProjectID, &d.Title, &d.DescriptionMD, &crit, &labels,
 			&d.Schedule, &d.Timezone, &d.Enabled, &d.AutoRun, &d.NextRunAt, &d.LastRunAt, &d.LastIssueID,
 			&d.LastIssueKey, &d.CreatedAt, &d.UpdatedAt)
 		if err != nil {
@@ -257,6 +275,7 @@ func (s *Store) ClaimDueRoutines(ctx context.Context, now time.Time) ([]DueRouti
 			return nil, err
 		}
 		d.Criteria = crit
+		_ = json.Unmarshal(labels, &d.Labels)
 		due = append(due, d)
 	}
 	rows.Close()
@@ -371,4 +390,42 @@ func RoutineTitle(r models.Routine, at time.Time) string {
 		loc = time.UTC
 	}
 	return strings.ReplaceAll(r.Title, "{date}", at.In(loc).Format("2006-01-02"))
+}
+
+// checkRepoLabel enforces the rule for multi-repo workspaces: a routine's
+// tickets must say which repository they are worked in, or an agent runs them
+// in whatever checkout its host defaults to.
+func (s *Store) checkRepoLabel(ctx context.Context, wsID string, labels []string) error {
+	var repos []string
+	rows, err := s.pool.Query(ctx, `
+		SELECT l.name FROM labels l JOIN label_groups g ON g.id = l.group_id
+		WHERE l.workspace_id = $1 AND g.name = 'repo'`, wsID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		repos = append(repos, n)
+	}
+	rows.Close()
+	if len(repos) < 2 {
+		return nil
+	}
+	for _, l := range labels {
+		for _, r := range repos {
+			if strings.EqualFold(l, r) {
+				return nil
+			}
+		}
+	}
+	return invalid("this workspace has several repositories (%s): give the routine a repo label", strings.Join(repos, ", "))
+}
+
+func mustJSON(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
 }

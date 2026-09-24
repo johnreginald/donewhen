@@ -79,3 +79,13 @@ func TestStaleSession(t *testing.T) {
 		t.Error("new instructions kept the old fingerprint")
 	}
 }
+
+func TestDecisionsMade(t *testing.T) {
+	qs, _ := json.Marshal(map[string]any{"questions": []models.Question{{ID: "q1", Text: "Greeting?"}}})
+	ans, _ := json.Marshal(map[string]any{"answers": []models.Answer{{QuestionID: "q1", Choices: []string{"Mingalaba"}}}})
+	open := models.Interaction{Kind: "questions", Status: "open", Payload: qs}
+	done := models.Interaction{Kind: "questions", Status: "answered", Payload: qs, Response: ans}
+	if got := decisionsMade([]models.Interaction{open, done}); got != "- Greeting? → Mingalaba" {
+		t.Errorf("decisions = %q", got)
+	}
+}

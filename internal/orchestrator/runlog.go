@@ -37,6 +37,9 @@ var redactPatterns = []*regexp.Regexp{
 // a transcript, whatever their shape.
 var secretEnvName = regexp.MustCompile(`(?i)(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|DSN|DATABASE_URL)`)
 
+// Redact removes credentials from text that is about to leave this machine.
+func Redact(s string) string { return redact(s) }
+
 // redact removes credentials from text that is about to leave this machine.
 func redact(s string) string {
 	// Values first, longest first, so a value containing another is not left

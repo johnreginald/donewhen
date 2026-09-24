@@ -71,13 +71,14 @@
 					</div>
 					{#if d.agents.length}
 						<div class="agents">
-							{#each d.agents as a (a.runner)}
+							{#each d.agents as a (a.id)}
 								<div class="agent">
-									<div class="ah">
+									<a class="ah" href="/agents/{a.slug}">
 										<span class="av"><Bot size={14} strokeWidth={2} /></span>
-										<span class="an">{a.runner}</span>
+										<span class="an">{a.name}</span>
 										{#if a.model}<span class="am">{a.model}</span>{/if}
-									</div>
+										{#if a.agentStatus === 'paused'}<span class="ap">paused</span>{/if}
+									</a>
 									{#if a.issueKey}
 										<button class="at" onclick={() => goto('/issue/' + a.issueKey)}>
 											{#if a.status === 'running'}<LoaderCircle size={13} strokeWidth={2.2} class="spin" />{/if}
@@ -87,21 +88,22 @@
 									{/if}
 									<div class="af">
 										{#if a.status === 'running'}Working · started {rel(a.startedAt)}
-										{:else}Finished {rel(a.finishedAt || a.startedAt)} · {a.status}{/if}
+										{:else if a.status}Finished {rel(a.finishedAt || a.startedAt)} · {a.status}
+										{:else}Hasn't run yet{/if}
 									</div>
 								</div>
 							{/each}
 						</div>
 					{:else}
-						<div class="none">No agent has run yet. Runs appear here as soon as one starts.</div>
+						<div class="none">No agents yet. <a href="/agents">Create one</a> to hand it tickets.</div>
 					{/if}
 				</section>
 
 				<section class="kpis">
 					<div class="kpi">
-						<div class="kv">{d.kpis.runnersActive}<Bot size={15} strokeWidth={2} /></div>
-						<div class="kl">Agents active</div>
-						<div class="ks">{d.kpis.runsRunning} running now</div>
+						<div class="kv">{d.kpis.agentsActive}<Bot size={15} strokeWidth={2} /></div>
+						<div class="kl">Agents enabled</div>
+						<div class="ks">{d.kpis.runsRunning} running now, {d.kpis.agentsPaused} paused</div>
 					</div>
 					<div class="kpi">
 						<div class="kv">{d.kpis.inProgress}<CircleDot size={15} strokeWidth={2} /></div>
@@ -219,7 +221,10 @@
 	}
 	.an {
 		font-weight: 500;
-		text-transform: capitalize;
+	}
+	.ap {
+		font-size: 11px;
+		color: var(--st-review);
 	}
 	.am {
 		font-family: var(--mono);

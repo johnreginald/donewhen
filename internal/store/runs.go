@@ -18,7 +18,7 @@ import (
 const runCols = `r.id, r.issue_id, coalesce(i.key, ''), coalesce(i.title, ''),
 	r.agent_id, r.kind, r.runner, r.model, r.attempt, r.status, r.verdict, r.session_id, r.exit_code, r.agent_error,
 	r.tokens_input, r.tokens_cache_read, r.tokens_cache_creation, r.tokens_output, r.tokens_total,
-	r.cost_usd::float8, r.notional_cost_usd::float8, r.billing, r.denied_tools, r.log_tail, r.host,
+	r.cost_usd::float8, r.notional_cost_usd::float8, r.billing, r.denied_tools, r.log_tail, r.diff, r.host,
 	r.started_at, r.finished_at`
 
 func scanRun(row pgx.Row) (models.Run, error) {
@@ -27,7 +27,7 @@ func scanRun(row pgx.Row) (models.Run, error) {
 	err := row.Scan(&r.ID, &r.IssueID, &r.IssueKey, &r.IssueTitle,
 		&r.AgentID, &r.Kind, &r.Runner, &r.Model, &r.Attempt, &r.Status, &r.Verdict, &r.SessionID, &r.ExitCode, &r.AgentError,
 		&r.Tokens.Input, &r.Tokens.CacheRead, &r.Tokens.CacheCreation, &r.Tokens.Output, &r.Tokens.Total,
-		&r.CostUSD, &r.NotionalUSD, &r.Billing, &denied, &r.LogTail, &r.Host,
+		&r.CostUSD, &r.NotionalUSD, &r.Billing, &denied, &r.LogTail, &r.Diff, &r.Host,
 		&r.StartedAt, &r.FinishedAt)
 	if err != nil {
 		return r, err
@@ -93,7 +93,11 @@ type RunFinish struct {
 	Billing     string
 	DeniedTools []string
 	LogTail     string
+	Diff        string
 }
+
+// maxDiff caps the diff a run keeps for review.
+const maxDiff = 200 * 1024
 
 // maxLogTail caps what a run keeps of its transcript. The full log stays on
 // the machine that ran it; this is enough to see how an attempt ended.
@@ -118,6 +122,9 @@ func (s *Store) FinishRun(ctx context.Context, wsID, runID string, f RunFinish) 
 	if len(f.LogTail) > maxLogTail {
 		f.LogTail = f.LogTail[len(f.LogTail)-maxLogTail:]
 	}
+	if len(f.Diff) > maxDiff {
+		f.Diff = f.Diff[:maxDiff] + "\n… (diff cut at 200 KB; the full one is in the worktree)\n"
+	}
 	if f.DeniedTools == nil {
 		f.DeniedTools = []string{}
 	}
@@ -128,11 +135,11 @@ func (s *Store) FinishRun(ctx context.Context, wsID, runID string, f RunFinish) 
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE runs SET status=$3, verdict=$4, session_id=$5, exit_code=$6, agent_error=$7,
 		   tokens_input=$8, tokens_cache_read=$9, tokens_cache_creation=$10, tokens_output=$11, tokens_total=$12,
-		   cost_usd=$13, notional_cost_usd=$14, billing=$15, denied_tools=$16, log_tail=$17, finished_at=now()
+		   cost_usd=$13, notional_cost_usd=$14, billing=$15, denied_tools=$16, log_tail=$17, diff=$18, finished_at=now()
 		 WHERE id=$2 AND workspace_id=$1 AND finished_at IS NULL`,
 		wsID, runID, f.Status, f.Verdict, f.SessionID, f.ExitCode, f.AgentError,
 		f.Tokens.Input, f.Tokens.CacheRead, f.Tokens.CacheCreation, f.Tokens.Output, f.Tokens.Total,
-		f.CostUSD, f.NotionalUSD, f.Billing, denied, f.LogTail)
+		f.CostUSD, f.NotionalUSD, f.Billing, denied, f.LogTail, f.Diff)
 	if err != nil {
 		return models.Run{}, err
 	}
@@ -198,7 +205,7 @@ func (s *Store) ListRuns(ctx context.Context, wsID string, f RunFilter) ([]model
 			return nil, err
 		}
 		if !f.WithLog {
-			r.LogTail = ""
+			r.LogTail, r.Diff = "", ""
 		}
 		out = append(out, r)
 	}

@@ -89,6 +89,7 @@ func (s *Server) handleFinishRun(w http.ResponseWriter, r *http.Request) {
 		Billing     string           `json:"billing"`
 		DeniedTools []string         `json:"deniedTools"`
 		LogTail     string           `json:"logTail"`
+		Diff        string           `json:"diff"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
@@ -97,7 +98,7 @@ func (s *Server) handleFinishRun(w http.ResponseWriter, r *http.Request) {
 	run, err := s.store.FinishRun(r.Context(), ws(r), r.PathValue("id"), store.RunFinish{
 		Status: body.Status, Verdict: body.Verdict, SessionID: body.SessionID, ExitCode: body.ExitCode,
 		AgentError: body.AgentError, Tokens: body.Tokens, CostUSD: body.CostUSD, NotionalUSD: body.NotionalUSD,
-		Billing: body.Billing, DeniedTools: body.DeniedTools, LogTail: body.LogTail,
+		Billing: body.Billing, DeniedTools: body.DeniedTools, LogTail: body.LogTail, Diff: body.Diff,
 	})
 	if handleStoreErr(w, err) {
 		return
@@ -113,7 +114,7 @@ func (s *Server) handleFinishRun(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	s.checkBudget(r.Context(), ws(r), run)
-	run.LogTail = "" // the event is a notification, not the transcript
+	run.LogTail, run.Diff = "", "" // the event is a notification, not the transcript
 	s.publishRun(r, "run.finished", run)
 	writeJSON(w, 200, run)
 }

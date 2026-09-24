@@ -107,7 +107,7 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 		SessionID:     session.SessionID,
 	}
 	if runner.Name() == "claude" && h.MCPURL != "" {
-		path, cleanup, err := writeMCPConfig(h.MCPURL, c.Token, a.ID, c.Workspace)
+		path, cleanup, err := WriteMCPConfig(h.MCPURL, c.Token, a.ID, c.Workspace)
 		if err != nil {
 			return nil, err
 		}
@@ -136,11 +136,19 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 	if res.Resumed && (runErr != nil || out.Exit != 0) && out.Answer == "" {
 		h.logf("resume failed (%v %s); starting a fresh session", runErr, out.AgentError)
 		req.SessionID, req.Prompt, res.Resumed = "", chatBrief(*a, issue, criteria, comments, interactions, in), false
+		// Its own log, so the live transcript follows the retry from its start.
+		stopStream()
+		if retry, err := os.CreateTemp("", "raenil-chat-*.log"); err == nil {
+			retry.Close()
+			defer os.Remove(retry.Name())
+			req.LogPath = retry.Name()
+		}
+		stopStream = streamLog(ctx, c, rec.ID, req.LogPath, runner.Name())
 		out, runErr = runner.Run(ctx, req)
 	}
 	stopStream()
 	if rec.ID != "" {
-		o.finishRun(context.WithoutCancel(ctx), rec.ID, runner.Name(), req.LogPath, out, runErr, "")
+		o.finishRun(context.WithoutCancel(ctx), rec.ID, runner.Name(), req.LogPath, out, runErr, "", "")
 	}
 	if runErr != nil {
 		return res, runErr
@@ -205,10 +213,10 @@ func resumable(r Runner) bool {
 	return false
 }
 
-// writeMCPConfig writes a one-run MCP config that reaches Raenil as the host,
+// WriteMCPConfig writes a one-run MCP config that reaches Raenil as the host,
 // naming the agent so what it writes is attributed to it. The file holds the
 // host's token, so it is private and removed after the run.
-func writeMCPConfig(url, token, agentID, workspace string) (string, func(), error) {
+func WriteMCPConfig(url, token, agentID, workspace string) (string, func(), error) {
 	headers := map[string]string{"Authorization": "Bearer " + token, "X-Raenil-Agent": agentID}
 	if workspace != "" {
 		// The host's token may span several workspaces; the agent sees only

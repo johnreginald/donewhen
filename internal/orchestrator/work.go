@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -69,8 +70,11 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 	names := map[int]string{}
 	attempts := 0
 
+	// Earlier runs of this ticket keep their branches; this run's attempts
+	// are numbered after them so their branches never collide.
+	prior := o.priorSlots(ctx, ref)
 	for attempt := 1; attempt <= wc.Triage.MaxAttempts; attempt++ {
-		spec.Attempt = attempt
+		spec.Attempt, spec.Slot = attempt, prior+attempt
 
 		v, ev, err := o.RunAttempt(ctx, ref, spec)
 		if err != nil {
@@ -199,4 +203,25 @@ func alwaysFailing(failures map[int]int, names map[int]string, attempts int) str
 		"A criterion that never once passes is often the command rather than the code. "+
 		"Check it exits 0 on a repository where the work is already done.",
 		attempts, strings.Join(stuck, "\n"))
+}
+
+// priorSlots is the highest attempt number a ticket's branches already use in
+// its repository, or 0.
+func (o *Orchestrator) priorSlots(ctx context.Context, ref string) int {
+	scoped, issue, err := o.forTicket(ctx, ref)
+	if err != nil {
+		return 0
+	}
+	prefix := "ticket/" + strings.ToLower(issue.Key) + "-attempt-"
+	out, err := git(ctx, scoped.Cfg.withDefaults().Repo, "branch", "--list", prefix+"*", "--format=%(refname:short)")
+	if err != nil {
+		return 0
+	}
+	high := 0
+	for _, line := range strings.Split(out, "\n") {
+		if n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(line), prefix)); err == nil && n > high {
+			high = n
+		}
+	}
+	return high
 }

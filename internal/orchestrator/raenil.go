@@ -197,6 +197,7 @@ type RunOutcome struct {
 	Billing     string         `json:"billing,omitempty"`
 	DeniedTools []string       `json:"deniedTools,omitempty"`
 	LogTail     string         `json:"logTail,omitempty"`
+	Diff        string         `json:"diff,omitempty"`
 }
 
 // AppendRunEvents posts lines of a run's live transcript.

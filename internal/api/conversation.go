@@ -232,3 +232,25 @@ func (s *Server) resolveProposal(r *http.Request, it models.Interaction, decisio
 	}
 	return s.store.ResolveInteraction(r.Context(), ws(r), it.ID, "approved", map[string]any{"created": created, "note": note})
 }
+
+// handleReviewIssue queues Verify or Finish on a handed-back ticket for the
+// host that has its worktree — the dashboard's `orchestrator verify` and
+// `orchestrator finish`.
+func (s *Server) handleReviewIssue(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		is, err := s.resolveIssue(r, r.PathValue("id"))
+		if handleStoreErr(w, err) {
+			return
+		}
+		a, ok := s.agentFor(w, r, is, "")
+		if !ok {
+			return
+		}
+		j, err := s.store.EnqueueJob(r.Context(), ws(r), store.JobInput{Kind: kind, AgentID: a.ID, IssueID: is.ID})
+		if handleStoreErr(w, err) {
+			return
+		}
+		s.publish(r, events.Event{Type: "job.updated", Job: &j})
+		writeJSON(w, http.StatusCreated, j)
+	}
+}

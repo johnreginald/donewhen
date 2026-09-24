@@ -26,6 +26,9 @@ type Host struct {
 	// RunTicket works a ticket for an agent. Nil means run_ticket jobs fail
 	// with a clear message rather than being claimed and dropped.
 	RunTicket func(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, error)
+	// Review verifies (finish=false) or finishes a handed-back ticket, as
+	// `orchestrator verify` / `finish` do. Nil refuses those jobs.
+	Review func(ctx context.Context, c *RaenilClient, job ClaimedJob, finish bool) (any, error)
 	// RunnerFor builds the runner an agent asked for, with its settings.
 	// Empty means the host's runner for the agent's harness.
 	RunnerFor func(models.Agent) (Runner, error)
@@ -168,6 +171,12 @@ func (h *Host) handle(ctx context.Context, c *RaenilClient, job ClaimedJob) {
 		result, err = h.testEnv(ctx, job)
 	case "chat":
 		result, err = h.chat(ctx, c, job)
+	case "verify", "finish":
+		if h.Review == nil {
+			err = errors.New("this host cannot review tickets")
+		} else {
+			result, err = h.Review(ctx, c, job, job.Kind == "finish")
+		}
 	case "run_ticket":
 		if h.RunTicket == nil {
 			err = errors.New("this host cannot run tickets")

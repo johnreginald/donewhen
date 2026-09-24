@@ -389,3 +389,38 @@ func TestWorkPromptCarriesAgentInstructions(t *testing.T) {
 		t.Errorf("prompt does not open with the agent's instructions:\n%s", prompt)
 	}
 }
+
+// A handed-back worktree's review diff shows the worker's committed change,
+// not only what was touched since.
+func TestReviewDiffShowsTheWholeChange(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, fixRunner{})
+	o.Cfg.Handoff = true
+	if _, err := o.RunTicket(context.Background(), "TST-1", 1); err != nil {
+		t.Fatal(err)
+	}
+	diff, err := o.ReviewDiff(context.Background(), "TST-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(diff, "+export const add = (a:number,b:number) => a + b") {
+		t.Errorf("review diff lacks the worker's change:\n%s", diff)
+	}
+}
+
+// Running a handed-back ticket again numbers its attempt after the kept one,
+// instead of failing on the branch that already exists.
+func TestWorkAgainAfterHandoff(t *testing.T) {
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, fixRunner{})
+	o.Cfg.Handoff = true
+	for i := 0; i < 2; i++ {
+		if _, err := o.Work(context.Background(), "TST-1", WorkConfig{Triage: TriagePolicy{MaxAttempts: 1}}); err != nil {
+			t.Fatalf("run %d: %v", i+1, err)
+		}
+	}
+	out, _ := git(context.Background(), o.Cfg.Repo, "branch", "--list", "ticket/tst-1-attempt-*", "--format=%(refname:short)")
+	if !strings.Contains(out, "ticket/tst-1-attempt-1") || !strings.Contains(out, "ticket/tst-1-attempt-2") {
+		t.Errorf("branches = %q, want attempt-1 and attempt-2", out)
+	}
+}

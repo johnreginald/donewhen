@@ -243,6 +243,7 @@ type Run struct {
 	Billing     string     `json:"billing"` // subscription | api | unknown
 	DeniedTools []string   `json:"deniedTools"`
 	LogTail     string     `json:"logTail,omitempty"`
+	Diff        string     `json:"diff,omitempty"` // what the run changed, for review
 	Host        string     `json:"host,omitempty"`
 	StartedAt   time.Time  `json:"startedAt"`
 	FinishedAt  *time.Time `json:"finishedAt"`
@@ -383,6 +384,7 @@ type Routine struct {
 	Title         string          `json:"title"`
 	DescriptionMD string          `json:"descriptionMd"`
 	Criteria      json.RawMessage `json:"criteria"`
+	Labels        []string        `json:"labels"`
 	Schedule      string          `json:"schedule"`
 	Timezone      string          `json:"timezone"`
 	Enabled       bool            `json:"enabled"`

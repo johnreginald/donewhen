@@ -546,11 +546,12 @@ func TestDashboard(t *testing.T) {
 		t.Errorf("today = %+v, want one succeeded, passed run", today)
 	}
 	k := d.KPIs
-	if k.InProgress != 1 || k.Open != 1 || k.RunnersActive != 1 || k.MonthTokens != 1000 || k.MonthCostUSD != 0.25 {
+	if k.InProgress != 1 || k.Open != 1 || k.MonthTokens != 1000 || k.MonthCostUSD != 0.25 {
 		t.Errorf("kpis = %+v", k)
 	}
-	if len(d.Agents) != 1 || d.Agents[0].Runner != "claude" || d.Agents[0].IssueKey != a.Key {
-		t.Errorf("agents = %+v", d.Agents)
+	// Runs with no agent do not make one up: the strip shows agents.
+	if len(d.Agents) != 0 {
+		t.Errorf("agents = %+v, want none: no agent exists", d.Agents)
 	}
 	if len(d.Recent) != 2 {
 		t.Errorf("recent tasks = %d, want 2", len(d.Recent))
@@ -895,5 +896,43 @@ func TestCostsAndBudgets(t *testing.T) {
 	s.UpdateAgent(ctx, ws, a.ID, AgentInput{Status: &paused})
 	if got, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"}); ok && got.ID == j.ID {
 		t.Error("a paused agent's job was handed out")
+	}
+}
+
+func TestRepoLabelAndBudgetGuards(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	str := func(v string) *string { return &v }
+
+	// One repo: no label needed.
+	s.CreateLabel(ctx, ws, "api", "", "repo")
+	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("a"), Title: str("t"), Schedule: str("0 9 * * *")}); err != nil {
+		t.Errorf("single repo: %v", err)
+	}
+	// Two repos: the routine must name one.
+	s.CreateLabel(ctx, ws, "web", "", "repo")
+	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("b"), Title: str("t"), Schedule: str("0 9 * * *")}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a routine without a repo label was accepted in a two-repo workspace: %v", err)
+	}
+	rt, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("c"), Title: str("t"), Schedule: str("0 9 * * *"),
+		Labels: []string{"web"}, SetLabels: true})
+	if err != nil || len(rt.Labels) != 1 || rt.Labels[0] != "web" {
+		t.Errorf("labelled routine: %v %+v", err, rt.Labels)
+	}
+
+	// An agent at its cap takes no new work.
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	is, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "t", StateName: "Ready"})
+	run, _ := s.StartRun(ctx, ws, RunStart{IssueID: is.ID, AgentID: a.ID, Runner: "claude"})
+	s.FinishRun(ctx, ws, run.ID, RunFinish{Status: "succeeded", Tokens: models.RunTokens{Input: 5000}})
+	cap := int64(1000)
+	s.UpdateAgent(ctx, ws, a.ID, AgentInput{BudgetTokens: &cap})
+	if _, err := s.EnqueueJob(ctx, ws, JobInput{Kind: "chat", AgentID: a.ID, IssueID: is.ID}); !errors.Is(err, ErrConflict) {
+		t.Errorf("an over-budget agent was given work: %v", err)
+	}
+	if _, err := s.EnqueueJob(ctx, ws, JobInput{Kind: "test_env", AgentID: a.ID}); err != nil {
+		t.Errorf("an environment test was refused for budget: %v", err)
 	}
 }

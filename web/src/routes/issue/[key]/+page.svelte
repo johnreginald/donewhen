@@ -14,6 +14,7 @@
 	import ActivityFeed from '$components/ActivityFeed.svelte';
 	import RunTicket from '$components/RunTicket.svelte';
 	import Conversation from '$components/Conversation.svelte';
+	import ReviewBlock from '$components/ReviewBlock.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { touchRecent } from '$lib/recent.js';
 	import { activeWorkspace, agents } from '$lib/store.js';
@@ -269,6 +270,7 @@
 					</section>
 				{/if}
 
+				{#key issue.id}<ReviewBlock {issue} stateName={stOf(issue)?.name} />{/key}
 				{#key issue.id}<Conversation {issue} />{/key}
 
 				{#if activity.length}

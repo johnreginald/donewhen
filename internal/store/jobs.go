@@ -93,12 +93,21 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 		if in.AgentID == "" {
 			return models.Job{}, invalid("a test needs an agent")
 		}
-	case "run_ticket", "chat":
+	case "run_ticket", "chat", "verify", "finish":
 		if in.AgentID == "" || in.IssueID == "" {
 			return models.Job{}, invalid("a %s job needs an agent and a ticket", in.Kind)
 		}
 	default:
 		return models.Job{}, invalid("unknown job kind %q", in.Kind)
+	}
+	if in.Kind == "run_ticket" || in.Kind == "chat" {
+		// An agent at its monthly cap takes no new work, however it was asked
+		// for — a click, a routine or a heartbeat.
+		if a, err := s.GetAgent(ctx, wsID, in.AgentID); err == nil && (a.BudgetTokens > 0 || a.BudgetUSD > 0) {
+			if u, err := s.AgentMonthUsage(ctx, wsID, a.ID, time.Now()); err == nil && BudgetShare(a.BudgetTokens, a.BudgetUSD, u) >= 1 {
+				return models.Job{}, fmt.Errorf("%s has reached its monthly budget: %w", a.Name, ErrConflict)
+			}
+		}
 	}
 	if in.Kind == "chat" {
 		// A turn that has not started yet will read every message waiting for
@@ -115,13 +124,13 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 			return models.Job{}, err
 		}
 	}
-	if in.Kind == "run_ticket" {
-		// One run of a ticket at a time: two would cut two worktrees from the
-		// same ticket and race each other to commit.
+	if in.Kind == "run_ticket" || in.Kind == "verify" || in.Kind == "finish" {
+		// One piece of work on a ticket's worktree at a time: two would cut two
+		// worktrees, or verify one while it is being finished, and race to commit.
 		var busy bool
 		if err := s.pool.QueryRow(ctx, `
 			SELECT EXISTS(SELECT 1 FROM jobs WHERE workspace_id = $1 AND issue_id::text = $2
-			              AND kind = 'run_ticket' AND status IN ('queued', 'claimed'))`,
+			              AND kind IN ('run_ticket', 'verify', 'finish') AND status IN ('queued', 'claimed'))`,
 			wsID, in.IssueID).Scan(&busy); err != nil {
 			return models.Job{}, err
 		}

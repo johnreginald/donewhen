@@ -4,7 +4,8 @@
 	// thing here that starts on its own, and only when you turn it on.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { agents, projects } from '$lib/store.js';
+	import { agents, projects, labels } from '$lib/store.js';
+	import LabelPicker from '$components/LabelPicker.svelte';
 	import { showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -40,13 +41,20 @@
 			agentId: '',
 			projectId: '',
 			criteria: [],
+			labels: [],
 			autoRun: false,
 			enabled: true
 		};
 	}
 	function edit(r) {
 		editing = r
-			? { ...r, agentId: r.agentId || '', projectId: r.projectId || '', criteria: structuredClone(r.criteria || []) }
+			? {
+					...r,
+					agentId: r.agentId || '',
+					projectId: r.projectId || '',
+					criteria: structuredClone(r.criteria || []),
+					labels: [...(r.labels || [])]
+				}
 			: blank();
 	}
 	const custom = $derived(editing && !PRESETS.some((p) => p.cron === editing.schedule));
@@ -153,6 +161,10 @@
 				<EpicMenu value={editing.agentId} options={$agents} icon={Bot} none="No agent" onchange={(v) => (editing.agentId = v)} />
 				<span class="faint">in</span>
 				<EpicMenu value={editing.projectId} options={$projects} onchange={(v) => (editing.projectId = v)} />
+				<LabelPicker
+					selected={$labels.filter((l) => editing.labels.includes(l.name)).map((l) => l.id)}
+					onchange={(ids) => (editing.labels = $labels.filter((l) => ids.includes(l.id)).map((l) => l.name))}
+				/>
 			</div>
 			<div class="lbl">The ticket it makes</div>
 			<input class="field" bind:value={editing.title} placeholder="Title — {'{date}'} becomes the day, e.g. Bump dependencies {'{date}'}" />

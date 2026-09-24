@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"raenil/internal/models"
@@ -27,7 +28,12 @@ func (o *Orchestrator) FindWorktree(ticketKey string) (string, error) {
 	if len(matches) == 0 {
 		return "", fmt.Errorf("no worktree for %s — run `orchestrator work %s --handoff` first", ticketKey, ticketKey)
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(matches)))
+	// Newest attempt by number: as strings, attempt 10 would sort before 9.
+	n := func(name string) int {
+		v, _ := strconv.Atoi(strings.TrimPrefix(name, ticketKey+"-"))
+		return v
+	}
+	sort.Slice(matches, func(i, j int) bool { return n(matches[i]) > n(matches[j]) })
 	return filepath.Join(root, matches[0]), nil
 }
 
@@ -172,6 +178,29 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 
 	o.logf("%s → %s", issue.Key, cfg.StateInReview)
 	return v, nil
+}
+
+// ReviewDiff is the ticket's kept worktree against where it branched from, as
+// Verify leaves it staged — what a reviewer is looking at.
+func (o *Orchestrator) ReviewDiff(ctx context.Context, ref string) (string, error) {
+	scoped, issue, err := o.forTicket(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	wt, err := scoped.FindWorktree(issue.Key)
+	if err != nil {
+		return "", err
+	}
+	// The worktree's HEAD is already the worker's commit, so the diff has to
+	// run from where its branch left the main checkout — the whole change,
+	// the worker's commit and any fixes since.
+	base := scoped.Cfg.withDefaults().BaseRef
+	if main, err := git(ctx, scoped.Cfg.Repo, "rev-parse", "HEAD"); err == nil {
+		if mb, err := git(ctx, wt, "merge-base", "HEAD", strings.TrimSpace(main)); err == nil {
+			base = strings.TrimSpace(mb)
+		}
+	}
+	return gitRaw(ctx, wt, "diff", "--cached", base)
 }
 
 // branchForWorktree reads the branch a worktree has checked out.

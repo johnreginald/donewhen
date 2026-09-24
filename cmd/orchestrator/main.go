@@ -936,24 +936,26 @@ func cmdHost(ctx context.Context, args []string) error {
 	// with the agent's harness, model and allowlist: attempts, retries, and a
 	// kept worktree for review. The agent's harness decides — a runner: label
 	// on the ticket does not override the agent that was asked.
-	runTicket := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (any, error) {
+	// agentOrch builds the orchestrator an agent's job runs with: its harness,
+	// model, effort, allowed commands and instructions, on this host's runs.
+	agentOrch := func(c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (*orchestrator.Orchestrator, orchestrator.Runner, error) {
 		a := job.Agent
 		if a == nil {
-			return nil, errors.New("the job names no agent")
+			return nil, nil, errors.New("the job names no agent")
 		}
 		if a.Status == "paused" {
-			return nil, fmt.Errorf("%s is paused", a.Name)
+			return nil, nil, fmt.Errorf("%s is paused", a.Name)
 		}
 		if job.IssueKey == "" {
-			return nil, errors.New("the job names no ticket")
+			return nil, nil, errors.New("the job names no ticket")
 		}
 		runner, err := agentRunner(*a, oc)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		model := orchestrator.AgentModel(*a)
 		if model == "" {
-			return nil, fmt.Errorf("%s has no model: set one on its Harness page", a.Name)
+			return nil, nil, fmt.Errorf("%s has no model: set one on its Harness page", a.Name)
 		}
 		o := &orchestrator.Orchestrator{
 			Raenil:       c,
@@ -972,9 +974,58 @@ func cmdHost(ctx context.Context, args []string) error {
 		if asker, ok := runner.(orchestrator.Asker); ok {
 			o.Judge = orchestrator.NewJudge(asker, model)
 		}
+		return o, runner, nil
+	}
+
+	// Running a ticket from the dashboard is `orchestrator work KEY --handoff`
+	// with the agent's settings: attempts, retries, and a kept worktree for
+	// review. The agent's harness decides — a runner: label on the ticket does
+	// not override the agent that was asked. A Claude worker can ask the user
+	// through Raenil; a question stops the attempts until it is answered.
+	runTicket := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (any, error) {
+		o, runner, err := agentOrch(c, job)
+		if err != nil {
+			return nil, err
+		}
+		if runner.Name() == "claude" {
+			path, cleanup, err := orchestrator.WriteMCPConfig(rc.BaseURL+"/mcp", c.Token, job.Agent.ID, c.Workspace)
+			if err != nil {
+				return nil, err
+			}
+			defer cleanup()
+			o.MCPConfig, o.ExtraTools = path, []string{"mcp__raenil__ask_user"}
+		}
 		return o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
 			Triage: orchestrator.TriagePolicy{MaxAttempts: *maxAttempts, EscalateAfter: *maxAttempts},
 		})
+	}
+
+	// Verify and Finish from the dashboard run what `orchestrator verify` and
+	// `finish` run, on the worktree the Run kept: the criteria decide, Finish
+	// commits review fixes, links the commit, saves the document and moves the
+	// ticket to In Review.
+	review := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob, finish bool) (any, error) {
+		o, _, err := agentOrch(c, job)
+		if err != nil {
+			return nil, err
+		}
+		type result struct {
+			Verdict orchestrator.Verdict `json:"verdict"`
+			Diff    string               `json:"diff,omitempty"`
+		}
+		if finish {
+			v, err := o.Finish(ctx, job.IssueKey, 90)
+			return result{Verdict: v}, err
+		}
+		v, _, err := o.Verify(ctx, job.IssueKey, 90)
+		if err != nil {
+			return nil, err
+		}
+		diff, _ := o.ReviewDiff(ctx, job.IssueKey)
+		if len(diff) > 200*1024 {
+			diff = diff[:200*1024] + "\n… (cut at 200 KB)\n"
+		}
+		return result{Verdict: v, Diff: orchestrator.Redact(diff)}, nil
 	}
 
 	h := &orchestrator.Host{
@@ -983,6 +1034,7 @@ func cmdHost(ctx context.Context, args []string) error {
 		Clients:   serve,
 		Runners:   runners,
 		RunTicket: runTicket,
+		Review:    review,
 		RunnerFor: func(a models.Agent) (orchestrator.Runner, error) { return agentRunner(a, oc) },
 		Repos:     repos,
 		Repo:      *repo,
