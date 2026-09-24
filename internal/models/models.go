@@ -113,6 +113,7 @@ type Issue struct {
 	StateID       string    `json:"stateId"`
 	ProjectID     *string   `json:"projectId"`
 	AssigneeID    *string   `json:"assigneeId"`
+	AgentID       *string   `json:"agentId"`  // the agent this ticket is for, if any
 	Priority      int       `json:"priority"` // 0 none,1 urgent,2 high,3 medium,4 low
 	Position      float64   `json:"position"` // ordering within a state column
 	Labels        []Label   `json:"labels"`
@@ -224,6 +225,7 @@ type Run struct {
 	IssueID     *string    `json:"issueId"`
 	IssueKey    string     `json:"issueKey,omitempty"`
 	IssueTitle  string     `json:"issueTitle,omitempty"`
+	AgentID     *string    `json:"agentId"`
 	Runner      string     `json:"runner"`
 	Model       string     `json:"model"`
 	Attempt     int        `json:"attempt"`
@@ -260,3 +262,61 @@ const (
 	RunFailed    = "failed"
 	RunAborted   = "aborted"
 )
+
+// Agent is a configured worker: a harness, a model, and how it should behave.
+type Agent struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Role           string    `json:"role"`
+	Harness        string    `json:"harness"` // claude | codex | opencode
+	Model          string    `json:"model"`
+	Effort         string    `json:"effort"`
+	InstructionsMD string    `json:"instructionsMd"`
+	AllowedTools   []string  `json:"allowedTools"`
+	MaxTurns       int       `json:"maxTurns"`
+	Status         string    `json:"status"` // active | paused
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// Harnesses an agent can run on.
+var Harnesses = []string{"claude", "codex", "opencode"}
+
+// RunnerHost is a machine that runs agents, as it last reported itself.
+type RunnerHost struct {
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Harnesses  []HarnessStatus `json:"harnesses"`
+	Version    string          `json:"version"`
+	LastSeenAt time.Time       `json:"lastSeenAt"`
+}
+
+// HarnessStatus is what a host proved about one harness: installed, signed
+// in, on which kind of plan, and what to do when it is not.
+type HarnessStatus struct {
+	Harness   string    `json:"harness"`
+	Installed bool      `json:"installed"`
+	Ready     bool      `json:"ready"`
+	Auth      string    `json:"auth,omitempty"` // e.g. "claude.ai subscription", "ChatGPT", "API key"
+	Detail    string    `json:"detail,omitempty"`
+	Fix       string    `json:"fix,omitempty"` // the command that would make it ready
+	Models    []string  `json:"models,omitempty"`
+	CheckedAt time.Time `json:"checkedAt"`
+}
+
+// Job is work Raenil has queued for a runner host.
+type Job struct {
+	ID         string          `json:"id"`
+	Kind       string          `json:"kind"` // test_env | run_ticket
+	AgentID    *string         `json:"agentId"`
+	IssueID    *string         `json:"issueId"`
+	IssueKey   string          `json:"issueKey,omitempty"`
+	Status     string          `json:"status"` // queued | claimed | succeeded | failed | canceled
+	Host       string          `json:"host,omitempty"`
+	Result     json.RawMessage `json:"result"`
+	Error      string          `json:"error,omitempty"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	ClaimedAt  *time.Time      `json:"claimedAt"`
+	FinishedAt *time.Time      `json:"finishedAt"`
+}

@@ -11,9 +11,10 @@
 		loadIssues,
 		loadMeta,
 		activeWorkspace,
+		agents,
 		PRIORITIES
 	} from '$lib/store.js';
-	import { X } from '@lucide/svelte';
+	import { X, Bot } from '@lucide/svelte';
 	import { composer, closeComposer, showToast, openIssue } from '$lib/ui.js';
 	import PriorityMenu from './PriorityMenu.svelte';
 	import StatusMenu from './StatusMenu.svelte';
@@ -32,6 +33,7 @@
 	let desc = $state('');
 	let stateId = $state('');
 	let projectId = $state('');
+	let agentId = $state('');
 	let initiativeId = $state('');
 	let priority = $state(0);
 	let repoUrl = $state('');
@@ -100,6 +102,7 @@
 		repoUrl = pf.repoUrl || '';
 		stateId = pf.stateId || defaultStateId();
 		projectId = pf.projectId || get(activeProject) || '';
+		agentId = pf.agentId || '';
 		queueMicrotask(() => firstInput && firstInput.focus());
 	});
 
@@ -123,6 +126,7 @@
 					descriptionMd: desc,
 					stateId,
 					projectId: projectId || undefined,
+					agentId: agentId || undefined,
 					priority,
 					labelIds: [...selLabels]
 				});
@@ -224,6 +228,8 @@
 			{#if kind === 'issue'}
 				<input bind:this={firstInput} bind:value={title} class="big" placeholder="Task title" />
 				<div class="for-row">
+					<span class="faint">For</span>
+					<EpicMenu value={agentId} options={$agents} icon={Bot} none="Assignee" onchange={(v) => (agentId = v)} />
 					<span class="faint">in</span>
 					<EpicMenu value={projectId} options={epicOptions} onchange={(v) => (projectId = v)} />
 				</div>

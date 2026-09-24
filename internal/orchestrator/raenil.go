@@ -63,7 +63,7 @@ func (c *RaenilClient) do(ctx context.Context, method, path string, body, out an
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return fmt.Errorf("raenil %s %s: %s: %s", method, path, resp.Status, bytes.TrimSpace(b))
 	}
-	if out == nil {
+	if out == nil || resp.StatusCode == http.StatusNoContent {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
@@ -159,6 +159,31 @@ type RunOutcome struct {
 // FinishRun closes a run with what the attempt produced.
 func (c *RaenilClient) FinishRun(ctx context.Context, runID string, o RunOutcome) error {
 	return c.do(ctx, http.MethodPatch, "/api/runs/"+runID, o, nil)
+}
+
+// Heartbeat tells Raenil this host is alive and what it can run.
+func (c *RaenilClient) Heartbeat(ctx context.Context, host, version string, harnesses []models.HarnessStatus) error {
+	return c.do(ctx, http.MethodPost, "/api/hosts/heartbeat",
+		map[string]any{"name": host, "version": version, "harnesses": harnesses}, nil)
+}
+
+// ClaimedJob is a job handed to this host, with the agent it is for.
+type ClaimedJob struct {
+	models.Job
+	Agent *models.Agent `json:"agent"`
+}
+
+// ClaimJob asks for the next job this host can run. ok is false when there is
+// none.
+func (c *RaenilClient) ClaimJob(ctx context.Context, host string, harnesses []string) (job ClaimedJob, ok bool, err error) {
+	err = c.do(ctx, http.MethodPost, "/api/jobs/claim", map[string]any{"host": host, "harnesses": harnesses}, &job)
+	return job, err == nil && job.ID != "", err
+}
+
+// FinishJob reports how a claimed job ended.
+func (c *RaenilClient) FinishJob(ctx context.Context, id, host, status string, result any, errText string) error {
+	return c.do(ctx, http.MethodPost, "/api/jobs/"+id+"/finish",
+		map[string]any{"host": host, "status": status, "result": result, "error": errText}, nil)
 }
 
 // SaveDocument attaches the engineering artifact for an issue.

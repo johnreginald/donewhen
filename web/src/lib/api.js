@@ -136,6 +136,22 @@ export const api = {
 	updateCriterion: (id, b) => request('PATCH', `/criteria/${id}`, b),
 	deleteCriterion: (id) => request('DELETE', `/criteria/${id}`),
 	dashboard: (tz) => request('GET', '/dashboard' + (tz ? `?tz=${encodeURIComponent(tz)}` : '')),
+	// agents, runner hosts, queued jobs
+	agents: () => request('GET', '/agents'),
+	agent: (id) => request('GET', `/agents/${id}`),
+	createAgent: (b) => request('POST', '/agents', b),
+	updateAgent: (id, b) => request('PATCH', `/agents/${id}`, b),
+	deleteAgent: (id) => request('DELETE', `/agents/${id}`),
+	agentRuns: (id) => request('GET', `/agents/${id}/runs`),
+	testAgent: (id) => request('POST', `/agents/${id}/test`, {}),
+	hosts: () => request('GET', '/hosts'),
+	jobs: (q = {}) => {
+		const p = new URLSearchParams(Object.entries(q).filter(([, v]) => v));
+		const s = p.toString();
+		return request('GET', '/jobs' + (s ? `?${s}` : ''));
+	},
+	job: (id) => request('GET', `/jobs/${id}`),
+	enqueueJob: (b) => request('POST', '/jobs', b),
 	// runs — each agent attempt
 	runs: (q = {}) => {
 		const p = new URLSearchParams(Object.entries(q).filter(([, v]) => v));

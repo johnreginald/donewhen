@@ -7,6 +7,7 @@ export const states = writable([]);
 export const projects = writable([]);
 export const initiatives = writable([]);
 export const labels = writable([]);
+export const agents = writable([]); // the workspace's configured agents
 export const issues = writable([]);
 export const appConfig = writable({});
 export const me = writable(null);
@@ -60,13 +61,15 @@ export async function switchWorkspace(slug) {
 }
 
 export async function loadMeta() {
-	const [st, pr, ini, lb, cfg] = await Promise.all([
+	const [st, pr, ini, lb, cfg, ag] = await Promise.all([
 		api.states(),
 		api.projects(),
 		api.initiatives(),
 		api.labels(),
-		api.config()
+		api.config(),
+		api.agents().catch(() => [])
 	]);
+	agents.set(ag || []);
 	states.set(st || []);
 	projects.set(pr || []);
 	initiatives.set(ini || []);
@@ -89,6 +92,13 @@ export async function loadIssues() {
 // applyEvent reconciles a live SSE event into the issues store.
 export function applyEvent(ev) {
 	if (!ev) return;
+	if (ev.type === 'agent.saved' && ev.agent) {
+		agents.update((l) => {
+			const rest = l.filter((a) => a.id !== ev.agent.id);
+			return [...rest, ev.agent].sort((a, b) => a.name.localeCompare(b.name));
+		});
+		return;
+	}
 	if (ev.type === 'issue.deleted') {
 		issues.update((l) => l.filter((i) => i.id !== ev.issueId));
 		return;

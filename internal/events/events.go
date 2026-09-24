@@ -30,6 +30,9 @@ type Event struct {
 	To          *models.WorkflowState `json:"to,omitempty"`
 	Comment     *models.Comment       `json:"comment,omitempty"`
 	Run         *models.Run           `json:"run,omitempty"`
+	Job         *models.Job           `json:"job,omitempty"`
+	Host        *models.RunnerHost    `json:"host,omitempty"`
+	Agent       *models.Agent         `json:"agent,omitempty"`
 	At          time.Time             `json:"at"`
 }
 

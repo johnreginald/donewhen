@@ -20,7 +20,10 @@ export function connectSSE(onEvent) {
 			'issue.deleted',
 			'comment.added',
 			'run.started',
-			'run.finished'
+			'run.finished',
+			'job.updated',
+			'host.updated',
+			'agent.saved'
 		];
 		for (const t of types) {
 			es.addEventListener(t, (e) => {

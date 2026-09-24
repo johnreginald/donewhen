@@ -555,3 +555,75 @@ func TestDashboard(t *testing.T) {
 		t.Errorf("recent tasks = %d, want 2", len(d.Recent))
 	}
 }
+
+func TestAgentsAndJobs(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	wsA, wsB := newWorkspace(t, s), newWorkspace(t, s)
+	str := func(v string) *string { return &v }
+
+	a1, err := s.CreateAgent(ctx, wsA, AgentInput{Name: str("Chief Engineer"), Harness: str("claude"), Model: str("sonnet")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a2, err := s.CreateAgent(ctx, wsA, AgentInput{Name: str("Chief Engineer"), Harness: str("codex")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a1.Slug != "chief-engineer" || a2.Slug != "chief-engineer-2" {
+		t.Errorf("slugs = %q, %q", a1.Slug, a2.Slug)
+	}
+	if _, err := s.CreateAgent(ctx, wsA, AgentInput{Name: str("x"), Harness: str("gpt")}); err == nil {
+		t.Error("an unknown harness was accepted")
+	}
+	if _, err := s.UpdateAgent(ctx, wsA, a1.ID, AgentInput{AllowedTools: []string{"Bash"}, SetAllowed: true}); err == nil {
+		t.Error("bare Bash was accepted as an allowed tool")
+	}
+	if got, err := s.GetAgent(ctx, wsA, "chief-engineer"); err != nil || got.ID != a1.ID {
+		t.Errorf("get by slug: %v %v", got.ID, err)
+	}
+	if _, err := s.GetAgent(ctx, wsB, a1.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("another workspace read the agent: %v", err)
+	}
+
+	// A ticket can be for an agent in its own workspace only.
+	is, err := s.CreateIssue(ctx, wsA, IssueInput{Title: "t", StateName: "Ready", AgentID: &a1.ID})
+	if err != nil || is.AgentID == nil || *is.AgentID != a1.ID {
+		t.Fatalf("create with agent: %v %+v", err, is.AgentID)
+	}
+	other, _ := s.CreateIssue(ctx, wsB, IssueInput{Title: "o", StateName: "Ready"})
+	if _, err := s.UpdateIssue(ctx, wsB, other.ID, IssuePatch{AgentID: &a1.ID, SetAgent: true}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("assigned another workspace's agent: %v", err)
+	}
+
+	// Jobs: a host only gets work for a harness it has, once, and only it can finish it.
+	job, err := s.EnqueueJob(ctx, wsA, JobInput{Kind: "run_ticket", AgentID: a1.ID, IssueID: is.ID})
+	if err != nil || job.Status != "queued" || job.IssueKey != is.Key {
+		t.Fatalf("enqueue: %v %+v", err, job)
+	}
+	if _, ok, _ := s.ClaimJob(ctx, wsA, "mac", []string{"codex"}); ok {
+		t.Error("a codex-only host claimed a claude job")
+	}
+	got, ok, err := s.ClaimJob(ctx, wsA, "mac", []string{"claude"})
+	if err != nil || !ok || got.ID != job.ID || got.Status != "claimed" {
+		t.Fatalf("claim: %v %v %+v", ok, err, got)
+	}
+	if _, ok, _ := s.ClaimJob(ctx, wsA, "other", []string{"claude"}); ok {
+		t.Error("a claimed job was claimed again")
+	}
+	if _, err := s.FinishJob(ctx, wsA, job.ID, "other", "succeeded", nil, ""); !errors.Is(err, ErrConflict) {
+		t.Errorf("a different host finished the job: %v", err)
+	}
+	done, err := s.FinishJob(ctx, wsA, job.ID, "mac", "succeeded", []byte(`{"ok":true}`), "")
+	if err != nil || done.Status != "succeeded" || string(done.Result) != `{"ok": true}` {
+		t.Errorf("finish: %v %+v %s", err, done.Status, done.Result)
+	}
+
+	h, err := s.HostHeartbeat(ctx, wsA, "mac", "1", []models.HarnessStatus{{Harness: "claude", Installed: true, Ready: true}})
+	if err != nil || len(h.Harnesses) != 1 {
+		t.Fatalf("heartbeat: %v %+v", err, h)
+	}
+	if hosts, _ := s.ListHosts(ctx, wsB); len(hosts) != 0 {
+		t.Error("another workspace sees the host")
+	}
+}

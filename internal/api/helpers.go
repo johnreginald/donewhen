@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"raenil/internal/auth"
 	"raenil/internal/models"
@@ -37,6 +38,10 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 	}
 	if errors.Is(err, store.ErrConflict) {
 		writeErr(w, http.StatusConflict, err.Error())
+		return true
+	}
+	if errors.Is(err, store.ErrInvalid) {
+		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
 		return true
 	}
 	writeErr(w, http.StatusInternalServerError, err.Error())

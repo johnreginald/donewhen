@@ -15,7 +15,7 @@ import (
 // issue's key and title ride along so a list of runs reads without a lookup
 // per row.
 const runCols = `r.id, r.issue_id, coalesce(i.key, ''), coalesce(i.title, ''),
-	r.runner, r.model, r.attempt, r.status, r.verdict, r.session_id, r.exit_code, r.agent_error,
+	r.agent_id, r.runner, r.model, r.attempt, r.status, r.verdict, r.session_id, r.exit_code, r.agent_error,
 	r.tokens_input, r.tokens_cache_read, r.tokens_cache_creation, r.tokens_output, r.tokens_total,
 	r.cost_usd::float8, r.notional_cost_usd::float8, r.billing, r.denied_tools, r.log_tail, r.host,
 	r.started_at, r.finished_at`
@@ -24,7 +24,7 @@ func scanRun(row pgx.Row) (models.Run, error) {
 	var r models.Run
 	var denied []byte
 	err := row.Scan(&r.ID, &r.IssueID, &r.IssueKey, &r.IssueTitle,
-		&r.Runner, &r.Model, &r.Attempt, &r.Status, &r.Verdict, &r.SessionID, &r.ExitCode, &r.AgentError,
+		&r.AgentID, &r.Runner, &r.Model, &r.Attempt, &r.Status, &r.Verdict, &r.SessionID, &r.ExitCode, &r.AgentError,
 		&r.Tokens.Input, &r.Tokens.CacheRead, &r.Tokens.CacheCreation, &r.Tokens.Output, &r.Tokens.Total,
 		&r.CostUSD, &r.NotionalUSD, &r.Billing, &denied, &r.LogTail, &r.Host,
 		&r.StartedAt, &r.FinishedAt)
@@ -40,6 +40,7 @@ func scanRun(row pgx.Row) (models.Run, error) {
 // RunStart is what a machine knows when an attempt begins.
 type RunStart struct {
 	IssueID string
+	AgentID string // optional
 	Runner  string
 	Model   string
 	Attempt int
@@ -49,17 +50,19 @@ type RunStart struct {
 // StartRun records that an attempt has begun on an issue in this workspace.
 func (s *Store) StartRun(ctx context.Context, wsID string, in RunStart) (models.Run, error) {
 	if in.Runner == "" {
-		return models.Run{}, fmt.Errorf("runner is required")
+		return models.Run{}, invalid("runner is required")
 	}
 	if in.Attempt < 1 {
 		in.Attempt = 1
 	}
 	var id string
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO runs (workspace_id, issue_id, runner, model, attempt, host)
-		 SELECT $1, i.id, $3, $4, $5, $6 FROM issues i WHERE i.id = $2 AND i.workspace_id = $1
+		`INSERT INTO runs (workspace_id, issue_id, runner, model, attempt, host, agent_id)
+		 SELECT $1, i.id, $3, $4, $5, $6,
+		        (SELECT a.id FROM agents a WHERE a.id::text = $7 AND a.workspace_id = $1)
+		 FROM issues i WHERE i.id = $2 AND i.workspace_id = $1
 		 RETURNING id`,
-		wsID, in.IssueID, in.Runner, in.Model, in.Attempt, in.Host).Scan(&id)
+		wsID, in.IssueID, in.Runner, in.Model, in.Attempt, in.Host, in.AgentID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Run{}, ErrNotFound
 	}
@@ -96,13 +99,13 @@ var runBilling = map[string]bool{"subscription": true, "api": true, "unknown": t
 // refused rather than silently rewriting what was already recorded.
 func (s *Store) FinishRun(ctx context.Context, wsID, runID string, f RunFinish) (models.Run, error) {
 	if !runFinalStatus[f.Status] {
-		return models.Run{}, fmt.Errorf("status must be succeeded, failed or aborted, not %q", f.Status)
+		return models.Run{}, invalid("status must be succeeded, failed or aborted, not %q", f.Status)
 	}
 	if f.Billing == "" {
 		f.Billing = "unknown"
 	}
 	if !runBilling[f.Billing] {
-		return models.Run{}, fmt.Errorf("billing must be subscription, api or unknown, not %q", f.Billing)
+		return models.Run{}, invalid("billing must be subscription, api or unknown, not %q", f.Billing)
 	}
 	if len(f.LogTail) > maxLogTail {
 		f.LogTail = f.LogTail[len(f.LogTail)-maxLogTail:]
@@ -149,6 +152,7 @@ func (s *Store) GetRun(ctx context.Context, wsID, runID string) (models.Run, err
 // RunFilter narrows ListRuns. Zero values mean "any".
 type RunFilter struct {
 	IssueID string
+	AgentID string
 	Limit   int
 	// WithLog includes each run's log tail. Lists leave it out: it is the one
 	// field that can be tens of kilobytes.
@@ -162,6 +166,10 @@ func (s *Store) ListRuns(ctx context.Context, wsID string, f RunFilter) ([]model
 	if f.IssueID != "" {
 		args = append(args, f.IssueID)
 		q += fmt.Sprintf(" AND r.issue_id = $%d", len(args))
+	}
+	if f.AgentID != "" {
+		args = append(args, f.AgentID)
+		q += fmt.Sprintf(" AND r.agent_id = $%d", len(args))
 	}
 	q += " ORDER BY r.started_at DESC"
 	if f.Limit <= 0 || f.Limit > 500 {

@@ -15,8 +15,8 @@
 	import RunBlock from '$components/RunBlock.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { touchRecent } from '$lib/recent.js';
-	import { activeWorkspace } from '$lib/store.js';
-	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
+	import { activeWorkspace, agents } from '$lib/store.js';
+	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal, Bot } from '@lucide/svelte';
 
 	let issue = $state(null);
 	let comments = $state([]);
@@ -335,6 +335,10 @@
 				<div class="rail-prop">
 					<span class="rl">Priority</span>
 					<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
+				</div>
+				<div class="rail-prop">
+					<span class="rl">Agent</span>
+					<EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none="Unassigned" onchange={(v) => patch({ agentId: v })} />
 				</div>
 				<div class="rail-prop">
 					<span class="rl">Epic</span>

@@ -185,6 +185,22 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/dashboard", s.wsGuard(s.handleDashboard))
 
+	// Agents, the machines that run them, and the work queued between.
+	mux.HandleFunc("GET /api/agents", s.wsGuard(s.handleListAgents))
+	mux.HandleFunc("POST /api/agents", s.wsGuard(s.handleCreateAgent))
+	mux.HandleFunc("GET /api/agents/{id}", s.wsGuard(s.handleGetAgent))
+	mux.HandleFunc("PATCH /api/agents/{id}", s.wsGuard(s.handleUpdateAgent))
+	mux.HandleFunc("DELETE /api/agents/{id}", s.wsGuard(s.handleDeleteAgent))
+	mux.HandleFunc("GET /api/agents/{id}/runs", s.wsGuard(s.handleAgentRuns))
+	mux.HandleFunc("POST /api/agents/{id}/test", s.wsGuard(s.handleTestAgent))
+	mux.HandleFunc("GET /api/hosts", s.wsGuard(s.handleListHosts))
+	mux.HandleFunc("POST /api/hosts/heartbeat", s.wsGuard(s.handleHostHeartbeat))
+	mux.HandleFunc("GET /api/jobs", s.wsGuard(s.handleListJobs))
+	mux.HandleFunc("POST /api/jobs", s.wsGuard(s.handleEnqueueJob))
+	mux.HandleFunc("POST /api/jobs/claim", s.wsGuard(s.handleClaimJob))
+	mux.HandleFunc("GET /api/jobs/{id}", s.wsGuard(s.handleGetJob))
+	mux.HandleFunc("POST /api/jobs/{id}/finish", s.wsGuard(s.handleFinishJob))
+
 	// Runs — each agent attempt, recorded by the machine that ran it.
 	mux.HandleFunc("GET /api/runs", s.wsGuard(s.handleListRuns))
 	mux.HandleFunc("POST /api/runs", s.wsGuard(s.handleStartRun))

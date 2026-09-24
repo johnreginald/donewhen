@@ -1,0 +1,41 @@
+// What each harness is called, and what connects it — the words the Agents
+// and Connectors pages share.
+
+export const HARNESSES = [
+	{
+		id: 'claude',
+		name: 'Claude Code',
+		plan: 'Claude subscription',
+		connect: 'claude auth login',
+		models: ['default', 'sonnet', 'opus', 'haiku']
+	},
+	{ id: 'codex', name: 'Codex', plan: 'ChatGPT', connect: 'codex login', models: ['default'] },
+	{
+		id: 'opencode',
+		name: 'OpenCode',
+		plan: 'API key (OpenCode Go)',
+		connect: 'opencode serve, then set OPENCODE_URL for the host',
+		models: ['opencode-go/glm-5.3-flash']
+	}
+];
+
+export const harnessName = (id) => HARNESSES.find((h) => h.id === id)?.name || id;
+
+// A host that has not reported in for this long is shown as offline: it
+// heartbeats every 30 seconds.
+export const HOST_STALE_MS = 90_000;
+export const hostOnline = (h) => Date.now() - new Date(h.lastSeenAt).getTime() < HOST_STALE_MS;
+
+// harnessOn finds a harness's status across hosts, preferring an online host
+// where it is ready.
+export function harnessOn(hosts, id) {
+	let best = null;
+	for (const h of hosts) {
+		const st = (h.harnesses || []).find((x) => x.harness === id);
+		if (!st) continue;
+		const cand = { host: h, status: st, online: hostOnline(h) };
+		const score = (c) => (c.online ? 2 : 0) + (c.status.ready ? 1 : 0);
+		if (!best || score(cand) > score(best)) best = cand;
+	}
+	return best;
+}

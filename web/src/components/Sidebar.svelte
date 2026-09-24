@@ -20,7 +20,7 @@
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check,
-		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut, LayoutDashboard
+		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -236,6 +236,12 @@
 
 	<div class="section">
 		<div class="section-head"><span class="section-title">Org</span></div>
+		<a href="/agents" class="nav-item" class:active={$page.url.pathname.startsWith('/agents')} onclick={onnavigate}>
+			<span class="icon"><Bot size={16} strokeWidth={2} /></span>Agents
+		</a>
+		<a href="/connectors" class="nav-item" class:active={$page.url.pathname === '/connectors'} onclick={onnavigate}>
+			<span class="icon"><Plug size={16} strokeWidth={2} /></span>Connectors
+		</a>
 		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log'} onclick={onnavigate}>
 			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
 		</a>

@@ -24,6 +24,14 @@ var ErrNotFound = errors.New("not found")
 // ErrConflict means the write contradicts what is already recorded.
 var ErrConflict = errors.New("conflict")
 
+// ErrInvalid means the input itself is wrong; the message says how.
+var ErrInvalid = errors.New("invalid")
+
+// invalid builds an ErrInvalid with a message a caller can show as is.
+func invalid(format string, args ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{ErrInvalid}, args...)...)
+}
+
 type Store struct {
 	pool *pgxpool.Pool
 	// reservedPrefix is the pre-workspace issue key prefix (RAENIL_ISSUE_PREFIX).
@@ -82,19 +90,25 @@ type IssueFilter struct {
 }
 
 const issueCols = `i.id, i.workspace_id, i.number, i.key, i.title, i.description_md, i.state_id,
-	i.project_id, i.assignee_id, i.priority, i.position,
+	i.project_id, i.assignee_id, i.agent_id, i.priority, i.position,
 	(SELECT count(*) FROM documents d WHERE d.issue_id = i.id) AS doc_count,
 	i.parent_key,
 	(SELECT count(*) FROM issues c WHERE c.parent_key = i.key AND c.workspace_id = i.workspace_id) AS child_count,
 	i.git_branch, i.pr_url,
 	i.created_at, i.updated_at`
 
+// issueDest is where each of issueCols lands, in order. Every query that
+// selects issueCols scans through this, so a new column is added in one place.
+func issueDest(is *models.Issue) []any {
+	return []any{&is.ID, &is.WorkspaceID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
+		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.AgentID, &is.Priority, &is.Position,
+		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.GitBranch, &is.PRURL,
+		&is.CreatedAt, &is.UpdatedAt}
+}
+
 func scanIssue(row pgx.Row) (models.Issue, error) {
 	var is models.Issue
-	err := row.Scan(&is.ID, &is.WorkspaceID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
-		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
-		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.GitBranch, &is.PRURL,
-		&is.CreatedAt, &is.UpdatedAt)
+	err := row.Scan(issueDest(&is)...)
 	return is, err
 }
 
@@ -309,6 +323,7 @@ type IssueInput struct {
 	StateName     string // optional: resolve state by name if StateID empty
 	ProjectID     *string
 	AssigneeID    *string
+	AgentID       *string // the agent the ticket is for; must be in the same workspace
 	Priority      int
 	ParentKey     *string  // epic key this issue belongs under
 	LabelIDs      []string // when non-nil, replaces the label set
@@ -331,6 +346,9 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 
 	stateID, err := s.resolveStateTx(ctx, tx, wsID, in.StateID, in.StateName)
 	if err != nil {
+		return models.Issue{}, err
+	}
+	if err := s.checkAgentTx(ctx, tx, wsID, in.AgentID); err != nil {
 		return models.Issue{}, err
 	}
 
@@ -358,10 +376,10 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 			return models.Issue{}, err
 		}
 		err = sp.QueryRow(ctx, `
-			INSERT INTO issues (workspace_id, number, key, title, description_md, state_id, project_id, assignee_id, priority, position, parent_key)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+			INSERT INTO issues (workspace_id, number, key, title, description_md, state_id, project_id, assignee_id, priority, position, parent_key, agent_id)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
 			wsID, number, key, in.Title, in.DescriptionMD, stateID, in.ProjectID, in.AssigneeID,
-			in.Priority, float64(number), in.ParentKey,
+			in.Priority, float64(number), in.ParentKey, in.AgentID,
 		).Scan(&id)
 		if err == nil {
 			if err := sp.Commit(ctx); err != nil {
@@ -398,6 +416,8 @@ type IssuePatch struct {
 	SetProject    bool
 	AssigneeID    *string
 	SetAssignee   bool
+	AgentID       *string // nil pointer + SetAgent clears it
+	SetAgent      bool
 	Priority      *int
 	Position      *float64
 	ParentKey     *string // epic key; nil pointer + SetParent clears it
@@ -451,6 +471,12 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 	}
 	if p.SetAssignee {
 		set("assignee_id", p.AssigneeID)
+	}
+	if p.SetAgent {
+		if err := s.checkAgentTx(ctx, tx, wsID, p.AgentID); err != nil {
+			return models.Issue{}, err
+		}
+		set("agent_id", p.AgentID)
 	}
 	if p.Priority != nil {
 		set("priority", *p.Priority)

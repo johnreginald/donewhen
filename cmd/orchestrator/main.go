@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -47,6 +48,8 @@ func main() {
 		err = cmdWork(ctx, args)
 	case "daemon":
 		err = cmdDaemon(ctx, args)
+	case "host":
+		err = cmdHost(ctx, args)
 	case "status":
 		err = cmdStatus(args)
 	case "bench":
@@ -85,6 +88,9 @@ func usage() {
   orchestrator verify  <TICKET>       re-run the criteria against the kept worktree
   orchestrator finish  <TICKET>       commit review fixes, record, move to In Review
   orchestrator daemon                 work the Ready queue unattended
+  orchestrator host                   serve Raenil's web UI from this machine: report
+                                      which agents can run here, and run the work
+                                      queued from the dashboard
   orchestrator status                 show held leases and the kill switch
   orchestrator bench                  compare models over the fixture tasks
 
@@ -847,4 +853,60 @@ type noopRunner struct{}
 func (noopRunner) Name() string { return "none" }
 func (noopRunner) Run(context.Context, orchestrator.RunRequest) (orchestrator.RunResult, error) {
 	return orchestrator.RunResult{}, nil
+}
+
+// cmdHost runs this machine as a runner host: it reports which harnesses are
+// ready here and runs the jobs queued from Raenil's web UI. It serves every
+// workspace the token reaches, or only RAENIL_WORKSPACE when set.
+func cmdHost(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("host", flag.ExitOnError)
+	hostname, _ := os.Hostname()
+	name := fs.String("name", strings.TrimSuffix(hostname, ".local"), "how this machine appears in Raenil")
+	poll := fs.Duration("poll", 3*time.Second, "how often to ask for queued work")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	rc, oc, err := clients()
+	if err != nil {
+		return err
+	}
+
+	var serve []*orchestrator.RaenilClient
+	if rc.Workspace != "" {
+		serve = append(serve, rc)
+	} else {
+		spaces, err := rc.Workspaces(ctx)
+		if err != nil {
+			return fmt.Errorf("list workspaces: %w", err)
+		}
+		for _, w := range spaces {
+			serve = append(serve, &orchestrator.RaenilClient{BaseURL: rc.BaseURL, Token: rc.Token, Workspace: w.Slug})
+		}
+	}
+
+	// Claude and Codex are always offered, so the dashboard can say what is
+	// missing; OpenCode only when a server is configured.
+	runners := orchestrator.RunnerSet{"claude": claudeRunner(), "codex": &orchestrator.CodexRunner{}}
+	if oc.BaseURL != "" {
+		runners["opencode"] = oc
+	}
+
+	h := &orchestrator.Host{
+		Name:    *name,
+		Version: "orchestrator",
+		Clients: serve,
+		Runners: runners,
+		Poll:    *poll,
+		Logf:    func(f string, a ...any) { fmt.Fprintf(os.Stderr, time.Now().Format("15:04:05 ")+f+"\n", a...) },
+	}
+	names := make([]string, len(serve))
+	for i, c := range serve {
+		names[i] = c.Workspace
+	}
+	fmt.Fprintf(os.Stderr, "host %s serving %s\n", *name, strings.Join(names, ", "))
+	err = h.Run(ctx)
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return err
 }
