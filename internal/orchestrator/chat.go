@@ -2,6 +2,8 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +37,7 @@ var chatTools = []string{
 type ChatResult struct {
 	Replied   bool   `json:"replied"`
 	Resumed   bool   `json:"resumed"`
+	Fresh     string `json:"fresh,omitempty"` // why an existing session was not resumed
 	SessionID string `json:"sessionId,omitempty"`
 	RunID     string `json:"runId,omitempty"`
 }
@@ -74,12 +77,19 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 	criteria, _ := c.Criteria(ctx, issue.ID)
 
 	// Resume where the conversation left off, when this runner can and the
-	// session began here; otherwise start from a full brief.
+	// session is still the right one; otherwise start from a full brief, which
+	// carries the whole thread, so nothing said is lost.
 	res := ChatResult{}
+	fp := sessionFingerprint(*a, runner, AgentModel(*a), cwd)
 	var session models.AgentSession
 	if resumable(runner) {
-		if ss, ok, err := c.AgentSession(ctx, a.ID, issue.Key); err == nil && ok && ss.Cwd == cwd {
-			session = ss
+		if ss, ok, err := c.AgentSession(ctx, a.ID, issue.Key); err == nil && ok {
+			if why := staleSession(ss, cwd, fp, time.Now()); why != "" {
+				h.logf("%s on %s: fresh session (%s)", a.Name, issue.Key, why)
+				res.Fresh = why
+			} else {
+				session = ss
+			}
 		}
 	}
 	prompt := chatBrief(*a, issue, criteria, comments, interactions, in)
@@ -145,11 +155,43 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 	}
 	if out.SessionID != "" {
 		res.SessionID = out.SessionID
-		if err := c.SaveAgentSession(ctx, a.ID, issue.Key, out.SessionID, cwd); err != nil {
+		if err := c.SaveAgentSession(ctx, a.ID, issue.Key, out.SessionID, cwd, fp); err != nil {
 			h.logf("could not save the session: %v", err)
 		}
 	}
 	return res, nil
+}
+
+// A session is retired after this many turns or this long, as Paperclip
+// rotates its own: a long session costs more per turn than a fresh brief.
+const (
+	maxSessionTurns = 30
+	maxSessionAge   = 72 * time.Hour
+)
+
+// sessionFingerprint names the setup a session began in. Resuming into a
+// changed setup — another repository, harness, model or set of instructions —
+// would carry the old context into the wrong place.
+func sessionFingerprint(a models.Agent, r Runner, model, cwd string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{r.Name(), model, a.Effort, cwd, a.InstructionsMD}, "\x00")))
+	return hex.EncodeToString(sum[:8])
+}
+
+// staleSession says why a session must not be resumed, or "" when it can be.
+func staleSession(ss models.AgentSession, cwd, fp string, now time.Time) string {
+	switch {
+	case ss.SessionID == "":
+		return "none yet"
+	case ss.Cwd != cwd:
+		return "the repository moved"
+	case ss.Fingerprint != fp:
+		return "the agent's setup changed"
+	case ss.Turns >= maxSessionTurns:
+		return fmt.Sprintf("%d turns", ss.Turns)
+	case now.Sub(ss.CreatedAt) >= maxSessionAge:
+		return "older than 72h"
+	}
+	return ""
 }
 
 // resumable reports whether a runner can continue a session by id.

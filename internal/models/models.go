@@ -357,10 +357,12 @@ type Answer struct {
 
 // AgentSession is an agent's resumable session on one ticket's conversation.
 type AgentSession struct {
-	AgentID   string    `json:"agentId"`
-	IssueID   string    `json:"issueId"`
-	SessionID string    `json:"sessionId"`
-	Cwd       string    `json:"cwd"`
-	Turns     int       `json:"turns"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	AgentID     string    `json:"agentId"`
+	IssueID     string    `json:"issueId"`
+	SessionID   string    `json:"sessionId"`
+	Cwd         string    `json:"cwd"`
+	Fingerprint string    `json:"fingerprint"`
+	Turns       int       `json:"turns"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }

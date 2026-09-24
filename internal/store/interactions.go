@@ -171,31 +171,36 @@ func contains(list []string, v string) bool {
 func (s *Store) GetAgentSession(ctx context.Context, wsID, agentID, issueID string) (models.AgentSession, error) {
 	var ss models.AgentSession
 	err := s.pool.QueryRow(ctx, `
-		SELECT s.agent_id, s.issue_id, s.session_id, s.cwd, s.turns, s.updated_at
+		SELECT s.agent_id, s.issue_id, s.session_id, s.cwd, s.fingerprint, s.turns, s.created_at, s.updated_at
 		FROM agent_sessions s JOIN agents a ON a.id = s.agent_id
 		WHERE a.workspace_id = $1 AND s.agent_id::text = $2 AND s.issue_id::text = $3`,
-		wsID, agentID, issueID).Scan(&ss.AgentID, &ss.IssueID, &ss.SessionID, &ss.Cwd, &ss.Turns, &ss.UpdatedAt)
+		wsID, agentID, issueID).Scan(&ss.AgentID, &ss.IssueID, &ss.SessionID, &ss.Cwd, &ss.Fingerprint, &ss.Turns,
+		&ss.CreatedAt, &ss.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ss, ErrNotFound
 	}
 	return ss, err
 }
 
-// SaveAgentSession records the session a turn ended in, counting the turn.
-func (s *Store) SaveAgentSession(ctx context.Context, wsID, agentID, issueID, sessionID, cwd string) (models.AgentSession, error) {
+// SaveAgentSession records the session a turn ended in. Continuing the same
+// session counts a turn; a different session starts the count again.
+func (s *Store) SaveAgentSession(ctx context.Context, wsID, agentID, issueID, sessionID, cwd, fingerprint string) (models.AgentSession, error) {
 	if sessionID == "" {
 		return models.AgentSession{}, invalid("session id is required")
 	}
 	var ss models.AgentSession
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO agent_sessions (agent_id, issue_id, session_id, cwd, turns)
-		SELECT a.id, i.id, $4, $5, 1 FROM agents a, issues i
+		INSERT INTO agent_sessions (agent_id, issue_id, session_id, cwd, fingerprint, turns)
+		SELECT a.id, i.id, $4, $5, $6, 1 FROM agents a, issues i
 		WHERE a.id::text = $2 AND i.id::text = $3 AND a.workspace_id = $1 AND i.workspace_id = $1
 		ON CONFLICT (agent_id, issue_id) DO UPDATE
-		   SET session_id = EXCLUDED.session_id, cwd = EXCLUDED.cwd,
-		       turns = agent_sessions.turns + 1, updated_at = now()
-		RETURNING agent_id, issue_id, session_id, cwd, turns, updated_at`,
-		wsID, agentID, issueID, sessionID, cwd).Scan(&ss.AgentID, &ss.IssueID, &ss.SessionID, &ss.Cwd, &ss.Turns, &ss.UpdatedAt)
+		   SET session_id = EXCLUDED.session_id, cwd = EXCLUDED.cwd, fingerprint = EXCLUDED.fingerprint,
+		       turns = CASE WHEN agent_sessions.session_id = EXCLUDED.session_id THEN agent_sessions.turns + 1 ELSE 1 END,
+		       created_at = CASE WHEN agent_sessions.session_id = EXCLUDED.session_id THEN agent_sessions.created_at ELSE now() END,
+		       updated_at = now()
+		RETURNING agent_id, issue_id, session_id, cwd, fingerprint, turns, created_at, updated_at`,
+		wsID, agentID, issueID, sessionID, cwd, fingerprint).Scan(&ss.AgentID, &ss.IssueID, &ss.SessionID, &ss.Cwd,
+		&ss.Fingerprint, &ss.Turns, &ss.CreatedAt, &ss.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ss, ErrNotFound
 	}

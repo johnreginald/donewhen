@@ -72,6 +72,9 @@ type Orchestrator struct {
 	// AgentID, when the work was asked of an agent from Raenil, is recorded on
 	// each run so the agent's page can show it.
 	AgentID string
+	// Instructions are the agent's own, given ahead of the ticket on every
+	// work run, as a chat turn gets them.
+	Instructions string
 	// HostName names this machine on run records; empty means its hostname.
 	// A runner host sets its own name, so its runs can be matched to it.
 	HostName string
@@ -257,6 +260,9 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	prompt := BuildPrompt(issue, criteria)
 	if spec.PriorVerdict != nil {
 		prompt = BuildRepairPrompt(issue, criteria, *spec.PriorVerdict, spec.PriorEvidence)
+	}
+	if in := strings.TrimSpace(o.Instructions); in != "" {
+		prompt = "## Your instructions\n\n" + in + "\n\n" + prompt
 	}
 	if err := os.WriteFile(runDir.File("context.md"), []byte(prompt), 0o644); err != nil {
 		return v, nil, err

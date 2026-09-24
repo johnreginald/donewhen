@@ -148,8 +148,9 @@ func (s *Server) handleGetAgentSession(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSaveAgentSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		SessionID string `json:"sessionId"`
-		Cwd       string `json:"cwd"`
+		SessionID   string `json:"sessionId"`
+		Cwd         string `json:"cwd"`
+		Fingerprint string `json:"fingerprint"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
@@ -163,7 +164,7 @@ func (s *Server) handleSaveAgentSession(w http.ResponseWriter, r *http.Request) 
 	if handleStoreErr(w, err) {
 		return
 	}
-	ss, err := s.store.SaveAgentSession(r.Context(), ws(r), a.ID, is.ID, body.SessionID, body.Cwd)
+	ss, err := s.store.SaveAgentSession(r.Context(), ws(r), a.ID, is.ID, body.SessionID, body.Cwd, body.Fingerprint)
 	if handleStoreErr(w, err) {
 		return
 	}

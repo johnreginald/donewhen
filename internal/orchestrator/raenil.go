@@ -179,9 +179,9 @@ func (c *RaenilClient) AgentSession(ctx context.Context, agentID, issueRef strin
 }
 
 // SaveAgentSession records the session a turn ended in.
-func (c *RaenilClient) SaveAgentSession(ctx context.Context, agentID, issueRef, sessionID, cwd string) error {
+func (c *RaenilClient) SaveAgentSession(ctx context.Context, agentID, issueRef, sessionID, cwd, fingerprint string) error {
 	return c.do(ctx, http.MethodPut, "/api/agents/"+agentID+"/sessions/"+issueRef,
-		map[string]any{"sessionId": sessionID, "cwd": cwd}, nil)
+		map[string]any{"sessionId": sessionID, "cwd": cwd, "fingerprint": fingerprint}, nil)
 }
 
 // RunOutcome is what FinishRun reports.

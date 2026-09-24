@@ -682,12 +682,17 @@ func TestConversationPieces(t *testing.T) {
 		t.Errorf("an interaction was answered twice: %v", err)
 	}
 
-	if _, err := s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s1", "/repo"); err != nil {
+	if _, err := s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s1", "/repo", "fp"); err != nil {
 		t.Fatal(err)
 	}
-	ss, err := s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s2", "/repo")
-	if err != nil || ss.SessionID != "s2" || ss.Turns != 2 {
+	ss, err := s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s1", "/repo", "fp")
+	if err != nil || ss.SessionID != "s1" || ss.Turns != 2 {
 		t.Errorf("session after two turns: %v %+v", err, ss)
+	}
+	// A new session starts the count again.
+	ss, err = s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s2", "/repo", "fp2")
+	if err != nil || ss.SessionID != "s2" || ss.Turns != 1 || ss.Fingerprint != "fp2" {
+		t.Errorf("a new session kept the old count: %v %+v", err, ss)
 	}
 
 	// Messages while a turn waits join it.

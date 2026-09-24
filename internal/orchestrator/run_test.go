@@ -367,3 +367,25 @@ func TestReadyRunnerProceeds(t *testing.T) {
 		t.Errorf("status = %s", v.Status)
 	}
 }
+
+// promptRunner keeps the prompt it was given, then does the job.
+type promptRunner struct{ got *string }
+
+func (promptRunner) Name() string { return "fake" }
+func (p promptRunner) Run(ctx context.Context, req RunRequest) (RunResult, error) {
+	*p.got = req.Prompt
+	return fixRunner{}.Run(ctx, req)
+}
+
+func TestWorkPromptCarriesAgentInstructions(t *testing.T) {
+	var prompt string
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := newOrch(t, f, promptRunner{got: &prompt})
+	o.Instructions = "Always run the tests first."
+	if _, err := o.RunTicket(context.Background(), "TST-1", 1); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(prompt, "## Your instructions\n\nAlways run the tests first.") || !strings.Contains(prompt, "TST-1") {
+		t.Errorf("prompt does not open with the agent's instructions:\n%s", prompt)
+	}
+}

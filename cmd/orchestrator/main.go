@@ -956,11 +956,12 @@ func cmdHost(ctx context.Context, args []string) error {
 			return nil, fmt.Errorf("%s has no model: set one on its Harness page", a.Name)
 		}
 		o := &orchestrator.Orchestrator{
-			Raenil:   c,
-			Runner:   runner,
-			AgentID:  a.ID,
-			HostName: *name,
-			Repos:    repos,
+			Raenil:       c,
+			Runner:       runner,
+			AgentID:      a.ID,
+			HostName:     *name,
+			Instructions: a.InstructionsMD,
+			Repos:        repos,
 			Cfg: orchestrator.Config{
 				RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
 				Model: model, Timeout: *timeout, Handoff: true,

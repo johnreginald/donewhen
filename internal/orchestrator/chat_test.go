@@ -49,3 +49,33 @@ func TestChatPrompts(t *testing.T) {
 		}
 	}
 }
+
+func TestStaleSession(t *testing.T) {
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	ok := models.AgentSession{SessionID: "s", Cwd: "/repo", Fingerprint: "fp", Turns: 3, CreatedAt: now.Add(-time.Hour)}
+	if why := staleSession(ok, "/repo", "fp", now); why != "" {
+		t.Errorf("a good session was refused: %s", why)
+	}
+	for name, c := range map[string]struct {
+		mut func(*models.AgentSession)
+		cwd string
+	}{
+		"moved":   {func(*models.AgentSession) {}, "/elsewhere"},
+		"setup":   {func(s *models.AgentSession) { s.Fingerprint = "old" }, "/repo"},
+		"turns":   {func(s *models.AgentSession) { s.Turns = maxSessionTurns }, "/repo"},
+		"too old": {func(s *models.AgentSession) { s.CreatedAt = now.Add(-maxSessionAge) }, "/repo"},
+		"none":    {func(s *models.AgentSession) { s.SessionID = "" }, "/repo"},
+	} {
+		ss := ok
+		c.mut(&ss)
+		if staleSession(ss, c.cwd, "fp", now) == "" {
+			t.Errorf("%s: a session that should be retired was resumed", name)
+		}
+	}
+	// Changing the instructions changes the fingerprint.
+	a := models.Agent{InstructionsMD: "one"}
+	b := models.Agent{InstructionsMD: "two"}
+	if sessionFingerprint(a, helloRunner{}, "m", "/r") == sessionFingerprint(b, helloRunner{}, "m", "/r") {
+		t.Error("new instructions kept the old fingerprint")
+	}
+}
