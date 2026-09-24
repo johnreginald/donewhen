@@ -214,6 +214,18 @@ transcript streaming.
 user has not signed in to the local instance, so none has been looked at.
 The epic's "from the web UI" items stay unticked until they are.
 
+Since then, from an advisor review:
+- Review from the dashboard: diff + Verify / Finish (host runs `verify` /
+  `finish`), proven on RAE-11 → In Review with commit linked and doc saved.
+- Work runs can ask (ask_user); answers join the next run's brief. Proven
+  live on RAE-17 (asked, stopped, re-run used "Mingalaba").
+- Re-running a handed-back ticket numbers attempts past its kept branches.
+- Dashboard agents strip from agents; routine labels + repo rule; budget
+  refused at enqueue.
+
+Known, not fixed (pre-existing): `verify` diffs policy checks against the
+worktree's HEAD, so after the worker's commit they see only reviewer changes.
+
 Waiting on the user:
 - sign in once at http://localhost:5173 so the screens can be checked;
 - `orchestrator connect claude` to prove isolated runs (no user hooks) live.
