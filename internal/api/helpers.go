@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -81,4 +82,9 @@ func orEmpty[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// errInvalid is a bad-request error built in the API layer.
+func errInvalid(msg string) error {
+	return fmt.Errorf("%w: %s", store.ErrInvalid, msg)
 }

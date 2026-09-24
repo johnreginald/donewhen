@@ -16,7 +16,7 @@ import (
 // workspace first, so a caller cannot read a conversation it cannot see.
 func (s *Store) ListComments(ctx context.Context, wsID, issueID string) ([]models.Comment, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.id, c.issue_id, c.body_md, c.actor, c.created_at
+		SELECT c.id, c.issue_id, c.body_md, c.actor, c.agent_id, c.created_at
 		FROM comments c JOIN issues i ON i.id = c.issue_id
 		WHERE c.issue_id=$1 AND i.workspace_id=$2
 		ORDER BY c.created_at`, issueID, wsID)
@@ -27,7 +27,7 @@ func (s *Store) ListComments(ctx context.Context, wsID, issueID string) ([]model
 	var out []models.Comment
 	for rows.Next() {
 		var c models.Comment
-		if err := rows.Scan(&c.ID, &c.IssueID, &c.BodyMD, &c.Actor, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.IssueID, &c.BodyMD, &c.Actor, &c.AgentID, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -35,16 +35,19 @@ func (s *Store) ListComments(ctx context.Context, wsID, issueID string) ([]model
 	return out, rows.Err()
 }
 
-func (s *Store) CreateComment(ctx context.Context, wsID, issueID, body, actor string) (models.Comment, error) {
+// CreateComment adds a comment. agentID names the agent that wrote it, or ""
+// for none; an agent from another workspace is dropped rather than attached.
+func (s *Store) CreateComment(ctx context.Context, wsID, issueID, body, actor, agentID string) (models.Comment, error) {
 	if actor == "" {
 		actor = "human"
 	}
 	var c models.Comment
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO comments (issue_id, body_md, actor)
-		 SELECT $1,$2,$3 FROM issues WHERE id=$1 AND workspace_id=$4
-		 RETURNING id, issue_id, body_md, actor, created_at`,
-		issueID, body, actor, wsID).Scan(&c.ID, &c.IssueID, &c.BodyMD, &c.Actor, &c.CreatedAt)
+		`INSERT INTO comments (issue_id, body_md, actor, agent_id)
+		 SELECT $1, $2, $3, (SELECT a.id FROM agents a WHERE a.id::text = $5 AND a.workspace_id = $4)
+		 FROM issues WHERE id=$1 AND workspace_id=$4
+		 RETURNING id, issue_id, body_md, actor, agent_id, created_at`,
+		issueID, body, actor, wsID, agentID).Scan(&c.ID, &c.IssueID, &c.BodyMD, &c.Actor, &c.AgentID, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}

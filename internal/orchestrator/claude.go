@@ -138,7 +138,8 @@ func (r *ClaudeRunner) Ready(ctx context.Context, model string) error {
 
 // Run implements Runner.
 func (r *ClaudeRunner) Run(ctx context.Context, req RunRequest) (RunResult, error) {
-	_, res, err := r.run(ctx, req)
+	answer, res, err := r.run(ctx, req)
+	res.Answer = answer
 	return res, err
 }
 
@@ -156,10 +157,11 @@ func (r *ClaudeRunner) args(req RunRequest, mcpConfig string) []string {
 	case req.DisableTools:
 		args = append(args, "--tools", "")
 	case req.ReadOnlyTools:
+		allowed := append(append([]string{}, claudeReadTools...), req.AllowedTools...)
 		args = append(args, "--tools", strings.Join(claudeReadTools, ","),
-			"--allowedTools", strings.Join(claudeReadTools, ","))
+			"--allowedTools", strings.Join(allowed, ","))
 	default:
-		allowed := append(append([]string{}, claudeWorkAllowed...), r.AllowedTools...)
+		allowed := append(append(append([]string{}, claudeWorkAllowed...), r.AllowedTools...), req.AllowedTools...)
 		args = append(args, "--permission-mode", "acceptEdits",
 			"--tools", strings.Join(claudeWorkTools, ","),
 			"--allowedTools", strings.Join(allowed, ","))
@@ -195,9 +197,13 @@ func (r *ClaudeRunner) run(ctx context.Context, req RunRequest) (string, RunResu
 	start := time.Now()
 	res := RunResult{}
 
-	// Only work runs get the configured MCP servers; a judge needs none.
-	mcpConfig := r.MCPConfig
-	if mcpConfig == "" || req.DisableTools || req.ReadOnlyTools {
+	// A run gets MCP servers only when it asks for them (a conversation turn)
+	// or is a work run with configured ones; a judge or reviewer gets none.
+	mcpConfig := req.MCPConfig
+	if mcpConfig == "" && !req.DisableTools && !req.ReadOnlyTools {
+		mcpConfig = r.MCPConfig
+	}
+	if mcpConfig == "" {
 		f, err := os.CreateTemp("", "claude-mcp-*.json")
 		if err != nil {
 			return "", res, err

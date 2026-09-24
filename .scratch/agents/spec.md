@@ -207,6 +207,23 @@ MCP connector catalog (user: out), multi-company, cloud sandboxes.
 | 11 | Subscription connections | `setup-token` / device-auth, encrypted store, isolated config dir per run | Connect flow on Connectors (fixes hook isolation) |
 | 12 | Routines + timers | routines, CAS scheduler, heartbeat-on-interval | Routines page |
 
+## Slices 7–8 design (2026-09-25)
+
+- **Chat turns.** "Ask {agent}" on a ticket queues a `chat` job. The host runs the
+  agent read-only in the ticket's repo, with Raenil's MCP (agent id in an
+  `X-Raenil-Agent` header), and posts its final answer as a comment from that
+  agent. The session per (agent, ticket) is kept, so the next turn resumes it
+  (same cwd: the repo root). Chat runs are recorded as runs of kind `chat`.
+- **Questions.** MCP `ask_user {issue, questions}` creates an interaction; the
+  ticket shows a question card ("2 of 4", options + Other). Answering it queues
+  the next chat turn with the answers — Paperclip's "answer wakes the agent".
+- **Proposals (slice 8).** MCP `propose_tickets {issue, tickets:[{title,
+  description, criteria}]}` creates an approval card; approve → child tickets
+  created with their typed done-when, in Ready. Running them stays a Run click.
+- Interactive MCP tools are Claude-only for now; Codex/OpenCode chat replies in text.
+- A worker (work run) that needs an answer uses the same `ask_user`; its run ends
+  and the ticket waits for the answer before the next Run.
+
 ## Done when (epic)
 
 - [ ] An agent can be created, configured and environment-tested entirely from the web UI, for each of Claude, Codex and OpenCode (incl. an opencode-go model).

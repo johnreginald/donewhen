@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -632,5 +633,67 @@ func TestAgentsAndJobs(t *testing.T) {
 	}
 	if hosts, _ := s.ListHosts(ctx, wsB); len(hosts) != 0 {
 		t.Error("another workspace sees the host")
+	}
+}
+
+func TestConversationPieces(t *testing.T) {
+	// Validation needs no database.
+	if _, err := NormaliseQuestions(nil); err == nil {
+		t.Error("no questions was accepted")
+	}
+	qs, err := NormaliseQuestions([]models.Question{{Text: " Window? ", Options: []string{"minute", " ", "hour"}}, {Text: "Anything else?"}})
+	if err != nil || qs[0].ID != "q1" || len(qs[0].Options) != 2 || !qs[1].AllowOther {
+		t.Fatalf("normalise: %v %+v", err, qs)
+	}
+	if err := CheckAnswers(qs, []models.Answer{{QuestionID: "q1", Choices: []string{"day"}}, {QuestionID: "q2", Other: "no"}}); err == nil {
+		t.Error("an answer outside the options was accepted")
+	}
+	if err := CheckAnswers(qs, []models.Answer{{QuestionID: "q1", Choices: []string{"minute"}}}); err == nil {
+		t.Error("an unanswered question was accepted")
+	}
+	if err := CheckAnswers(qs, []models.Answer{{QuestionID: "q1", Choices: []string{"minute"}}, {QuestionID: "q2", Other: "no"}}); err != nil {
+		t.Errorf("good answers refused: %v", err)
+	}
+	ungated := Proposal{Tickets: []ProposedTicket{{Title: "t", Criteria: []ProposedCriterion{{Text: "looks right", Kind: "manual"}}}}}
+	if _, err := NormaliseProposal(ungated); err == nil {
+		t.Error("a ticket with nothing a program can check was accepted")
+	}
+	gated := Proposal{Tickets: []ProposedTicket{{Title: "t", Criteria: []ProposedCriterion{
+		{Text: "tests pass", Kind: "deterministic", Check: json.RawMessage(`{"cmd":"go test ./..."}`)}}}}}
+	if _, err := NormaliseProposal(gated); err != nil {
+		t.Errorf("a gated proposal was refused: %v", err)
+	}
+
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	is, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "t", StateName: "Aligning"})
+
+	it, err := s.CreateInteraction(ctx, ws, is.ID, a.ID, "questions", map[string]any{"questions": qs})
+	if err != nil || it.Status != "open" || it.AgentID == nil {
+		t.Fatalf("create interaction: %v %+v", err, it)
+	}
+	if _, err := s.ResolveInteraction(ctx, ws, it.ID, "answered", map[string]any{"answers": []models.Answer{}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ResolveInteraction(ctx, ws, it.ID, "answered", nil); !errors.Is(err, ErrConflict) {
+		t.Errorf("an interaction was answered twice: %v", err)
+	}
+
+	if _, err := s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s1", "/repo"); err != nil {
+		t.Fatal(err)
+	}
+	ss, err := s.SaveAgentSession(ctx, ws, a.ID, is.ID, "s2", "/repo")
+	if err != nil || ss.SessionID != "s2" || ss.Turns != 2 {
+		t.Errorf("session after two turns: %v %+v", err, ss)
+	}
+
+	// Messages while a turn waits join it.
+	j1, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "chat", AgentID: a.ID, IssueID: is.ID})
+	j2, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "chat", AgentID: a.ID, IssueID: is.ID})
+	if j1.ID == "" || j1.ID != j2.ID {
+		t.Errorf("a second message queued another turn: %s vs %s", j1.ID, j2.ID)
 	}
 }

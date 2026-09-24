@@ -261,7 +261,8 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	// Record the attempt on the ticket before it starts, so it is visible while
 	// it runs. A tracker that cannot take the record does not stop the work.
 	host, _ := os.Hostname()
-	runRec, recErr := o.Raenil.StartRun(ctx, issue.ID, o.AgentID, runner.Name(), effectiveModel(runner, model), attempt, host)
+	runRec, recErr := o.Raenil.StartRun(ctx, RunStartReq{IssueID: issue.ID, AgentID: o.AgentID, Kind: "work",
+		Runner: runner.Name(), Model: effectiveModel(runner, model), Attempt: attempt, Host: host})
 	if recErr != nil {
 		o.logf("warning: could not record the run: %v", recErr)
 	}

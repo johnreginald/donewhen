@@ -65,15 +65,15 @@ func (s *Store) ListHosts(ctx context.Context, wsID string) ([]models.RunnerHost
 
 // ---- jobs ----
 
-const jobCols = `j.id, j.kind, j.agent_id, j.issue_id, coalesce(i.key, ''), j.status, j.host, j.result, j.error,
+const jobCols = `j.id, j.kind, j.agent_id, j.input, j.issue_id, coalesce(i.key, ''), j.status, j.host, j.result, j.error,
 	j.created_at, j.claimed_at, j.finished_at`
 
 func scanJob(row pgx.Row) (models.Job, error) {
 	var j models.Job
-	var result []byte
-	err := row.Scan(&j.ID, &j.Kind, &j.AgentID, &j.IssueID, &j.IssueKey, &j.Status, &j.Host, &result, &j.Error,
+	var result, input []byte
+	err := row.Scan(&j.ID, &j.Kind, &j.AgentID, &input, &j.IssueID, &j.IssueKey, &j.Status, &j.Host, &result, &j.Error,
 		&j.CreatedAt, &j.ClaimedAt, &j.FinishedAt)
-	j.Result = json.RawMessage(result)
+	j.Result, j.Input = json.RawMessage(result), json.RawMessage(input)
 	return j, err
 }
 
@@ -82,6 +82,7 @@ type JobInput struct {
 	Kind    string
 	AgentID string
 	IssueID string
+	Input   any // job-specific: what a chat turn should say, for one
 }
 
 // EnqueueJob queues a job. The agent and issue must be in this workspace.
@@ -91,12 +92,27 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 		if in.AgentID == "" {
 			return models.Job{}, invalid("a test needs an agent")
 		}
-	case "run_ticket":
+	case "run_ticket", "chat":
 		if in.AgentID == "" || in.IssueID == "" {
-			return models.Job{}, invalid("a run needs an agent and a ticket")
+			return models.Job{}, invalid("a %s job needs an agent and a ticket", in.Kind)
 		}
 	default:
 		return models.Job{}, invalid("unknown job kind %q", in.Kind)
+	}
+	if in.Kind == "chat" {
+		// A turn that has not started yet will read every message waiting for
+		// it, so a second message joins that turn instead of queueing another.
+		var id string
+		err := s.pool.QueryRow(ctx, `
+			SELECT id FROM jobs WHERE workspace_id = $1 AND issue_id::text = $2 AND agent_id::text = $3
+			  AND kind = 'chat' AND status = 'queued' ORDER BY created_at LIMIT 1`,
+			wsID, in.IssueID, in.AgentID).Scan(&id)
+		if err == nil {
+			return s.GetJob(ctx, wsID, id)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return models.Job{}, err
+		}
 	}
 	if in.Kind == "run_ticket" {
 		// One run of a ticket at a time: two would cut two worktrees from the
@@ -114,12 +130,12 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 	}
 	var id string
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO jobs (workspace_id, kind, agent_id, issue_id)
-		SELECT $1, $2, a.id, i.id
+		INSERT INTO jobs (workspace_id, kind, agent_id, issue_id, input)
+		SELECT $1, $2, a.id, i.id, $5
 		FROM agents a
 		LEFT JOIN issues i ON i.id::text = $4 AND i.workspace_id = $1
 		WHERE a.id::text = $3 AND a.workspace_id = $1 AND ($4 = '' OR i.id IS NOT NULL)
-		RETURNING id`, wsID, in.Kind, in.AgentID, in.IssueID).Scan(&id)
+		RETURNING id`, wsID, in.Kind, in.AgentID, in.IssueID, jobInput(in.Input)).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Job{}, ErrNotFound
 	}
@@ -233,4 +249,15 @@ func (s *Store) ListJobs(ctx context.Context, wsID string, f JobFilter) ([]model
 		out = append(out, j)
 	}
 	return out, rows.Err()
+}
+
+func jobInput(v any) []byte {
+	if v == nil {
+		return []byte(`{}`)
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return []byte(`{}`)
+	}
+	return b
 }

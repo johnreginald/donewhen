@@ -181,6 +181,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/criteria/{id}", s.wsGuard(s.handleDeleteCriterion))
 	mux.HandleFunc("GET /api/issues/{id}/runs", s.wsGuard(s.handleListIssueRuns))
 	mux.HandleFunc("POST /api/issues/{id}/run", s.wsGuard(s.handleRunIssue))
+	mux.HandleFunc("POST /api/issues/{id}/ask", s.wsGuard(s.handleAskAgent))
+	mux.HandleFunc("GET /api/issues/{id}/interactions", s.wsGuard(s.handleListInteractions))
+	mux.HandleFunc("POST /api/interactions/{id}/respond", s.wsGuard(s.handleRespondInteraction))
+	mux.HandleFunc("GET /api/agents/{id}/sessions/{issue}", s.wsGuard(s.handleGetAgentSession))
+	mux.HandleFunc("PUT /api/agents/{id}/sessions/{issue}", s.wsGuard(s.handleSaveAgentSession))
 	mux.HandleFunc("GET /api/issues/{id}/comments", s.wsGuard(s.handleListComments))
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.wsGuard(s.handleAddComment))
 

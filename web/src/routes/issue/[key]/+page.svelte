@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { states, projects, labels as allLabels, PRIORITIES } from '$lib/store.js';
-	import { showToast, liveEvent } from '$lib/ui.js';
+	import { showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
@@ -12,29 +12,26 @@
 	import EpicMenu from '$components/EpicMenu.svelte';
 	import LabelPicker from '$components/LabelPicker.svelte';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
-	import RunBlock from '$components/RunBlock.svelte';
 	import RunTicket from '$components/RunTicket.svelte';
+	import Conversation from '$components/Conversation.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { touchRecent } from '$lib/recent.js';
 	import { activeWorkspace, agents } from '$lib/store.js';
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal, Bot } from '@lucide/svelte';
 
 	let issue = $state(null);
-	let comments = $state([]);
 	let docs = $state([]);
 	let children = $state([]);
 	let parent = $state(null);
 	let activity = $state([]);
 	let criteria = $state([]);
 	let commits = $state([]);
-	let runs = $state([]);
 	let newCrit = $state('');
 	const doneCrit = $derived(criteria.filter((c) => c.done).length);
 	let loading = $state(false);
 	let editingDesc = $state(false);
 	let descDraft = $state('');
 	let titleDraft = $state('');
-	let newComment = $state('');
 	let labelPickerOpen = $state(false);
 	let confirmDel = $state(false);
 
@@ -58,14 +55,12 @@
 			titleDraft = issue.title;
 			touchRecent($activeWorkspace?.slug, issue);
 			descDraft = issue.descriptionMd || '';
-			comments = (await api.comments(issue.id)) || [];
 			docs = (await api.documents({ issue: issue.id })) || [];
 			children = issue.childCount > 0 ? (await api.issues({ parent: issue.key })) || [] : [];
 			parent = issue.parentKey ? await api.issue(issue.parentKey).catch(() => null) : null;
 			activity = (await api.issueActivity(issue.id)) || [];
 			criteria = (await api.criteria(issue.id)) || [];
 			commits = (await api.commits(issue.id)) || [];
-			runs = (await api.issueRuns(issue.id)) || [];
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
 			goto('/tasks');
@@ -99,17 +94,6 @@
 				? issue.labels.filter((l) => l.id !== id).map((l) => l.id)
 				: [...issue.labels.map((l) => l.id), id]
 		});
-	}
-	async function addComment() {
-		if (!newComment.trim()) return;
-		try {
-			const c = await api.addComment(issue.id, newComment.trim());
-			comments = [...comments, c];
-			newComment = '';
-			activity = (await api.issueActivity(issue.id)) || [];
-		} catch (e) {
-			showToast('Comment failed: ' + e.message, 'error');
-		}
 	}
 	async function del() {
 		if (!confirmDel) {
@@ -156,13 +140,6 @@
 	}
 	const shortSha = (s) => (s || '').slice(0, 7);
 
-	// A run on this ticket starting or finishing updates its block in place.
-	$effect(() => {
-		const ev = $liveEvent;
-		if (!ev?.run || !issue || ev.run.issueId !== issue.id) return;
-		const i = runs.findIndex((r) => r.id === ev.run.id);
-		runs = i >= 0 ? runs.map((r) => (r.id === ev.run.id ? ev.run : r)) : [ev.run, ...runs];
-	});
 </script>
 
 {#if issue}
@@ -240,17 +217,6 @@
 					/>
 				</section>
 
-				{#if runs.length}
-					<section class="block">
-						<div class="rh">Runs <span class="prog">{runs.length}</span></div>
-						<div class="runs">
-							{#each runs as r (r.id)}
-								<RunBlock run={r} />
-							{/each}
-						</div>
-					</section>
-				{/if}
-
 				{#if children.length}
 					<section class="block">
 						<div class="rh">Sub-issues <span class="prog">{doneChildren}/{children.length}</span></div>
@@ -303,22 +269,7 @@
 					</section>
 				{/if}
 
-				<section class="block">
-					<div class="rh">Comments</div>
-					{#each comments as c (c.id)}
-						<div class="comment">
-							<div class="comment-meta">
-								<span class="actor" class:ai={c.actor === 'ai'}>{c.actor === 'ai' ? 'Clanker' : c.actor}</span>
-								<span class="faint">{fmtDate(c.createdAt)}</span>
-							</div>
-							<div class="comment-body"><Markdown source={c.bodyMd} /></div>
-						</div>
-					{/each}
-					<div class="add-comment">
-						<textarea bind:value={newComment} placeholder="Leave a comment…"></textarea>
-						<button class="btn primary sm" onclick={addComment} disabled={!newComment.trim()}>Comment</button>
-					</div>
-				</section>
+				{#key issue.id}<Conversation {issue} />{/key}
 
 				{#if activity.length}
 					<section class="block">
@@ -365,11 +316,6 @@
 {/if}
 
 <style>
-	.runs {
-		display: flex;
-		flex-direction: column;
-		margin: 0 -8px;
-	}
 	.detail {
 		height: 100%;
 		display: flex;
@@ -619,49 +565,6 @@
 	.dl-ai {
 		font-size: 11px;
 		color: var(--accent2);
-	}
-	.comment {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		padding: 10px 0;
-		border-bottom: 1px solid var(--border);
-	}
-	.comment-meta {
-		display: flex;
-		gap: 8px;
-		font-size: 12px;
-	}
-	.actor {
-		text-transform: capitalize;
-		color: var(--text-dim);
-	}
-	.actor.ai {
-		color: var(--accent2);
-	}
-	.comment-body {
-		font-size: 14px;
-		line-height: 1.55;
-	}
-	.add-comment {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		align-items: flex-end;
-		margin-top: 4px;
-	}
-	.add-comment textarea {
-		width: 100%;
-		min-height: 64px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		color: var(--text);
-		padding: 10px 12px;
-		font-size: 14px;
-		font-family: inherit;
-		outline: none;
-		resize: vertical;
 	}
 	.drail {
 		flex: 0 0 300px;

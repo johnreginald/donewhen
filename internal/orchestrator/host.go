@@ -26,6 +26,17 @@ type Host struct {
 	// RunTicket works a ticket for an agent. Nil means run_ticket jobs fail
 	// with a clear message rather than being claimed and dropped.
 	RunTicket func(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, error)
+	// RunnerFor builds the runner an agent asked for, with its settings.
+	// Empty means the host's runner for the agent's harness.
+	RunnerFor func(models.Agent) (Runner, error)
+
+	// Repos and Repo say where a ticket's code is, as for `work`: a chat turn
+	// reads the same repository a run would change.
+	Repos RepoSet
+	Repo  string
+	// MCPURL is Raenil's MCP endpoint, handed to an agent in a chat turn so it
+	// can ask questions and propose tickets. Empty leaves it without tools.
+	MCPURL string
 
 	Poll      time.Duration // how often to ask for work (default 3s)
 	Heartbeat time.Duration // how often to report health (default 30s)
@@ -129,6 +140,8 @@ func (h *Host) handle(ctx context.Context, c *RaenilClient, job ClaimedJob) {
 	switch job.Kind {
 	case "test_env":
 		result, err = h.testEnv(ctx, job)
+	case "chat":
+		result, err = h.chat(ctx, c, job)
 	case "run_ticket":
 		if h.RunTicket == nil {
 			err = errors.New("this host cannot run tickets")
@@ -262,4 +275,15 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 		st.Detail = "unknown runner"
 	}
 	return st
+}
+
+// runnerFor is the runner for an agent: RunnerFor when set, else the host's.
+func (h *Host) runnerFor(a models.Agent) (Runner, error) {
+	if h.RunnerFor != nil {
+		return h.RunnerFor(a)
+	}
+	if r, ok := h.Runners[a.Harness]; ok {
+		return r, nil
+	}
+	return nil, fmt.Errorf("%s is not set up on %s", a.Harness, h.Name)
 }

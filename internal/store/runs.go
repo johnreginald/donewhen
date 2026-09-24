@@ -15,7 +15,7 @@ import (
 // issue's key and title ride along so a list of runs reads without a lookup
 // per row.
 const runCols = `r.id, r.issue_id, coalesce(i.key, ''), coalesce(i.title, ''),
-	r.agent_id, r.runner, r.model, r.attempt, r.status, r.verdict, r.session_id, r.exit_code, r.agent_error,
+	r.agent_id, r.kind, r.runner, r.model, r.attempt, r.status, r.verdict, r.session_id, r.exit_code, r.agent_error,
 	r.tokens_input, r.tokens_cache_read, r.tokens_cache_creation, r.tokens_output, r.tokens_total,
 	r.cost_usd::float8, r.notional_cost_usd::float8, r.billing, r.denied_tools, r.log_tail, r.host,
 	r.started_at, r.finished_at`
@@ -24,7 +24,7 @@ func scanRun(row pgx.Row) (models.Run, error) {
 	var r models.Run
 	var denied []byte
 	err := row.Scan(&r.ID, &r.IssueID, &r.IssueKey, &r.IssueTitle,
-		&r.AgentID, &r.Runner, &r.Model, &r.Attempt, &r.Status, &r.Verdict, &r.SessionID, &r.ExitCode, &r.AgentError,
+		&r.AgentID, &r.Kind, &r.Runner, &r.Model, &r.Attempt, &r.Status, &r.Verdict, &r.SessionID, &r.ExitCode, &r.AgentError,
 		&r.Tokens.Input, &r.Tokens.CacheRead, &r.Tokens.CacheCreation, &r.Tokens.Output, &r.Tokens.Total,
 		&r.CostUSD, &r.NotionalUSD, &r.Billing, &denied, &r.LogTail, &r.Host,
 		&r.StartedAt, &r.FinishedAt)
@@ -41,6 +41,7 @@ func scanRun(row pgx.Row) (models.Run, error) {
 type RunStart struct {
 	IssueID string
 	AgentID string // optional
+	Kind    string // work (default) | chat
 	Runner  string
 	Model   string
 	Attempt int
@@ -55,14 +56,20 @@ func (s *Store) StartRun(ctx context.Context, wsID string, in RunStart) (models.
 	if in.Attempt < 1 {
 		in.Attempt = 1
 	}
+	if in.Kind == "" {
+		in.Kind = "work"
+	}
+	if in.Kind != "work" && in.Kind != "chat" {
+		return models.Run{}, invalid("run kind must be work or chat, not %q", in.Kind)
+	}
 	var id string
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO runs (workspace_id, issue_id, runner, model, attempt, host, agent_id)
+		`INSERT INTO runs (workspace_id, issue_id, runner, model, attempt, host, agent_id, kind)
 		 SELECT $1, i.id, $3, $4, $5, $6,
-		        (SELECT a.id FROM agents a WHERE a.id::text = $7 AND a.workspace_id = $1)
+		        (SELECT a.id FROM agents a WHERE a.id::text = $7 AND a.workspace_id = $1), $8
 		 FROM issues i WHERE i.id = $2 AND i.workspace_id = $1
 		 RETURNING id`,
-		wsID, in.IssueID, in.Runner, in.Model, in.Attempt, in.Host, in.AgentID).Scan(&id)
+		wsID, in.IssueID, in.Runner, in.Model, in.Attempt, in.Host, in.AgentID, in.Kind).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return models.Run{}, ErrNotFound
 	}

@@ -45,6 +45,12 @@ type RunRequest struct {
 	// ReadOnlyTools allows only the tools needed to look at code, never to
 	// change it. Used for review, where a reviewer that can edit is not one.
 	ReadOnlyTools bool
+	// MCPConfig is an MCP config file for this run, overriding the runner's.
+	// It is how a conversation turn reaches Raenil's tools.
+	MCPConfig string
+	// AllowedTools are extra permission rules for this run, e.g. the Raenil
+	// MCP tools a conversation turn may call without asking.
+	AllowedTools []string
 }
 
 // readyChecker is an optional Runner interface for backends that can say
@@ -97,6 +103,8 @@ const DefaultRunTimeout = 30 * time.Minute
 type RunResult struct {
 	// SessionID lets a later attempt fork or continue this one.
 	SessionID string
+	// Answer is the agent's final message, for runners that report one.
+	Answer string
 	// Exit is 0 when the agent completed its turn, non-zero otherwise.
 	Exit int
 	// Aborted is true when the attempt hit its timeout and was killed.

@@ -59,7 +59,7 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		c, err := d.svc.AddComment(ctx, wsID, is.ID, body, auth.ActorAI)
+		c, err := d.svc.AddComment(ctx, wsID, is.ID, body, auth.ActorAI, agentFrom(ctx))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

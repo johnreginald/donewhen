@@ -33,6 +33,7 @@ type Event struct {
 	Job         *models.Job           `json:"job,omitempty"`
 	Host        *models.RunnerHost    `json:"host,omitempty"`
 	Agent       *models.Agent         `json:"agent,omitempty"`
+	Interaction *models.Interaction   `json:"interaction,omitempty"`
 	At          time.Time             `json:"at"`
 }
 

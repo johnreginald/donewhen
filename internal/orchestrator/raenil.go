@@ -133,12 +133,55 @@ type RunRecord struct {
 
 // StartRun records that an attempt has begun, so it shows on the ticket while
 // it is still running.
-func (c *RaenilClient) StartRun(ctx context.Context, issueID, agentID, runner, model string, attempt int, host string) (RunRecord, error) {
+func (c *RaenilClient) StartRun(ctx context.Context, s RunStartReq) (RunRecord, error) {
 	var out RunRecord
-	err := c.do(ctx, http.MethodPost, "/api/runs", map[string]any{
-		"issue": issueID, "agent": agentID, "runner": runner, "model": model, "attempt": attempt, "host": host,
-	}, &out)
+	err := c.do(ctx, http.MethodPost, "/api/runs", s, &out)
 	return out, err
+}
+
+// RunStartReq is what StartRun records.
+type RunStartReq struct {
+	IssueID string `json:"issue"`
+	AgentID string `json:"agent,omitempty"`
+	Kind    string `json:"kind,omitempty"` // work | chat
+	Runner  string `json:"runner"`
+	Model   string `json:"model"`
+	Attempt int    `json:"attempt"`
+	Host    string `json:"host"`
+}
+
+// Comments lists a ticket's comments, oldest first.
+func (c *RaenilClient) Comments(ctx context.Context, issueID string) ([]models.Comment, error) {
+	var out []models.Comment
+	return out, c.do(ctx, http.MethodGet, "/api/issues/"+issueID+"/comments", nil, &out)
+}
+
+// CommentAs posts a comment written by an agent.
+func (c *RaenilClient) CommentAs(ctx context.Context, issueID, bodyMD, agentID string) error {
+	return c.do(ctx, http.MethodPost, "/api/issues/"+issueID+"/comments",
+		map[string]any{"bodyMd": bodyMD, "agentId": agentID}, nil)
+}
+
+// Interactions lists what agents asked on a ticket, oldest first.
+func (c *RaenilClient) Interactions(ctx context.Context, issueID string) ([]models.Interaction, error) {
+	var out []models.Interaction
+	return out, c.do(ctx, http.MethodGet, "/api/issues/"+issueID+"/interactions", nil, &out)
+}
+
+// AgentSession reads an agent's session on a ticket; ok is false when it has none.
+func (c *RaenilClient) AgentSession(ctx context.Context, agentID, issueRef string) (models.AgentSession, bool, error) {
+	var out models.AgentSession
+	err := c.do(ctx, http.MethodGet, "/api/agents/"+agentID+"/sessions/"+issueRef, nil, &out)
+	if err != nil && strings.Contains(err.Error(), "404") {
+		return out, false, nil
+	}
+	return out, err == nil, err
+}
+
+// SaveAgentSession records the session a turn ended in.
+func (c *RaenilClient) SaveAgentSession(ctx context.Context, agentID, issueRef, sessionID, cwd string) error {
+	return c.do(ctx, http.MethodPut, "/api/agents/"+agentID+"/sessions/"+issueRef,
+		map[string]any{"sessionId": sessionID, "cwd": cwd}, nil)
 }
 
 // RunOutcome is what FinishRun reports.

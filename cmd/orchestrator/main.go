@@ -957,6 +957,10 @@ func cmdHost(ctx context.Context, args []string) error {
 		Clients:   serve,
 		Runners:   runners,
 		RunTicket: runTicket,
+		RunnerFor: func(a models.Agent) (orchestrator.Runner, error) { return agentRunner(a, oc) },
+		Repos:     repos,
+		Repo:      *repo,
+		MCPURL:    rc.BaseURL + "/mcp",
 		Poll:      *poll,
 		Logf:      logf,
 	}

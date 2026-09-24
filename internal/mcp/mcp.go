@@ -203,7 +203,15 @@ func buildServer(d *deps) *server.MCPServer {
 // NewHandler builds the bearer-authed MCP HTTP handler mounted at /mcp.
 func NewHandler(svc *service.Service, st *store.Store, cfg config.Config) http.Handler {
 	d := &deps{svc: svc, store: st, cfg: cfg, mgr: auth.NewManager(st, cfg.SecureCookies())}
-	httpSrv := server.NewStreamableHTTPServer(buildServer(d))
+	httpSrv := server.NewStreamableHTTPServer(buildServer(d),
+		// A runner host names the agent it is running in this header, so what
+		// the agent writes through these tools is attributed to it.
+		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			if a := strings.TrimSpace(r.Header.Get("X-Raenil-Agent")); a != "" {
+				ctx = context.WithValue(ctx, agentKey{}, a)
+			}
+			return ctx
+		}))
 	return requireBearer(st, httpSrv)
 }
 
@@ -230,6 +238,14 @@ func requireBearer(st *store.Store, next http.Handler) http.Handler {
 		// context; tools read them through d.ws.
 		next.ServeHTTP(w, r)
 	})
+}
+
+type agentKey struct{}
+
+// agentFrom is the agent id a runner host named for this call, or "".
+func agentFrom(ctx context.Context) string {
+	a, _ := ctx.Value(agentKey{}).(string)
+	return a
 }
 
 func jsonResult(v any) (*mcp.CallToolResult, error) {
@@ -494,6 +510,8 @@ func (d *deps) register(s *server.MCPServer) {
 	d.registerMeta(s)
 	d.registerContent(s)
 	d.registerDev(s)
+	d.registerAgents(s)
+	d.registerProposals(s)
 }
 
 func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -11,7 +11,11 @@ import (
 // ---- comments ----
 
 func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
-	comments, err := s.store.ListComments(r.Context(), ws(r), r.PathValue("id"))
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
+	comments, err := s.store.ListComments(r.Context(), ws(r), id)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -20,13 +24,18 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		BodyMd string `json:"bodyMd"`
+		BodyMd  string `json:"bodyMd"`
+		AgentID string `json:"agentId"` // set by a runner host posting an agent's reply
 	}
 	if err := readJSON(r, &body); err != nil || body.BodyMd == "" {
 		writeErr(w, http.StatusBadRequest, "bodyMd required")
 		return
 	}
-	c, err := s.svc.AddComment(r.Context(), ws(r), r.PathValue("id"), body.BodyMd, auth.ActorFrom(r.Context()))
+	id, err := s.issueID(r)
+	if handleStoreErr(w, err) {
+		return
+	}
+	c, err := s.svc.AddComment(r.Context(), ws(r), id, body.BodyMd, auth.ActorFrom(r.Context()), body.AgentID)
 	if handleStoreErr(w, err) {
 		return
 	}

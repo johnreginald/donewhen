@@ -178,7 +178,8 @@ type Comment struct {
 	ID        string    `json:"id"`
 	IssueID   string    `json:"issueId"`
 	BodyMD    string    `json:"bodyMd"`
-	Actor     string    `json:"actor"` // human | ai
+	Actor     string    `json:"actor"`   // human | ai
+	AgentID   *string   `json:"agentId"` // the agent that wrote it, when one did
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -226,6 +227,7 @@ type Run struct {
 	IssueKey    string     `json:"issueKey,omitempty"`
 	IssueTitle  string     `json:"issueTitle,omitempty"`
 	AgentID     *string    `json:"agentId"`
+	Kind        string     `json:"kind"` // work | chat
 	Runner      string     `json:"runner"`
 	Model       string     `json:"model"`
 	Attempt     int        `json:"attempt"`
@@ -308,8 +310,9 @@ type HarnessStatus struct {
 // Job is work Raenil has queued for a runner host.
 type Job struct {
 	ID         string          `json:"id"`
-	Kind       string          `json:"kind"` // test_env | run_ticket
+	Kind       string          `json:"kind"` // test_env | run_ticket | chat
 	AgentID    *string         `json:"agentId"`
+	Input      json.RawMessage `json:"input"`
 	IssueID    *string         `json:"issueId"`
 	IssueKey   string          `json:"issueKey,omitempty"`
 	Status     string          `json:"status"` // queued | claimed | succeeded | failed | canceled
@@ -319,4 +322,43 @@ type Job struct {
 	CreatedAt  time.Time       `json:"createdAt"`
 	ClaimedAt  *time.Time      `json:"claimedAt"`
 	FinishedAt *time.Time      `json:"finishedAt"`
+}
+
+// Interaction is something an agent asked of a human on a ticket.
+type Interaction struct {
+	ID         string          `json:"id"`
+	IssueID    string          `json:"issueId"`
+	AgentID    *string         `json:"agentId"`
+	Kind       string          `json:"kind"`    // questions | proposal
+	Payload    json.RawMessage `json:"payload"` // Questions or Proposal
+	Status     string          `json:"status"`  // open | answered | approved | rejected | canceled
+	Response   json.RawMessage `json:"response"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	ResolvedAt *time.Time      `json:"resolvedAt"`
+}
+
+// Question is one structured question an agent asks.
+type Question struct {
+	ID         string   `json:"id"`
+	Text       string   `json:"text"`
+	Options    []string `json:"options,omitempty"`
+	Multi      bool     `json:"multi,omitempty"`      // choose several
+	AllowOther bool     `json:"allowOther,omitempty"` // free text besides the options
+}
+
+// Answer is a human's answer to one Question.
+type Answer struct {
+	QuestionID string   `json:"questionId"`
+	Choices    []string `json:"choices,omitempty"`
+	Other      string   `json:"other,omitempty"`
+}
+
+// AgentSession is an agent's resumable session on one ticket's conversation.
+type AgentSession struct {
+	AgentID   string    `json:"agentId"`
+	IssueID   string    `json:"issueId"`
+	SessionID string    `json:"sessionId"`
+	Cwd       string    `json:"cwd"`
+	Turns     int       `json:"turns"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }

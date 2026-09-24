@@ -126,7 +126,7 @@ func (r *CodexRunner) Run(ctx context.Context, req RunRequest) (RunResult, error
 		sandbox = "read-only"
 	}
 	answer, res, err := r.run(ctx, req, sandbox, timeout)
-	_ = answer
+	res.Answer = answer
 	return res, err
 }
 
