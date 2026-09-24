@@ -270,3 +270,38 @@ func (s *Server) publish(r *http.Request, e events.Event) {
 	}
 	s.bus.Publish(e)
 }
+
+// handleRunIssue queues a ticket for an agent: the one named in the body, or
+// else the agent the ticket is for. A runner host picks it up.
+func (s *Server) handleRunIssue(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Agent string `json:"agent"`
+	}
+	_ = readJSON(r, &body)
+	is, err := s.resolveIssue(r, r.PathValue("id"))
+	if handleStoreErr(w, err) {
+		return
+	}
+	ref := body.Agent
+	if ref == "" && is.AgentID != nil {
+		ref = *is.AgentID
+	}
+	if ref == "" {
+		writeErr(w, http.StatusBadRequest, "choose an agent for this ticket first")
+		return
+	}
+	a, err := s.store.GetAgent(r.Context(), ws(r), ref)
+	if handleStoreErr(w, err) {
+		return
+	}
+	if a.Status == "paused" {
+		writeErr(w, http.StatusConflict, a.Name+" is paused")
+		return
+	}
+	j, err := s.store.EnqueueJob(r.Context(), ws(r), store.JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID})
+	if handleStoreErr(w, err) {
+		return
+	}
+	s.publish(r, events.Event{Type: "job.updated", Job: &j, IssueID: is.ID})
+	writeJSON(w, http.StatusCreated, j)
+}

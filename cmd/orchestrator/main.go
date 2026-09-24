@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"raenil/internal/models"
 	"raenil/internal/orchestrator"
 )
 
@@ -420,8 +421,9 @@ func cmdWork(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if oc.BaseURL == "" {
-		return fmt.Errorf("OPENCODE_URL must be set")
+	// Only the OpenCode runner needs its server; Codex and Claude are CLIs.
+	if oc.BaseURL == "" && strings.EqualFold(*runnerName, "opencode") {
+		return fmt.Errorf("OPENCODE_URL must be set to work on opencode (or use --runner codex|claude)")
 	}
 	if *model == "" {
 		return fmt.Errorf("a model is required: --model or ORCHESTRATOR_MODEL")
@@ -513,8 +515,9 @@ func cmdDaemon(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if oc.BaseURL == "" {
-		return fmt.Errorf("OPENCODE_URL must be set")
+	// Only OpenCode needs its server; Codex and Claude are CLIs.
+	if oc.BaseURL == "" && strings.EqualFold(*runnerName, "opencode") {
+		return fmt.Errorf("OPENCODE_URL must be set to use opencode as the runner (or pick codex|claude)")
 	}
 	if *model == "" {
 		return fmt.Errorf("a model is required: --model or ORCHESTRATOR_MODEL")
@@ -621,8 +624,9 @@ func cmdPropose(ctx context.Context, args []string) error {
 	if cerr != nil {
 		return cerr
 	}
-	if oc.BaseURL == "" {
-		return fmt.Errorf("OPENCODE_URL must be set")
+	// Only OpenCode needs its server; Codex and Claude are CLIs.
+	if oc.BaseURL == "" && strings.EqualFold(*askerName, "opencode") {
+		return fmt.Errorf("OPENCODE_URL must be set to use opencode as the asker (or pick codex|claude)")
 	}
 	if *model == "" {
 		return fmt.Errorf("a model is required: --model or ORCHESTRATOR_ESCALATE_MODEL")
@@ -863,6 +867,13 @@ func cmdHost(ctx context.Context, args []string) error {
 	hostname, _ := os.Hostname()
 	name := fs.String("name", strings.TrimSuffix(hostname, ".local"), "how this machine appears in Raenil")
 	poll := fs.Duration("poll", 3*time.Second, "how often to ask for queued work")
+	home, _ := os.UserHomeDir()
+	repo := fs.String("repo", ".", "repository a ticket is worked in when it names none")
+	reposSpec := fs.String("repos", os.Getenv("ORCHESTRATOR_REPOS"), "repo:label routing, e.g. api-mobile=/p/a,api-server=/p/b")
+	runRoot := fs.String("run-root", filepath.Join(home, ".raenil", "runs"), "where run directories and worktrees live")
+	baseRef := fs.String("base", "HEAD", "what a worktree branches from")
+	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
+	maxAttempts := fs.Int("max-attempts", 3, "attempts before a ticket is handed back")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -891,13 +902,63 @@ func cmdHost(ctx context.Context, args []string) error {
 		runners["opencode"] = oc
 	}
 
+	repos, err := parseRepos(*reposSpec)
+	if err != nil {
+		return err
+	}
+	logf := func(f string, a ...any) { fmt.Fprintf(os.Stderr, time.Now().Format("15:04:05 ")+f+"\n", a...) }
+
+	// Running a ticket from the dashboard is `orchestrator work KEY --handoff`
+	// with the agent's harness, model and allowlist: attempts, retries, and a
+	// kept worktree for review. The agent's harness decides — a runner: label
+	// on the ticket does not override the agent that was asked.
+	runTicket := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (any, error) {
+		a := job.Agent
+		if a == nil {
+			return nil, errors.New("the job names no agent")
+		}
+		if a.Status == "paused" {
+			return nil, fmt.Errorf("%s is paused", a.Name)
+		}
+		if job.IssueKey == "" {
+			return nil, errors.New("the job names no ticket")
+		}
+		runner, err := agentRunner(*a, oc)
+		if err != nil {
+			return nil, err
+		}
+		model := orchestrator.AgentModel(*a)
+		if model == "" {
+			return nil, fmt.Errorf("%s has no model: set one on its Harness page", a.Name)
+		}
+		o := &orchestrator.Orchestrator{
+			Raenil:  c,
+			Runner:  runner,
+			AgentID: a.ID,
+			Repos:   repos,
+			Cfg: orchestrator.Config{
+				RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
+				Model: model, Timeout: *timeout, Handoff: true,
+			},
+			Leases: &orchestrator.LeaseManager{Dir: filepath.Join(*runRoot, "leases")},
+			Log:    logf,
+		}
+		if asker, ok := runner.(orchestrator.Asker); ok {
+			o.Judge = orchestrator.NewJudge(asker, model)
+		}
+		return o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
+			Triage: orchestrator.TriagePolicy{MaxAttempts: *maxAttempts, EscalateAfter: *maxAttempts},
+		})
+	}
+
 	h := &orchestrator.Host{
-		Name:    *name,
-		Version: "orchestrator",
-		Clients: serve,
-		Runners: runners,
-		Poll:    *poll,
-		Logf:    func(f string, a ...any) { fmt.Fprintf(os.Stderr, time.Now().Format("15:04:05 ")+f+"\n", a...) },
+		Name:      *name,
+		Version:   "orchestrator",
+		Clients:   serve,
+		Runners:   runners,
+		RunTicket: runTicket,
+		Poll:      *poll,
+		Logf:      logf,
 	}
 	names := make([]string, len(serve))
 	for i, c := range serve {
@@ -909,4 +970,23 @@ func cmdHost(ctx context.Context, args []string) error {
 		return nil
 	}
 	return err
+}
+
+// agentRunner builds the runner an agent asked for, with its own settings.
+func agentRunner(a models.Agent, oc *orchestrator.OpenCodeRunner) (orchestrator.Runner, error) {
+	switch a.Harness {
+	case "claude":
+		r := claudeRunner()
+		r.AllowedTools = append(r.AllowedTools, a.AllowedTools...)
+		r.Effort, r.MaxTurns = a.Effort, a.MaxTurns
+		return r, nil
+	case "codex":
+		return &orchestrator.CodexRunner{}, nil
+	case "opencode":
+		if oc == nil || oc.BaseURL == "" {
+			return nil, errors.New("OpenCode is not set up on this host: set OPENCODE_URL")
+		}
+		return oc, nil
+	}
+	return nil, fmt.Errorf("unknown harness %q", a.Harness)
 }

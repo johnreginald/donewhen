@@ -133,10 +133,10 @@ type RunRecord struct {
 
 // StartRun records that an attempt has begun, so it shows on the ticket while
 // it is still running.
-func (c *RaenilClient) StartRun(ctx context.Context, issueID, runner, model string, attempt int, host string) (RunRecord, error) {
+func (c *RaenilClient) StartRun(ctx context.Context, issueID, agentID, runner, model string, attempt int, host string) (RunRecord, error) {
 	var out RunRecord
 	err := c.do(ctx, http.MethodPost, "/api/runs", map[string]any{
-		"issue": issueID, "runner": runner, "model": model, "attempt": attempt, "host": host,
+		"issue": issueID, "agent": agentID, "runner": runner, "model": model, "attempt": attempt, "host": host,
 	}, &out)
 	return out, err
 }

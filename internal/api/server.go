@@ -180,6 +180,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/criteria/{id}", s.wsGuard(s.handleUpdateCriterion))
 	mux.HandleFunc("DELETE /api/criteria/{id}", s.wsGuard(s.handleDeleteCriterion))
 	mux.HandleFunc("GET /api/issues/{id}/runs", s.wsGuard(s.handleListIssueRuns))
+	mux.HandleFunc("POST /api/issues/{id}/run", s.wsGuard(s.handleRunIssue))
 	mux.HandleFunc("GET /api/issues/{id}/comments", s.wsGuard(s.handleListComments))
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.wsGuard(s.handleAddComment))
 

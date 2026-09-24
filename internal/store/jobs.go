@@ -98,6 +98,20 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 	default:
 		return models.Job{}, invalid("unknown job kind %q", in.Kind)
 	}
+	if in.Kind == "run_ticket" {
+		// One run of a ticket at a time: two would cut two worktrees from the
+		// same ticket and race each other to commit.
+		var busy bool
+		if err := s.pool.QueryRow(ctx, `
+			SELECT EXISTS(SELECT 1 FROM jobs WHERE workspace_id = $1 AND issue_id::text = $2
+			              AND kind = 'run_ticket' AND status IN ('queued', 'claimed'))`,
+			wsID, in.IssueID).Scan(&busy); err != nil {
+			return models.Job{}, err
+		}
+		if busy {
+			return models.Job{}, fmt.Errorf("this ticket is already queued or running: %w", ErrConflict)
+		}
+	}
 	var id string
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO jobs (workspace_id, kind, agent_id, issue_id)

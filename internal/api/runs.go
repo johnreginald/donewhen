@@ -51,6 +51,7 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Issue   string `json:"issue"` // id or key
+		Agent   string `json:"agent"` // optional agent id
 		Runner  string `json:"runner"`
 		Model   string `json:"model"`
 		Attempt int    `json:"attempt"`
@@ -65,7 +66,7 @@ func (s *Server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run, err := s.store.StartRun(r.Context(), ws(r), store.RunStart{
-		IssueID: is.ID, Runner: body.Runner, Model: body.Model, Attempt: body.Attempt, Host: body.Host,
+		IssueID: is.ID, AgentID: body.Agent, Runner: body.Runner, Model: body.Model, Attempt: body.Attempt, Host: body.Host,
 	})
 	if handleStoreErr(w, err) {
 		return

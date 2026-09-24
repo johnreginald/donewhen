@@ -69,6 +69,9 @@ type Orchestrator struct {
 	// Repos maps a repo label to a checkout. Empty means every ticket is worked
 	// in Cfg.Repo.
 	Repos RepoSet
+	// AgentID, when the work was asked of an agent from Raenil, is recorded on
+	// each run so the agent's page can show it.
+	AgentID string
 	// labelGroups maps a group name to its id, resolved per ticket so labels can
 	// be matched by group membership rather than by how they happen to be named.
 	labelGroups map[string]string
@@ -258,7 +261,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	// Record the attempt on the ticket before it starts, so it is visible while
 	// it runs. A tracker that cannot take the record does not stop the work.
 	host, _ := os.Hostname()
-	runRec, recErr := o.Raenil.StartRun(ctx, issue.ID, runner.Name(), effectiveModel(runner, model), attempt, host)
+	runRec, recErr := o.Raenil.StartRun(ctx, issue.ID, o.AgentID, runner.Name(), effectiveModel(runner, model), attempt, host)
 	if recErr != nil {
 		o.logf("warning: could not record the run: %v", recErr)
 	}

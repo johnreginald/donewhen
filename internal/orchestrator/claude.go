@@ -43,6 +43,10 @@ type ClaudeRunner struct {
 	// daemon's hourly guard it would act during the run; how the CLI applies it
 	// on a subscription is not yet verified.
 	MaxBudgetUSD float64
+	// Effort is the thinking effort (low … max). Empty leaves Claude's own.
+	Effort string
+	// MaxTurns bounds a work run's agentic turns. Zero is no bound.
+	MaxTurns int
 
 	ready readyCache
 }
@@ -165,6 +169,12 @@ func (r *ClaudeRunner) args(req RunRequest, mcpConfig string) []string {
 	}
 	if req.SessionID != "" {
 		args = append(args, "--resume", req.SessionID)
+	}
+	if r.Effort != "" {
+		args = append(args, "--effort", r.Effort)
+	}
+	if r.MaxTurns > 0 && !req.DisableTools {
+		args = append(args, "--max-turns", fmt.Sprint(r.MaxTurns))
 	}
 	if r.MaxBudgetUSD > 0 {
 		args = append(args, "--max-budget-usd", fmt.Sprintf("%.2f", r.MaxBudgetUSD))

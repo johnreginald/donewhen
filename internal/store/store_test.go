@@ -611,12 +611,19 @@ func TestAgentsAndJobs(t *testing.T) {
 	if _, ok, _ := s.ClaimJob(ctx, wsA, "other", []string{"claude"}); ok {
 		t.Error("a claimed job was claimed again")
 	}
+	if _, err := s.EnqueueJob(ctx, wsA, JobInput{Kind: "run_ticket", AgentID: a1.ID, IssueID: is.ID}); !errors.Is(err, ErrConflict) {
+		t.Errorf("a ticket was queued twice while running: %v", err)
+	}
 	if _, err := s.FinishJob(ctx, wsA, job.ID, "other", "succeeded", nil, ""); !errors.Is(err, ErrConflict) {
 		t.Errorf("a different host finished the job: %v", err)
 	}
 	done, err := s.FinishJob(ctx, wsA, job.ID, "mac", "succeeded", []byte(`{"ok":true}`), "")
 	if err != nil || done.Status != "succeeded" || string(done.Result) != `{"ok": true}` {
 		t.Errorf("finish: %v %+v %s", err, done.Status, done.Result)
+	}
+
+	if _, err := s.EnqueueJob(ctx, wsA, JobInput{Kind: "run_ticket", AgentID: a1.ID, IssueID: is.ID}); err != nil {
+		t.Errorf("a finished ticket could not be run again: %v", err)
 	}
 
 	h, err := s.HostHeartbeat(ctx, wsA, "mac", "1", []models.HarnessStatus{{Harness: "claude", Installed: true, Ready: true}})

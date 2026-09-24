@@ -13,6 +13,7 @@
 	import LabelPicker from '$components/LabelPicker.svelte';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
 	import RunBlock from '$components/RunBlock.svelte';
+	import RunTicket from '$components/RunTicket.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { touchRecent } from '$lib/recent.js';
 	import { activeWorkspace, agents } from '$lib/store.js';
@@ -173,6 +174,7 @@
 				{ label: issue.key, upper: false }
 			]}
 		>
+			{#key issue.id}<RunTicket {issue} />{/key}
 			<button class="btn danger sm" onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
 		</PageHeader>
 

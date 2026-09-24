@@ -58,7 +58,7 @@ func TestClaudeAPIRunIsBilled(t *testing.T) {
 }
 
 func TestClaudeArgs(t *testing.T) {
-	r := &ClaudeRunner{AllowedTools: []string{"Bash(go test *)"}, MaxBudgetUSD: 2}
+	r := &ClaudeRunner{AllowedTools: []string{"Bash(go test *)"}, MaxBudgetUSD: 2, Effort: "high", MaxTurns: 40}
 	has := func(args []string, pair ...string) bool {
 		for i := 0; i+len(pair) <= len(args); i++ {
 			if slices.Equal(args[i:i+len(pair)], pair) {
@@ -77,6 +77,8 @@ func TestClaudeArgs(t *testing.T) {
 		{"--model", "sonnet"},
 		{"--resume", "s1"},
 		{"--max-budget-usd", "2.00"},
+		{"--effort", "high"},
+		{"--max-turns", "40"},
 	} {
 		if !has(work, pair...) {
 			t.Errorf("work args lack %v: %v", pair, work)
