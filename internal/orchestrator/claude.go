@@ -47,6 +47,15 @@ type ClaudeRunner struct {
 	Effort string
 	// MaxTurns bounds a work run's agentic turns. Zero is no bound.
 	MaxTurns int
+	// OAuthToken is a subscription token from `claude setup-token`. When set,
+	// runs get it and a config directory of their own — so the user's
+	// settings, hooks and skills never reach an agent, and nothing reads the
+	// Mac's keychain login. Empty uses the Mac's own claude login.
+	OAuthToken string
+	// ConfigDir is that config directory. It persists, because Claude keeps
+	// its sessions there and a conversation resumes them; empty makes a
+	// throwaway one per run.
+	ConfigDir string
 
 	ready readyCache
 }
@@ -95,6 +104,9 @@ type claudeAuth struct {
 func (r *ClaudeRunner) Available(ctx context.Context) error {
 	if _, err := exec.LookPath(r.bin()); err != nil {
 		return fmt.Errorf("claude is not on PATH: %w", err)
+	}
+	if r.OAuthToken != "" {
+		return VerifyClaudeToken(ctx, r.OAuthToken)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -214,9 +226,15 @@ func (r *ClaudeRunner) run(ctx context.Context, req RunRequest) (string, RunResu
 		mcpConfig = f.Name()
 	}
 
+	env, cleanupEnv, err := r.env()
+	if err != nil {
+		return "", res, err
+	}
+	defer cleanupEnv()
+
 	cmd := exec.CommandContext(ctx, r.bin(), r.args(req, mcpConfig)...)
 	cmd.Dir = req.Cwd
-	cmd.Env = subscriptionEnv(claudeKeyEnv)
+	cmd.Env = env
 	cmd.Stdin = strings.NewReader(req.Prompt)
 
 	// Always capture output: discarding it is how a failure becomes "claude
@@ -245,7 +263,7 @@ func (r *ClaudeRunner) run(ctx context.Context, req RunRequest) (string, RunResu
 
 	t, perr := parseClaudeTranscript(logPath)
 	if perr == nil {
-		t.apply(&res)
+		t.apply(&res, r.OAuthToken != "")
 	}
 
 	switch {
@@ -269,6 +287,31 @@ func (r *ClaudeRunner) run(ctx context.Context, req RunRequest) (string, RunResu
 		res.AgentError = fmt.Sprintf("claude exited %d: %s", res.Exit, claudeTail(logPath))
 	}
 	return t.answer, res, nil
+}
+
+// env is the environment a run gets. With a Raenil connection it is isolated:
+// the token, and a config directory made for this run and removed after it.
+func (r *ClaudeRunner) env() ([]string, func(), error) {
+	if r.OAuthToken == "" {
+		return subscriptionEnv(claudeKeyEnv), func() {}, nil
+	}
+	dir, cleanup := r.ConfigDir, func() {}
+	if dir == "" {
+		tmp, err := os.MkdirTemp("", "raenil-claude-")
+		if err != nil {
+			return nil, nil, err
+		}
+		dir, cleanup = tmp, func() { os.RemoveAll(tmp) }
+	} else if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, nil, err
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	env := subscriptionEnv(append(append([]string{}, claudeKeyEnv...), "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN"))
+	env = append(env, "CLAUDE_CONFIG_DIR="+dir, "CLAUDE_CODE_OAUTH_TOKEN="+r.OAuthToken)
+	return env, cleanup, nil
 }
 
 // claudeTranscript is what a stream-json log says about a finished run.
@@ -366,13 +409,16 @@ func claudeToolInput(raw json.RawMessage) string {
 // subscription reports whether the run was paid for by the logged-in plan.
 func (t claudeTranscript) subscription() bool { return t.apiKeySource == "none" }
 
-func (t claudeTranscript) apply(res *RunResult) {
+// apply fills a result from the transcript. onConnection says the run used a
+// Raenil subscription token: every key variable was stripped, so it can only
+// have run on the subscription, whatever the transcript calls its key source.
+func (t claudeTranscript) apply(res *RunResult, onConnection bool) {
 	res.SessionID = t.sessionID
 	res.Usage = t.usage
 	res.Tokens = t.usage.Total()
 	res.DeniedTools = append([]string(nil), t.denied...)
 	switch {
-	case t.subscription():
+	case onConnection || t.subscription():
 		res.Billing, res.NotionalCostUSD = "subscription", t.costUSD
 	case t.apiKeySource != "":
 		res.Billing, res.CostUSD = "api", t.costUSD

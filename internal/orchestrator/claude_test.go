@@ -29,7 +29,7 @@ func TestParseClaudeTranscriptSuccess(t *testing.T) {
 	}
 
 	var res RunResult
-	tr.apply(&res)
+	tr.apply(&res, false)
 	if res.CostUSD != 0 || res.NotionalCostUSD == 0 {
 		t.Errorf("a subscription run must record notional cost only: cost=%v notional=%v", res.CostUSD, res.NotionalCostUSD)
 	}
@@ -51,7 +51,7 @@ func TestParseClaudeTranscriptDenied(t *testing.T) {
 func TestClaudeAPIRunIsBilled(t *testing.T) {
 	tr := claudeTranscript{apiKeySource: "ANTHROPIC_API_KEY", costUSD: 0.5}
 	var res RunResult
-	tr.apply(&res)
+	tr.apply(&res, false)
 	if res.CostUSD != 0.5 || res.NotionalCostUSD != 0 {
 		t.Errorf("an API-key run is real spend: cost=%v notional=%v", res.CostUSD, res.NotionalCostUSD)
 	}

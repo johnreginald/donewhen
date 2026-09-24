@@ -73,3 +73,31 @@ func TestClaudeLive(t *testing.T) {
 		t.Errorf("reviewer answer = %q, want hello", answer)
 	}
 }
+
+// TestClaudeLiveIsolated checks a run on a Raenil connection is apart from
+// the user's own ~/.claude: no hooks fire, and it runs on the subscription.
+// It needs `orchestrator connect claude` to have been run on this Mac.
+func TestClaudeLiveIsolated(t *testing.T) {
+	if os.Getenv("RAENIL_CLAUDE_LIVE") == "" {
+		t.Skip("set RAENIL_CLAUDE_LIVE=1 to run against the real claude CLI")
+	}
+	conns := DefaultConnections()
+	tok, ok := conns.ClaudeToken()
+	if !ok {
+		t.Skip("no Raenil Claude connection: run `orchestrator connect claude`")
+	}
+	r := &ClaudeRunner{OAuthToken: tok, ConfigDir: conns.ClaudeConfigDir()}
+	log := filepath.Join(t.TempDir(), "run.jsonl")
+	res, err := r.Run(context.Background(), RunRequest{Prompt: "Reply with exactly: ok", Cwd: t.TempDir(),
+		Model: "claude/haiku", DisableTools: true, LogPath: log})
+	if err != nil || res.Exit != 0 {
+		t.Fatalf("run: %v %+v", err, res)
+	}
+	b, _ := os.ReadFile(log)
+	if n := strings.Count(string(b), `"subtype":"hook_`); n > 0 {
+		t.Errorf("%d hook events: the user's own settings reached the run", n)
+	}
+	if res.Billing != "subscription" {
+		t.Errorf("billing = %q, want subscription", res.Billing)
+	}
+}

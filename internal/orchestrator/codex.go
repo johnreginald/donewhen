@@ -23,6 +23,9 @@ type CodexRunner struct {
 	// Sandbox overrides the policy for work runs. Empty means workspace-write,
 	// which is the least authority a worker can have and still edit files.
 	Sandbox string
+	// Home is the CODEX_HOME holding Raenil's Codex connection. Empty uses
+	// the Mac's own codex login.
+	Home string
 
 	ready readyCache
 }
@@ -101,13 +104,21 @@ func (r *CodexRunner) Available(ctx context.Context) error {
 
 func (r *CodexRunner) capture(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, r.bin(), args...)
-	cmd.Env = subscriptionEnv(codexKeyEnv)
+	cmd.Env = r.env()
 	if dir != "" {
 		cmd.Dir = dir
 	}
 	cmd.Stdin = nil
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// env keeps API keys out and points Codex at Raenil's connection when set.
+func (r *CodexRunner) env() []string {
+	if r.Home == "" {
+		return subscriptionEnv(codexKeyEnv)
+	}
+	return append(subscriptionEnv(append(append([]string{}, codexKeyEnv...), "CODEX_HOME")), "CODEX_HOME="+r.Home)
 }
 
 // Run implements Runner.
@@ -170,7 +181,7 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 
 	cmd := exec.CommandContext(ctx, r.bin(), args...)
 	cmd.Dir = req.Cwd
-	cmd.Env = subscriptionEnv(codexKeyEnv)
+	cmd.Env = r.env()
 	// Never inherit a live stdin: a child that blocks on it hangs with no output,
 	// which is exactly how the OpenCode CLI wedged.
 	cmd.Stdin = nil

@@ -11,12 +11,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"golang.org/x/term"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -51,6 +54,8 @@ func main() {
 		err = cmdDaemon(ctx, args)
 	case "host":
 		err = cmdHost(ctx, args)
+	case "connect":
+		err = cmdConnect(ctx, args)
 	case "status":
 		err = cmdStatus(args)
 	case "bench":
@@ -89,6 +94,9 @@ func usage() {
   orchestrator verify  <TICKET>       re-run the criteria against the kept worktree
   orchestrator finish  <TICKET>       commit review fixes, record, move to In Review
   orchestrator daemon                 work the Ready queue unattended
+  orchestrator connect claude|codex   connect a subscription for Raenil's agents
+                                      (claude setup-token / codex device login);
+                                      "connect status" shows what is connected
   orchestrator host                   serve Raenil's web UI from this machine: report
                                       which agents can run here, and run the work
                                       queued from the dashboard
@@ -222,7 +230,7 @@ func runnerPool(ctx context.Context, oc *orchestrator.OpenCodeRunner) orchestrat
 	if oc != nil && oc.BaseURL != "" {
 		set["opencode"] = oc
 	}
-	cx := &orchestrator.CodexRunner{}
+	cx := codexRunner()
 	if err := cx.Available(ctx); err == nil {
 		set["codex"] = cx
 	}
@@ -244,7 +252,23 @@ func claudeRunner() *orchestrator.ClaudeRunner {
 			allowed = append(allowed, rule)
 		}
 	}
-	return &orchestrator.ClaudeRunner{AllowedTools: allowed}
+	r := &orchestrator.ClaudeRunner{AllowedTools: allowed}
+	// A Raenil connection, when made, runs Claude isolated from the user's own
+	// ~/.claude on its own subscription token.
+	conns := orchestrator.DefaultConnections()
+	if tok, ok := conns.ClaudeToken(); ok {
+		r.OAuthToken, r.ConfigDir = tok, conns.ClaudeConfigDir()
+	}
+	return r
+}
+
+// codexRunner builds the Codex runner, on Raenil's connection when one exists.
+func codexRunner() *orchestrator.CodexRunner {
+	conns := orchestrator.DefaultConnections()
+	if conns.CodexConnected() {
+		return &orchestrator.CodexRunner{Home: conns.CodexHome()}
+	}
+	return &orchestrator.CodexRunner{}
 }
 
 // pickAsker chooses who answers judgment criteria and drafts checklists.
@@ -256,7 +280,7 @@ func pickAsker(name string, oc *orchestrator.OpenCodeRunner) (orchestrator.Asker
 		}
 		return oc, nil
 	case "codex":
-		return &orchestrator.CodexRunner{}, nil
+		return codexRunner(), nil
 	case "claude":
 		return claudeRunner(), nil
 	default:
@@ -287,7 +311,7 @@ func cmdHealth(ctx context.Context) error {
 	} else {
 		fmt.Printf("opencode  %-10s %s (%s)\n", "ok", oc.BaseURL, v)
 	}
-	cx := &orchestrator.CodexRunner{}
+	cx := codexRunner()
 	if err := cx.Available(ctx); err != nil {
 		fmt.Printf("codex     %-10s %s\n", "SKIP", err)
 	} else {
@@ -897,7 +921,7 @@ func cmdHost(ctx context.Context, args []string) error {
 
 	// Claude and Codex are always offered, so the dashboard can say what is
 	// missing; OpenCode only when a server is configured.
-	runners := orchestrator.RunnerSet{"claude": claudeRunner(), "codex": &orchestrator.CodexRunner{}}
+	runners := orchestrator.RunnerSet{"claude": claudeRunner(), "codex": codexRunner()}
 	if oc.BaseURL != "" {
 		runners["opencode"] = oc
 	}
@@ -986,7 +1010,7 @@ func agentRunner(a models.Agent, oc *orchestrator.OpenCodeRunner) (orchestrator.
 		r.Effort, r.MaxTurns = a.Effort, a.MaxTurns
 		return r, nil
 	case "codex":
-		return &orchestrator.CodexRunner{}, nil
+		return codexRunner(), nil
 	case "opencode":
 		if oc == nil || oc.BaseURL == "" {
 			return nil, errors.New("OpenCode is not set up on this host: set OPENCODE_URL")
@@ -994,4 +1018,88 @@ func agentRunner(a models.Agent, oc *orchestrator.OpenCodeRunner) (orchestrator.
 		return oc, nil
 	}
 	return nil, fmt.Errorf("unknown harness %q", a.Harness)
+}
+
+// cmdConnect makes the subscription logins Raenil's agents run on — the
+// terminal half of Paperclip's "Connect account". Tokens stay on this Mac.
+func cmdConnect(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("connect", flag.ExitOnError)
+	paste := fs.Bool("paste", false, "claude: paste a token you already have instead of running setup-token")
+	pos, err := parsePermuted(fs, args)
+	if err != nil {
+		return err
+	}
+	conns := orchestrator.DefaultConnections()
+	what := ""
+	if len(pos) > 0 {
+		what = strings.ToLower(pos[0])
+	}
+	switch what {
+	case "claude":
+		if !*paste {
+			fmt.Println("Running `claude setup-token`. Sign in with your Claude subscription in the browser it opens.")
+			cmd := exec.CommandContext(ctx, "claude", "setup-token")
+			cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("claude setup-token: %w", err)
+			}
+		}
+		fmt.Print("\nPaste the token (sk-ant-oat…) and press Enter: ")
+		tok, err := readSecret()
+		fmt.Println()
+		if err != nil {
+			return err
+		}
+		if err := conns.SaveClaudeToken(tok); err != nil {
+			return err
+		}
+		if err := orchestrator.VerifyClaudeToken(ctx, strings.TrimSpace(tok)); err != nil {
+			return err
+		}
+		fmt.Println("Connected. Agents on this Mac now run Claude on this token, apart from your own ~/.claude.")
+		fmt.Println("Restart `orchestrator host` for it to take effect.")
+		return nil
+	case "codex":
+		if err := conns.PrepareCodexHome(); err != nil {
+			return err
+		}
+		fmt.Println("Running `codex login --device-auth`. Sign in with ChatGPT.")
+		cmd := exec.CommandContext(ctx, "codex", "-c", `cli_auth_credentials_store="file"`, "login", "--device-auth")
+		cmd.Env = append(os.Environ(), "CODEX_HOME="+conns.CodexHome())
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("codex login: %w", err)
+		}
+		if !conns.CodexConnected() {
+			return fmt.Errorf("codex finished but left no login in %s", conns.CodexHome())
+		}
+		fmt.Println("Connected. Restart `orchestrator host` for it to take effect.")
+		return nil
+	case "status", "":
+		if _, ok := conns.ClaudeToken(); ok {
+			fmt.Println("claude  connected (Raenil connection)")
+		} else {
+			fmt.Println("claude  not connected — agents use this Mac's own claude login; run: orchestrator connect claude")
+		}
+		if conns.CodexConnected() {
+			fmt.Println("codex   connected (Raenil connection)")
+		} else {
+			fmt.Println("codex   not connected — agents use this Mac's own codex login; run: orchestrator connect codex")
+		}
+		return nil
+	}
+	return fmt.Errorf("connect what? claude, codex or status")
+}
+
+// readSecret reads a line without echoing it when stdin is a terminal.
+func readSecret() (string, error) {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		b, err := term.ReadPassword(int(os.Stdin.Fd()))
+		return strings.TrimSpace(string(b)), err
+	}
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
 }

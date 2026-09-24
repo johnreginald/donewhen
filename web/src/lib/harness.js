@@ -6,10 +6,10 @@ export const HARNESSES = [
 		id: 'claude',
 		name: 'Claude Code',
 		plan: 'Claude subscription',
-		connect: 'claude auth login',
+		connect: 'orchestrator connect claude',
 		models: ['default', 'sonnet', 'opus', 'haiku']
 	},
-	{ id: 'codex', name: 'Codex', plan: 'ChatGPT', connect: 'codex login', models: ['default'] },
+	{ id: 'codex', name: 'Codex', plan: 'ChatGPT', connect: 'orchestrator connect codex', models: ['default'] },
 	{
 		id: 'opencode',
 		name: 'OpenCode',

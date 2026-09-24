@@ -261,20 +261,26 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 		err := rr.Available(ctx)
 		st.Installed = err == nil || !strings.Contains(err.Error(), "not on PATH")
 		st.Ready = err == nil
-		st.Auth = "Claude subscription"
+		st.Auth = "Claude subscription · Mac login"
+		if rr.OAuthToken != "" {
+			st.Auth = "Claude subscription · Raenil connection"
+		}
 		if err != nil {
 			st.Detail = err.Error()
-			st.Fix = "claude auth login"
+			st.Fix = "orchestrator connect claude"
 		}
 	case *CodexRunner:
 		st.Models = []string{"default"}
 		err := rr.Available(ctx)
 		st.Installed = err == nil || !strings.Contains(err.Error(), "not on PATH")
 		st.Ready = err == nil
-		st.Auth = "ChatGPT"
+		st.Auth = "ChatGPT · Mac login"
+		if rr.Home != "" {
+			st.Auth = "ChatGPT · Raenil connection"
+		}
 		if err != nil {
 			st.Detail = err.Error()
-			st.Fix = "codex login"
+			st.Fix = "orchestrator connect codex"
 		}
 	case *OpenCodeRunner:
 		st.Auth = "API key (OpenCode Go)"

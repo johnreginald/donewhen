@@ -35,50 +35,28 @@ Raenil server runs on the PC; repos and agent CLIs live on this Mac. So:
   Claude Code and Codex run on **subscription logins, never API keys**. OpenCode Go
   is the only API-key connection. See "Connections" below.
 
-## Connections (mirrors Paperclip; traced in its source 2026-09-25)
+## Connections (built 2026-09-25, slice 11)
 
-**Connect (once per account):**
-- The runner host makes a 0700 login dir and the UI shows the command to paste
-  in a terminal on the Mac (or runs it in a PTY):
-  - Claude: `CLAUDE_CONFIG_DIR=<dir> claude setup-token` → a ~1-year OAuth token
-    (`sk-ant-oat01-…`). Preferred over `claude auth login`, whose token is
-    short-lived and Paperclip cannot refresh.
-  - Codex: `CODEX_HOME=<dir> codex -c 'cli_auth_credentials_store="file"' login --device-auth`
-    → `auth.json` {access, refresh, id token, account id}.
-  - OpenCode Go: paste an API key (the only key-based connection).
-- Verify before saving (Claude: `GET api.anthropic.com/api/oauth/usage`;
-  Codex: ChatGPT usage endpoint), then delete the login dir. Login output never
-  logged.
+Paperclip's subscription-login approach, with one change: the token stays on
+the Mac. Raenil (on the PC) never runs an agent, so it only needs to know
+whether a connection works — which the host reports each heartbeat.
 
-**Store:** encrypted at rest (AES-256-GCM, master key from env / 0600 key file,
-never in the DB). A `connections` row per provider holds metadata only: account
-email, method, status, last verified. Secrets live in a separate store.
-
-**Use in a run (runner host):**
-- Blank every provider auth env var (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …)
-  so nothing is inherited.
-- A temporary `HOME` / `CLAUDE_CONFIG_DIR` / `CODEX_HOME` per run, 0700,
-  `rm -rf` afterwards.
-- Claude: `CLAUDE_CODE_OAUTH_TOKEN=<token>`. Codex: write `auth.json` (0600) plus
-  `config.toml` forcing file storage; after the run, if Codex refreshed the token,
-  save the newer `auth.json` back (compare `last_refresh`, under a row lock).
-- Refuse the run if the repo's `.claude/settings*.json` / `.codex/config.toml`
-  carries `apiKeyHelper` or `*_API_KEY` (it would silently switch to key billing).
-- Billing type from the run itself: Claude's init `apiKeySource: "none"` =
-  subscription (more reliable than Paperclip's "is a key env var set?").
-
-**Until the Connections slice lands** the runner uses the Mac's own CLI login;
-`Available()` refuses a Claude login that is not a claude.ai subscription.
-
-```mermaid
-flowchart LR
-  UI[Raenil web UI] -- REST + SSE --> S[(Raenil server<br/>PC · Postgres)]
-  S -- claim run / post events --> H[Runner host<br/>orchestrator daemon · Mac]
-  H --> C[claude -p stream-json]
-  H --> X[codex exec --json]
-  H --> O[OpenCode server<br/>incl. opencode-go/*]
-  C & X & O -- MCP (slim) --> S
-```
+- `orchestrator connect claude` runs `claude setup-token` (the ~1-year
+  subscription token), asks for the token without echo, refuses an API key,
+  verifies it against Anthropic's OAuth usage endpoint, and stores it at
+  `~/.raenil/connections/claude/oauth-token` (0600, dir 0700).
+- Claude runs on a connection get `CLAUDE_CODE_OAUTH_TOKEN` and their own
+  `CLAUDE_CONFIG_DIR` (`~/.raenil/connections/claude/config`, persistent so
+  sessions resume) — the user's `~/.claude` settings, hooks and skills never
+  load. Every API-key variable is stripped; such a run is always billed as
+  subscription.
+- `orchestrator connect codex` runs `codex login --device-auth` into
+  `~/.raenil/connections/codex` (a CODEX_HOME storing its login in a file).
+  Codex refreshes in place; nothing needs copying back.
+- OpenCode Go is the only API-key connection (the OpenCode server's own).
+- Without a connection, runs fall back to the Mac's own CLI login.
+- Connectors shows "Raenil connection" or "Mac login" per harness and host,
+  with `orchestrator connect …` as the fix.
 
 ## Scope — five layers
 
@@ -165,7 +143,7 @@ MCP connector catalog (user: out), multi-company, cloud sandboxes.
 ## Slice 1 — Claude runner: done when
 - [x] `ClaudeRunner` implements Runner, Asker, Ready, EffectiveModel (`internal/orchestrator/claude.go`).
 - [x] Prompt on stdin; `--setting-sources project`; `--strict-mcp-config`; user settings not loaded.
-- [ ] **No user hooks at all.** One SessionStart hook still fires (outputs `{}`). `--bare` would skip it but reads only `ANTHROPIC_API_KEY`, never the subscription, and skips CLAUDE.md. Full isolation = temp `CLAUDE_CONFIG_DIR` + `CLAUDE_CODE_OAUTH_TOKEN` from `setup-token` → lands with the Connections slice.
+- [ ] **No user hooks at all.** Built in slice 11 (token + own `CLAUDE_CONFIG_DIR`); unit-tested. Live check `TestClaudeLiveIsolated` (zero hook events, subscription billing) waits on the user running `orchestrator connect claude`.
 - [x] Work runs: writes inside the worktree allowed; writes outside by `touch`, shell redirect and `python3 -c` all refused and reported in `DeniedTools` (live test, 2026-09-25).
 - [x] Bare `Bash` never pre-approved; extra rules via `CLAUDE_ALLOWED_TOOLS` (machine-wide for now — per-repo/per-agent comes with the agents entity). Without rules a worker cannot run `go test`; criteria still run the checks themselves.
 - [x] API-key env vars (`ANTHROPIC_API_KEY`, Bedrock/Vertex switches, `OPENAI_API_KEY`, …) stripped from Claude and Codex child processes; Codex must be a ChatGPT login.
