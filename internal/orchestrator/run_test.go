@@ -28,6 +28,8 @@ type fakeRaenil struct {
 	labels    []string
 	queue     []models.Issue
 	state     string
+	runs      []map[string]any // POST /api/runs bodies
+	finished  []map[string]any // PATCH /api/runs/{id} bodies
 }
 
 func (f *fakeRaenil) server(t *testing.T) *RaenilClient {
@@ -123,6 +125,22 @@ func (f *fakeRaenil) server(t *testing.T) *RaenilClient {
 		f.mu.Unlock()
 	})
 
+	mux.HandleFunc("POST /api/runs", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.runs = append(f.runs, body)
+		f.mu.Unlock()
+		json.NewEncoder(w).Encode(map[string]string{"id": "run-1"})
+	})
+	mux.HandleFunc("PATCH /api/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		f.mu.Lock()
+		f.finished = append(f.finished, body)
+		f.mu.Unlock()
+	})
+
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	// Pinned, so Scoped short-circuits — the same path a single-workspace
@@ -198,6 +216,14 @@ func TestRunTicketPassingFlow(t *testing.T) {
 	if !strings.HasPrefix(f.branch, "ticket/tst-1") {
 		t.Errorf("branch = %q", f.branch)
 	}
+	if len(f.runs) != 1 || f.runs[0]["runner"] != "fake" || f.runs[0]["issue"] != "iss-1" {
+		t.Errorf("run records started = %v, want one for the fake runner", f.runs)
+	}
+	if len(f.finished) != 1 || f.finished[0]["status"] != "succeeded" || f.finished[0]["verdict"] != string(StatusPassed) {
+		t.Errorf("run records finished = %v, want succeeded with the passing verdict", f.finished)
+	} else if tok, _ := f.finished[0]["tokens"].(map[string]any); tok["total"] != float64(100) {
+		t.Errorf("finished tokens = %v, want total 100", f.finished[0]["tokens"])
+	}
 }
 
 func TestRunTicketFailingFlow(t *testing.T) {
@@ -225,6 +251,10 @@ func TestRunTicketFailingFlow(t *testing.T) {
 	}
 	if len(f.commits) != 0 {
 		t.Error("a failing attempt must not link a commit")
+	}
+	// The agent finished its turn; the criteria are what failed.
+	if len(f.finished) != 1 || f.finished[0]["status"] != "succeeded" || f.finished[0]["verdict"] != string(StatusFailed) {
+		t.Errorf("run record = %v, want the attempt succeeded with a failed verdict", f.finished)
 	}
 }
 

@@ -453,3 +453,58 @@ func TestNewWorkspaceOffersEveryRunner(t *testing.T) {
 		}
 	}
 }
+
+// A run is started, finished once, and stays inside its workspace.
+func TestRunLifecycle(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	wsA, wsB := newWorkspace(t, s), newWorkspace(t, s)
+	is, err := s.CreateIssue(ctx, wsA, IssueInput{Title: "work", StateName: "Ready"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.StartRun(ctx, wsB, RunStart{IssueID: is.ID, Runner: "claude"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("starting a run on another workspace's issue: err=%v, want ErrNotFound", err)
+	}
+
+	run, err := s.StartRun(ctx, wsA, RunStart{IssueID: is.ID, Runner: "claude", Model: "claude/haiku", Attempt: 2, Host: "mac"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "running" || run.IssueKey != is.Key || run.Attempt != 2 || run.FinishedAt != nil {
+		t.Fatalf("started run = %+v", run)
+	}
+
+	exit := 0
+	done, err := s.FinishRun(ctx, wsA, run.ID, RunFinish{
+		Status: "succeeded", Verdict: "pass", SessionID: "s1", ExitCode: &exit,
+		Tokens:      models.RunTokens{Input: 10, CacheRead: 100, CacheCreation: 5, Output: 20},
+		NotionalUSD: 0.02, Billing: "subscription", DeniedTools: []string{"Bash touch /tmp/x"}, LogTail: "the end",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done.Status != "succeeded" || done.Tokens.Total != 135 || done.FinishedAt == nil ||
+		len(done.DeniedTools) != 1 || done.NotionalUSD != 0.02 || done.CostUSD != 0 || done.LogTail != "the end" {
+		t.Fatalf("finished run = %+v", done)
+	}
+
+	if _, err := s.FinishRun(ctx, wsA, run.ID, RunFinish{Status: "failed"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("second finish: err=%v, want ErrConflict", err)
+	}
+	if _, err := s.FinishRun(ctx, wsA, run.ID, RunFinish{Status: "running"}); err == nil {
+		t.Fatal("finishing with a non-final status was accepted")
+	}
+
+	list, err := s.ListRuns(ctx, wsA, RunFilter{IssueID: is.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].LogTail != "" {
+		t.Fatalf("list = %+v, want one run without its log", list)
+	}
+	if other, _ := s.ListRuns(ctx, wsB, RunFilter{}); len(other) != 0 {
+		t.Fatalf("another workspace sees %d runs", len(other))
+	}
+}

@@ -1,6 +1,6 @@
 # Agents in Raenil (Paperclip-style connectors)
 
-Status: **Ready** — spec locked 2026-09-25. Thin-slice order (Option A). Tracked in .scratch only.
+Status: **In Progress** — spec locked 2026-09-25; vertical slices. Tracked in .scratch only.
 
 ## Objective
 
@@ -175,35 +175,37 @@ MCP connector catalog (user: out), multi-company, cloud sandboxes.
 - [x] `claude` in runner pool, `--runner`/`--asker`, runner label (migration 0018 + new-workspace seed).
 - [x] Unit tests on real (scrubbed) fixtures + fake binary; live test passes on the subscription.
 
-## Proposed split
+## Decisions 2026-09-25 (round 2)
 
-### Option A — thin slice first (recommended)
-Both asks visible early — a connector and answering in the UI — then polish.
+- **Run everything from the web dashboard**, Paperclip-style. Only two terminal
+  touches, same as Paperclip: connecting a subscription (paste a login command
+  once) and the runner-host daemon on the Mac (launchd service).
+- **Copy Paperclip's UI too**: sidebar, Dashboard, Tasks, New Task composer,
+  conversation-style task page, Agents, Connectors, Audit. Re-implemented in
+  Svelte (Paperclip is React); MIT notice kept in `THIRD_PARTY_NOTICES.md`.
+- **Tasks view:** Paperclip-style list by default, Kanban board one toggle away.
+- **Aligning is agent-led but keeps our workflow:** discuss a task with an agent
+  in its thread → the agent helps split it into tickets with typed done-when →
+  you approve → Ready. **You** decide when an agent runs a ticket (a Run button);
+  nothing auto-starts.
+- **Vertical slices:** each ships its backend with its Paperclip-style screen.
 
-1. Claude runner (adapter parity for Claude).
-2. `runs` table + runner host posts runs; minimal run viewer (header + log tail).
-3. Connections page + minimal Agents page (harness, model, Test environment).
-4. Assign ticket → agent; runner host claims and runs it.
-5. `ask_user` + question card on the ticket + resume same session on answer
-   (builds on existing `RunResult.Questions` / `RunRequest.SessionID`).
-6. Polish, layer by layer: normalised events + live transcript via SSE, Costs page,
-   full agent page (instructions, budget, permissions), session store with
-   fingerprinted resume + rotation, skills bundle, plan approval by revision,
-   stored API keys (encrypted), routines + heartbeat timers.
+## Slices (vertical, in order)
 
-### Option B — layer order
-
-1. Claude runner (adapter parity for Claude) — no UI; unblocks everything.
-2. Normalised run events + usage/billing type across all three runners.
-3. `runs` + `run_events` storage/API; runner host posts runs.
-4. Runner host registration + harness health (`Ready`) reported to Raenil.
-5. `agents` entity + API + Agents UI (list, page, Harness/Runtime, Test env).
-6. Assign ticket → agent; runner host claims and runs queued work.
-7. Run viewer UI (live transcript via SSE) + Costs page.
-8. Sessions store, fingerprinted resume, rotation handoff.
-9. Instructions/skills bundle per agent.
-10. `ask_user` interaction + question card UI + wake on answer.
-11. Plan approval bound to document revision.
+| # | Slice | Backend | Screen |
+|---|---|---|---|
+| 1 | Claude runner | ClaudeRunner, key stripping | — (done) |
+| 2 | Runs | `runs` table + API + SSE; orchestrator records every attempt (redacted log tail) | Run blocks in the task page; run detail page |
+| 3 | App shell + Tasks | recent tasks, search | Paperclip sidebar; Tasks list (by day) + Board toggle; New Task composer "For [agent] in [project]" |
+| 4 | Dashboard | stats endpoint (KPIs, 14-day series) | Agents strip, 4 KPI cards, run activity / tasks by status / success rate, recent activity, recent tasks |
+| 5 | Agents + Connections | `agents` table/API; runner host registers + reports harness health | Agents list; agent page (Overview, Instructions, Harness/Runtime + Test environment, Runs, Costs); Connectors page |
+| 6 | Run from the UI | queued runs; runner-host daemon claims + executes via orchestrator | "Run" on a ticket with an agent; live status |
+| 7 | Conversation + questions | `ask_user` MCP tool; answer → resume same session | Task page as a thread; question cards ("2 of 4"); inbox toast |
+| 8 | Agent-led Aligning | chat turn on a task; proposal = child tickets + done-when | Approval card: approve → tickets created in Ready |
+| 9 | Live transcript + Audit | `run_events` streamed | Live transcript; Audit: Activity, Runs, Costs (subscription vs api), Budgets |
+| 10 | Sessions + instructions | session store, fingerprinted resume, rotation handoff; per-agent instructions | Instructions tab |
+| 11 | Subscription connections | `setup-token` / device-auth, encrypted store, isolated config dir per run | Connect flow on Connectors (fixes hook isolation) |
+| 12 | Routines + timers | routines, CAS scheduler, heartbeat-on-interval | Routines page |
 
 ## Done when (epic)
 

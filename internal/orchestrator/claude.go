@@ -355,9 +355,13 @@ func (t claudeTranscript) apply(res *RunResult) {
 	res.Usage = t.usage
 	res.Tokens = t.usage.Total()
 	res.DeniedTools = append([]string(nil), t.denied...)
-	if t.subscription() {
-		res.NotionalCostUSD = t.costUSD
-	} else {
+	switch {
+	case t.subscription():
+		res.Billing, res.NotionalCostUSD = "subscription", t.costUSD
+	case t.apiKeySource != "":
+		res.Billing, res.CostUSD = "api", t.costUSD
+	default:
+		// No init event: nothing says who paid, so it is counted, not hidden.
 		res.CostUSD = t.costUSD
 	}
 }

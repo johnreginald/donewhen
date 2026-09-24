@@ -255,8 +255,26 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if err := os.WriteFile(runDir.File("context.md"), []byte(prompt), 0o644); err != nil {
 		return v, nil, err
 	}
+	// Record the attempt on the ticket before it starts, so it is visible while
+	// it runs. A tracker that cannot take the record does not stop the work.
+	host, _ := os.Hostname()
+	runRec, recErr := o.Raenil.StartRun(ctx, issue.ID, runner.Name(), effectiveModel(runner, model), attempt, host)
+	if recErr != nil {
+		o.logf("warning: could not record the run: %v", recErr)
+	}
+	var (
+		res           RunResult
+		runErr        error
+		verdictStatus string
+	)
+	defer func() {
+		if runRec.ID != "" {
+			o.finishRun(context.WithoutCancel(ctx), runRec.ID, runner.Name(), runDir.File("worker.log"), res, runErr, verdictStatus)
+		}
+	}()
+
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
-	res, runErr := runner.Run(ctx, RunRequest{
+	res, runErr = runner.Run(ctx, RunRequest{
 		Prompt:    prompt,
 		Cwd:       wtPath,
 		Model:     model,
@@ -323,6 +341,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 
 	v = Summarise(issue.Key, attempt, criteria, evidence, diff)
+	verdictStatus = string(v.Status)
 	v.Runner, v.Model = runner.Name(), model
 	v.CostUSD += res.CostUSD // Summarise already counted what evaluation spent
 	v.DurationS = int64(res.Duration.Seconds())
@@ -524,4 +543,47 @@ func Commit(ctx context.Context, dir, message string) (string, error) {
 	}
 	sha, err := git(ctx, dir, "rev-parse", "HEAD")
 	return strings.TrimSpace(sha), err
+}
+
+// finishRun closes the run record with what the attempt produced. The log tail
+// is rendered and redacted here, on the machine that ran it, before it leaves.
+func (o *Orchestrator) finishRun(ctx context.Context, runID, runner, logPath string, res RunResult, runErr error, verdict string) {
+	out := RunOutcome{
+		Status:      runOutcomeStatus(res, runErr),
+		Verdict:     verdict,
+		SessionID:   res.SessionID,
+		AgentError:  res.AgentError,
+		CostUSD:     res.CostUSD,
+		NotionalUSD: res.NotionalCostUSD,
+		Billing:     res.Billing,
+		DeniedTools: res.DeniedTools,
+		LogTail:     runLogTail(logPath, runner),
+		Tokens: map[string]int{
+			"input": res.Usage.Input, "cacheRead": res.Usage.CacheRead,
+			"cacheCreation": res.Usage.CacheCreation, "output": res.Usage.Output, "total": res.Tokens,
+		},
+	}
+	if runErr != nil {
+		out.AgentError = strings.TrimSpace(runErr.Error() + " " + out.AgentError)
+	}
+	if runErr == nil || res.Exit != 0 {
+		exit := res.Exit
+		out.ExitCode = &exit
+	}
+	if err := o.Raenil.FinishRun(ctx, runID, out); err != nil {
+		o.logf("warning: could not close the run record: %v", err)
+	}
+}
+
+// runOutcomeStatus says how the agent's attempt itself ended — not whether the
+// criteria passed, which is the verdict.
+func runOutcomeStatus(res RunResult, runErr error) string {
+	switch {
+	case res.Aborted:
+		return "aborted"
+	case runErr != nil, res.Exit != 0, res.AgentError != "":
+		return "failed"
+	default:
+		return "succeeded"
+	}
 }

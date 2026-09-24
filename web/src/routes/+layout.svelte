@@ -10,7 +10,7 @@
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace } from '$lib/store.js';
-	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer } from '$lib/ui.js';
+	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer, liveEvent } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 	import { Columns3, List, Plus, Settings, LogOut, Inbox, Activity, FileText } from '@lucide/svelte';
 	import LabelFilter from '$components/LabelFilter.svelte';
@@ -89,6 +89,7 @@
 	});
 
 	function handleEvent(ev) {
+		liveEvent.set(ev);
 		applyEvent(ev);
 		if (ev.issue) flashIssue(ev.issue.id);
 		if (ev.type === 'issue.state_changed' && ev.issue && ev.to) {

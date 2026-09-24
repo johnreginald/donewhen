@@ -179,8 +179,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/issues/{id}/criteria", s.wsGuard(s.handleAddCriterion))
 	mux.HandleFunc("PATCH /api/criteria/{id}", s.wsGuard(s.handleUpdateCriterion))
 	mux.HandleFunc("DELETE /api/criteria/{id}", s.wsGuard(s.handleDeleteCriterion))
+	mux.HandleFunc("GET /api/issues/{id}/runs", s.wsGuard(s.handleListIssueRuns))
 	mux.HandleFunc("GET /api/issues/{id}/comments", s.wsGuard(s.handleListComments))
 	mux.HandleFunc("POST /api/issues/{id}/comments", s.wsGuard(s.handleAddComment))
+
+	// Runs — each agent attempt, recorded by the machine that ran it.
+	mux.HandleFunc("GET /api/runs", s.wsGuard(s.handleListRuns))
+	mux.HandleFunc("POST /api/runs", s.wsGuard(s.handleStartRun))
+	mux.HandleFunc("GET /api/runs/{id}", s.wsGuard(s.handleGetRun))
+	mux.HandleFunc("PATCH /api/runs/{id}", s.wsGuard(s.handleFinishRun))
 
 	// Documents.
 	mux.HandleFunc("GET /api/documents", s.wsGuard(s.handleListDocuments))

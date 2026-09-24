@@ -119,6 +119,9 @@ type RunResult struct {
 	// Usage splits Tokens by kind. One total misleads: a cache read is a tenth
 	// the price of fresh input and most of what a long session consumes.
 	Usage TokenUsage
+	// Billing says who paid: "subscription" (a logged-in plan), "api" (a key,
+	// metered) or "" when the runner cannot tell.
+	Billing string
 	// Questions holds anything the agent asked. A daemon cannot answer, so these
 	// become the escalation payload rather than a hang.
 	Questions []string

@@ -21,6 +21,9 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+// ErrConflict means the write contradicts what is already recorded.
+var ErrConflict = errors.New("conflict")
+
 type Store struct {
 	pool *pgxpool.Pool
 	// reservedPrefix is the pre-workspace issue key prefix (RAENIL_ISSUE_PREFIX).

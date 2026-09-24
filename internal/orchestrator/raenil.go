@@ -126,6 +126,41 @@ func (c *RaenilClient) Comment(ctx context.Context, issueID, bodyMD string) erro
 		map[string]any{"bodyMd": bodyMD}, nil)
 }
 
+// RunRecord is the run as Raenil stores it; only the id is needed back.
+type RunRecord struct {
+	ID string `json:"id"`
+}
+
+// StartRun records that an attempt has begun, so it shows on the ticket while
+// it is still running.
+func (c *RaenilClient) StartRun(ctx context.Context, issueID, runner, model string, attempt int, host string) (RunRecord, error) {
+	var out RunRecord
+	err := c.do(ctx, http.MethodPost, "/api/runs", map[string]any{
+		"issue": issueID, "runner": runner, "model": model, "attempt": attempt, "host": host,
+	}, &out)
+	return out, err
+}
+
+// RunOutcome is what FinishRun reports.
+type RunOutcome struct {
+	Status      string         `json:"status"`
+	Verdict     string         `json:"verdict,omitempty"`
+	SessionID   string         `json:"sessionId,omitempty"`
+	ExitCode    *int           `json:"exitCode,omitempty"`
+	AgentError  string         `json:"agentError,omitempty"`
+	Tokens      map[string]int `json:"tokens"`
+	CostUSD     float64        `json:"costUsd"`
+	NotionalUSD float64        `json:"notionalCostUsd"`
+	Billing     string         `json:"billing,omitempty"`
+	DeniedTools []string       `json:"deniedTools,omitempty"`
+	LogTail     string         `json:"logTail,omitempty"`
+}
+
+// FinishRun closes a run with what the attempt produced.
+func (c *RaenilClient) FinishRun(ctx context.Context, runID string, o RunOutcome) error {
+	return c.do(ctx, http.MethodPatch, "/api/runs/"+runID, o, nil)
+}
+
 // SaveDocument attaches the engineering artifact for an issue.
 func (c *RaenilClient) SaveDocument(ctx context.Context, issueID, title, bodyMD, docType string) error {
 	if docType == "" {

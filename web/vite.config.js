@@ -1,6 +1,9 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
+// Where the Go server listens. Override when :8080 is taken on this machine.
+const api = process.env.RAENIL_API || 'http://localhost:8080';
+
 export default defineConfig({
 	plugins: [sveltekit()],
 	server: {
@@ -8,7 +11,7 @@ export default defineConfig({
 		proxy: {
 			// Dev: proxy API + SSE + MCP to the Go server.
 			'/api': {
-				target: 'http://localhost:8080',
+				target: api,
 				changeOrigin: true,
 				// don't buffer SSE
 				configure: (proxy) => {
@@ -17,7 +20,7 @@ export default defineConfig({
 					});
 				}
 			},
-			'/mcp': 'http://localhost:8080'
+			'/mcp': api
 		}
 	}
 });

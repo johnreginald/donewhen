@@ -321,8 +321,9 @@ func cmdRun(ctx context.Context, args []string, checkOnly bool) error {
 		return cerr
 	}
 	if !checkOnly {
-		if oc.BaseURL == "" {
-			return fmt.Errorf("OPENCODE_URL must be set to run an agent (use 'check' to evaluate without one)")
+		// Only the OpenCode runner needs its server; Codex and Claude are CLIs.
+		if oc.BaseURL == "" && strings.EqualFold(*runnerName, "opencode") {
+			return fmt.Errorf("OPENCODE_URL must be set to run an agent on opencode (use --runner codex|claude, or 'check' to evaluate without one)")
 		}
 		if *model == "" {
 			return fmt.Errorf("a model is required: --model or ORCHESTRATOR_MODEL " +

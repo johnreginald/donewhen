@@ -259,7 +259,8 @@ func (r *OpenCodeRunner) Run(ctx context.Context, req RunRequest) (RunResult, er
 	defer cancel()
 
 	start := time.Now()
-	res := RunResult{}
+	// OpenCode runs on an API key (OpenCode Go included): metered spend.
+	res := RunResult{Billing: "api"}
 	dirQ := url.Values{"directory": {req.Cwd}}
 
 	// 1. Session. Continuing an existing one keeps a failed attempt in context,

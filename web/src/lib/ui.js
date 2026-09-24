@@ -4,6 +4,9 @@ import { goto } from '$app/navigation';
 export const paletteOpen = writable(false);
 export const composer = writable(null); // { kind: 'issue'|'project'|'initiative', prefill }
 export const toast = writable(null);
+// liveEvent is the latest server event, for views that follow one thing (a
+// ticket's runs) rather than the issue list the layout already keeps current.
+export const liveEvent = writable(null);
 
 // openComposer opens the create modal for the given entity, with optional
 // prefilled fields (e.g. a column's stateId when creating from that lane).

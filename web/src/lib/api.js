@@ -135,6 +135,14 @@ export const api = {
 	addCriterion: (id, body) => request('POST', `/issues/${id}/criteria`, { body }),
 	updateCriterion: (id, b) => request('PATCH', `/criteria/${id}`, b),
 	deleteCriterion: (id) => request('DELETE', `/criteria/${id}`),
+	// runs — each agent attempt
+	runs: (q = {}) => {
+		const p = new URLSearchParams(Object.entries(q).filter(([, v]) => v));
+		const s = p.toString();
+		return request('GET', '/runs' + (s ? `?${s}` : ''));
+	},
+	run: (id) => request('GET', `/runs/${id}`),
+	issueRuns: (id) => request('GET', `/issues/${id}/runs`),
 	// coverage
 	missingDocs: () => request('GET', '/issues/missing-docs'),
 	// inbox — review queue + recent AI activity

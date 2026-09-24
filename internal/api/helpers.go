@@ -35,6 +35,10 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 		writeErr(w, http.StatusNotFound, "not found")
 		return true
 	}
+	if errors.Is(err, store.ErrConflict) {
+		writeErr(w, http.StatusConflict, err.Error())
+		return true
+	}
 	writeErr(w, http.StatusInternalServerError, err.Error())
 	return true
 }

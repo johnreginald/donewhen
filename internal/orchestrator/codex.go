@@ -137,7 +137,8 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 	defer cancel()
 
 	start := time.Now()
-	res := RunResult{CostUnknown: true}
+	// Available refuses anything but a ChatGPT login, so a run is on the plan.
+	res := RunResult{CostUnknown: true, Billing: "subscription"}
 
 	lastMsg, err := os.CreateTemp("", "codex-last-*.txt")
 	if err != nil {

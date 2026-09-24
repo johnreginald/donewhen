@@ -217,3 +217,46 @@ type Activity struct {
 	Detail     string    `json:"detail,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
+
+// Run is one agent attempt at a ticket, recorded by whichever machine ran it.
+type Run struct {
+	ID          string     `json:"id"`
+	IssueID     *string    `json:"issueId"`
+	IssueKey    string     `json:"issueKey,omitempty"`
+	IssueTitle  string     `json:"issueTitle,omitempty"`
+	Runner      string     `json:"runner"`
+	Model       string     `json:"model"`
+	Attempt     int        `json:"attempt"`
+	Status      string     `json:"status"` // queued | running | succeeded | failed | aborted
+	Verdict     string     `json:"verdict,omitempty"`
+	SessionID   string     `json:"sessionId,omitempty"`
+	ExitCode    *int       `json:"exitCode"`
+	AgentError  string     `json:"agentError,omitempty"`
+	Tokens      RunTokens  `json:"tokens"`
+	CostUSD     float64    `json:"costUsd"`
+	NotionalUSD float64    `json:"notionalCostUsd"`
+	Billing     string     `json:"billing"` // subscription | api | unknown
+	DeniedTools []string   `json:"deniedTools"`
+	LogTail     string     `json:"logTail,omitempty"`
+	Host        string     `json:"host,omitempty"`
+	StartedAt   time.Time  `json:"startedAt"`
+	FinishedAt  *time.Time `json:"finishedAt"`
+}
+
+// RunTokens is a run's token usage by kind.
+type RunTokens struct {
+	Input         int `json:"input"`
+	CacheRead     int `json:"cacheRead"`
+	CacheCreation int `json:"cacheCreation"`
+	Output        int `json:"output"`
+	Total         int `json:"total"`
+}
+
+// Run statuses.
+const (
+	RunQueued    = "queued"
+	RunRunning   = "running"
+	RunSucceeded = "succeeded"
+	RunFailed    = "failed"
+	RunAborted   = "aborted"
+)

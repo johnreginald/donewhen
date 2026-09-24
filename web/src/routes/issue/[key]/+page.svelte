@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { states, projects, labels as allLabels, PRIORITIES } from '$lib/store.js';
-	import { showToast } from '$lib/ui.js';
+	import { showToast, liveEvent } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
@@ -12,6 +12,7 @@
 	import EpicMenu from '$components/EpicMenu.svelte';
 	import LabelPicker from '$components/LabelPicker.svelte';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
+	import RunBlock from '$components/RunBlock.svelte';
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
 
 	let issue = $state(null);
@@ -22,6 +23,7 @@
 	let activity = $state([]);
 	let criteria = $state([]);
 	let commits = $state([]);
+	let runs = $state([]);
 	let newCrit = $state('');
 	const doneCrit = $derived(criteria.filter((c) => c.done).length);
 	let loading = $state(false);
@@ -58,6 +60,7 @@
 			activity = (await api.issueActivity(issue.id)) || [];
 			criteria = (await api.criteria(issue.id)) || [];
 			commits = (await api.commits(issue.id)) || [];
+			runs = (await api.issueRuns(issue.id)) || [];
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
 			goto('/');
@@ -147,6 +150,14 @@
 		}
 	}
 	const shortSha = (s) => (s || '').slice(0, 7);
+
+	// A run on this ticket starting or finishing updates its block in place.
+	$effect(() => {
+		const ev = $liveEvent;
+		if (!ev?.run || !issue || ev.run.issueId !== issue.id) return;
+		const i = runs.findIndex((r) => r.id === ev.run.id);
+		runs = i >= 0 ? runs.map((r) => (r.id === ev.run.id ? ev.run : r)) : [ev.run, ...runs];
+	});
 </script>
 
 {#if issue}
@@ -223,6 +234,17 @@
 						onkeydown={(e) => e.key === 'Enter' && addCrit()}
 					/>
 				</section>
+
+				{#if runs.length}
+					<section class="block">
+						<div class="rh">Runs <span class="prog">{runs.length}</span></div>
+						<div class="runs">
+							{#each runs as r (r.id)}
+								<RunBlock run={r} />
+							{/each}
+						</div>
+					</section>
+				{/if}
 
 				{#if children.length}
 					<section class="block">
@@ -334,6 +356,11 @@
 {/if}
 
 <style>
+	.runs {
+		display: flex;
+		flex-direction: column;
+		margin: 0 -8px;
+	}
 	.detail {
 		height: 100%;
 		display: flex;
