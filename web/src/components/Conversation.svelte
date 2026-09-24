@@ -5,7 +5,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
 	import { agents } from '$lib/store.js';
-	import { liveEvent, showToast } from '$lib/ui.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import Markdown from './Markdown.svelte';
 	import RunBlock from './RunBlock.svelte';
@@ -41,22 +41,23 @@
 	}
 	onMount(load);
 
-	$effect(() => {
-		const ev = $liveEvent;
-		if (!ev || (ev.issueId !== issue.id && ev.issue?.id !== issue.id)) return;
-		if (ev.type === 'comment.added' && ev.comment && !comments.some((c) => c.id === ev.comment.id)) {
-			comments = [...comments, ev.comment];
-		}
-		if (ev.run) {
-			const i = runs.findIndex((r) => r.id === ev.run.id);
-			runs = i >= 0 ? runs.map((r) => (r.id === ev.run.id ? ev.run : r)) : [ev.run, ...runs];
-		}
-		if (ev.interaction) {
-			const i = interactions.findIndex((x) => x.id === ev.interaction.id);
-			interactions = i >= 0 ? interactions.map((x) => (x.id === ev.interaction.id ? ev.interaction : x)) : [...interactions, ev.interaction];
-		}
-		if (ev.job && ev.job.kind === 'chat') turn = ev.job;
-	});
+	onMount(() =>
+		onLive((ev) => {
+			if (!ev || (ev.issueId !== issue.id && ev.issue?.id !== issue.id)) return;
+			if (ev.type === 'comment.added' && ev.comment && !comments.some((c) => c.id === ev.comment.id)) {
+				comments = [...comments, ev.comment];
+			}
+			if (ev.run) {
+				const i = runs.findIndex((r) => r.id === ev.run.id);
+				runs = i >= 0 ? runs.map((r) => (r.id === ev.run.id ? ev.run : r)) : [ev.run, ...runs];
+			}
+			if (ev.interaction) {
+				const i = interactions.findIndex((x) => x.id === ev.interaction.id);
+				interactions = i >= 0 ? interactions.map((x) => (x.id === ev.interaction.id ? ev.interaction : x)) : [...interactions, ev.interaction];
+			}
+			if (ev.job && ev.job.kind === 'chat') turn = ev.job;
+		})
+	);
 
 	// Everything in one timeline. A run sits where it started.
 	const timeline = $derived(

@@ -72,6 +72,9 @@ type Orchestrator struct {
 	// AgentID, when the work was asked of an agent from Raenil, is recorded on
 	// each run so the agent's page can show it.
 	AgentID string
+	// HostName names this machine on run records; empty means its hostname.
+	// A runner host sets its own name, so its runs can be matched to it.
+	HostName string
 	// labelGroups maps a group name to its id, resolved per ticket so labels can
 	// be matched by group membership rather than by how they happen to be named.
 	labelGroups map[string]string
@@ -260,7 +263,10 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 	// Record the attempt on the ticket before it starts, so it is visible while
 	// it runs. A tracker that cannot take the record does not stop the work.
-	host, _ := os.Hostname()
+	host := o.HostName
+	if host == "" {
+		host, _ = os.Hostname()
+	}
 	runRec, recErr := o.Raenil.StartRun(ctx, RunStartReq{IssueID: issue.ID, AgentID: o.AgentID, Kind: "work",
 		Runner: runner.Name(), Model: effectiveModel(runner, model), Attempt: attempt, Host: host})
 	if recErr != nil {

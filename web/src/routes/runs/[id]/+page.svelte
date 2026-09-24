@@ -1,9 +1,10 @@
 <script>
+	import { onMount } from 'svelte';
 	// One run in full: the page Paperclip opens from "Inspect run".
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { liveEvent, showToast } from '$lib/ui.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import { rel, tokens, duration, usd } from '$lib/format.js';
 	import { Check, X, LoaderCircle, CircleSlash } from '@lucide/svelte';
 
@@ -26,10 +27,11 @@
 	}
 
 	// Finishing while open fills in the transcript and totals.
-	$effect(() => {
-		const ev = $liveEvent;
-		if (ev?.run && run && ev.run.id === run.id && ev.type === 'run.finished') load(run.id);
-	});
+	onMount(() =>
+		onLive((ev) => {
+			if (ev?.run && run && ev.run.id === run.id && ev.type === 'run.finished') load(run.id);
+		})
+	);
 
 	const fmt = (s) => (s ? new Date(s).toLocaleString() : '—');
 	const STATUS = { running: 'running', queued: 'queued', succeeded: 'succeeded', failed: 'failed', aborted: 'stopped' };

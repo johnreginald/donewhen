@@ -697,3 +697,62 @@ func TestConversationPieces(t *testing.T) {
 		t.Errorf("a second message queued another turn: %s vs %s", j1.ID, j2.ID)
 	}
 }
+
+func TestReapingWorkOfGoneHosts(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	is1, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "one", StateName: "Ready"})
+	is2, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "two", StateName: "Ready"})
+
+	// A restarted host releases what it held.
+	if _, err := s.HostHeartbeat(ctx, ws, "mac", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	j1, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is1.ID})
+	if _, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"}); !ok {
+		t.Fatal("claim failed")
+	}
+	run, _ := s.StartRun(ctx, ws, RunStart{IssueID: is1.ID, Runner: "claude", Host: "mac"})
+	jobs, runs, err := s.ReleaseHost(ctx, ws, "mac", "restarted")
+	if err != nil || len(jobs) != 1 || jobs[0].ID != j1.ID || jobs[0].Status != "failed" ||
+		len(runs) != 1 || runs[0].ID != run.ID || runs[0].Status != "aborted" {
+		t.Fatalf("release: %v jobs=%+v runs=%+v", err, jobs, runs)
+	}
+	if _, err := s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is1.ID}); err != nil {
+		t.Errorf("the ticket stayed locked after its host restarted: %v", err)
+	}
+
+	// A host that went silent has its claim reaped.
+	if _, err := s.HostHeartbeat(ctx, ws, "old", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	j2, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is2.ID})
+	for {
+		j, ok, _ := s.ClaimJob(ctx, ws, "old", []string{"claude"})
+		if !ok || j.ID == j2.ID {
+			break
+		}
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE runner_hosts SET last_seen_at = now() - interval '1 hour' WHERE workspace_id = $1 AND name = 'old'`, ws); err != nil {
+		t.Fatal(err)
+	}
+	byWS, err := s.ReapStale(ctx, 5*time.Minute, 3*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Everything "old" had claimed is reaped, with a reason.
+	got := byWS[ws]
+	found := false
+	for _, j := range got.Jobs {
+		found = found || j.ID == j2.ID
+		if j.Host != "old" || j.Status != "failed" || j.Error == "" {
+			t.Errorf("reaped job %+v", j)
+		}
+	}
+	if !found {
+		t.Errorf("the silent host's job was not reaped: %+v", got.Jobs)
+	}
+}

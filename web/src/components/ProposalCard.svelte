@@ -54,26 +54,26 @@
 					{#if created[i]}<a class="key" href="/issue/{created[i]}">{created[i]}</a>{/if}
 					<span class="cn">{(t.criteria || []).length} checks</span>
 				</button>
-				{#if open.has(i)}
-					<div class="td">
-						{#if t.description}<p>{t.description}</p>{/if}
-						{#if t.criteria?.length}
-							<ul class="crit">
-								{#each t.criteria as c}
-									<li>
-										<span class="k {c.kind}">{c.kind || 'manual'}</span>{c.text}
-										{#if checkText(c)}<code>{checkText(c)}</code>{/if}
-									</li>
-								{/each}
-							</ul>
-						{/if}
-					</div>
-				{/if}
+				<div class="td">
+					{#if open.has(i) && t.description}<p>{t.description}</p>{/if}
+					<!-- Always shown: approving runs these commands on your machine. -->
+					{#if t.criteria?.length}
+						<ul class="crit">
+							{#each t.criteria as c}
+								<li>
+									<span class="k {c.kind}">{c.kind || 'manual'}</span>{c.text}
+									{#if checkText(c)}<code>{checkText(c)}</code>{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
 			</li>
 		{/each}
 	</ol>
 
 	{#if interaction.status === 'open'}
+		<div class="warn">Approving creates these tickets. When one is run, its commands above run on your machine.</div>
 		<input class="note" bind:value={note} placeholder="Note for {agentName} (optional — say what to change if you reject)" />
 		<div class="pf">
 			<button class="btn sm" onclick={() => decide('reject')} disabled={busy}><X size={13} />Reject</button>
@@ -203,6 +203,10 @@
 		font-family: var(--mono);
 		font-size: 11.5px;
 		margin-left: 6px;
+		color: var(--text-faint);
+	}
+	.warn {
+		font-size: 12px;
 		color: var(--text-faint);
 	}
 	.note {

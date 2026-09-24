@@ -1,4 +1,5 @@
 <script>
+	import { onMount } from 'svelte';
 	// One agent: Paperclip's agent page, trimmed to what Raenil uses — who it
 	// is, what it runs on (and whether that works right now), its
 	// instructions, its runs, and what they cost.
@@ -6,7 +7,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { agents, issues, states } from '$lib/store.js';
-	import { liveEvent, showToast, openComposer } from '$lib/ui.js';
+	import { onLive, showToast, openComposer } from '$lib/ui.js';
 	import { rel, tokens, usd, duration } from '$lib/format.js';
 	import { HARNESSES, harnessName, harnessOn } from '$lib/harness.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -98,20 +99,21 @@
 	}
 
 	// Live: the test job moving, this agent's runs, hosts reporting in.
-	$effect(() => {
-		const ev = $liveEvent;
-		if (!ev || !agent) return;
-		if (ev.job && ev.job.agentId === agent.id && ev.job.kind === 'test_env') test = ev.job;
-		if (ev.run && ev.run.agentId === agent.id) {
-			const i = runs.findIndex((r) => r.id === ev.run.id);
-			runs = i >= 0 ? runs.map((r) => (r.id === ev.run.id ? ev.run : r)) : [ev.run, ...runs];
-		}
-		if (ev.type === 'host.updated') api.hosts().then((h) => (hosts = h || []));
-		if (ev.agent && ev.agent.id === agent.id && !dirty) {
-			agent = ev.agent;
-			form = toForm(ev.agent);
-		}
-	});
+	onMount(() =>
+		onLive((ev) => {
+			if (!ev || !agent) return;
+			if (ev.job && ev.job.agentId === agent.id && ev.job.kind === 'test_env') test = ev.job;
+			if (ev.run && ev.run.agentId === agent.id) {
+				const i = runs.findIndex((r) => r.id === ev.run.id);
+				runs = i >= 0 ? runs.map((r) => (r.id === ev.run.id ? ev.run : r)) : [ev.run, ...runs];
+			}
+			if (ev.type === 'host.updated') api.hosts().then((h) => (hosts = h || []));
+			if (ev.agent && ev.agent.id === agent.id && !dirty) {
+				agent = ev.agent;
+				form = toForm(ev.agent);
+			}
+		})
+	);
 
 	const conn = $derived(agent ? harnessOn(hosts, form?.harness || agent.harness) : null);
 	const hz = $derived(HARNESSES.find((h) => h.id === (form?.harness || agent?.harness)));

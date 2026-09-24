@@ -223,6 +223,7 @@ type Activity struct {
 // Run is one agent attempt at a ticket, recorded by whichever machine ran it.
 type Run struct {
 	ID          string     `json:"id"`
+	WorkspaceID string     `json:"-"` // internal: which stream to announce on
 	IssueID     *string    `json:"issueId"`
 	IssueKey    string     `json:"issueKey,omitempty"`
 	IssueTitle  string     `json:"issueTitle,omitempty"`
@@ -309,19 +310,20 @@ type HarnessStatus struct {
 
 // Job is work Raenil has queued for a runner host.
 type Job struct {
-	ID         string          `json:"id"`
-	Kind       string          `json:"kind"` // test_env | run_ticket | chat
-	AgentID    *string         `json:"agentId"`
-	Input      json.RawMessage `json:"input"`
-	IssueID    *string         `json:"issueId"`
-	IssueKey   string          `json:"issueKey,omitempty"`
-	Status     string          `json:"status"` // queued | claimed | succeeded | failed | canceled
-	Host       string          `json:"host,omitempty"`
-	Result     json.RawMessage `json:"result"`
-	Error      string          `json:"error,omitempty"`
-	CreatedAt  time.Time       `json:"createdAt"`
-	ClaimedAt  *time.Time      `json:"claimedAt"`
-	FinishedAt *time.Time      `json:"finishedAt"`
+	ID          string          `json:"id"`
+	WorkspaceID string          `json:"-"`    // internal: which stream to announce on
+	Kind        string          `json:"kind"` // test_env | run_ticket | chat
+	AgentID     *string         `json:"agentId"`
+	Input       json.RawMessage `json:"input"`
+	IssueID     *string         `json:"issueId"`
+	IssueKey    string          `json:"issueKey,omitempty"`
+	Status      string          `json:"status"` // queued | claimed | succeeded | failed | canceled
+	Host        string          `json:"host,omitempty"`
+	Result      json.RawMessage `json:"result"`
+	Error       string          `json:"error,omitempty"`
+	CreatedAt   time.Time       `json:"createdAt"`
+	ClaimedAt   *time.Time      `json:"claimedAt"`
+	FinishedAt  *time.Time      `json:"finishedAt"`
 }
 
 // Interaction is something an agent asked of a human on a ticket.

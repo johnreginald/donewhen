@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -260,4 +261,129 @@ func jobInput(v any) []byte {
 		return []byte(`{}`)
 	}
 	return b
+}
+
+// ---- reaping: work whose machine went away ----
+
+// Reaped is what one workspace had closed for it.
+type Reaped struct {
+	Jobs []models.Job
+	Runs []models.Run
+}
+
+// ReleaseHost fails every job a host had claimed and aborts every run it had
+// open — what a host does on its first heartbeat after a restart.
+func (s *Store) ReleaseHost(ctx context.Context, wsID, host, why string) ([]models.Job, []models.Run, error) {
+	jobs, err := s.failJobs(ctx, `WHERE workspace_id = $1 AND host = $2 AND status = 'claimed'`, why, wsID, host)
+	if err != nil {
+		return nil, nil, err
+	}
+	runs, err := s.abortRuns(ctx, `WHERE workspace_id = $1 AND host = $2 AND status = 'running'`, why, wsID, host)
+	return jobs, runs, err
+}
+
+// ReapStale fails jobs claimed by hosts silent for longer than after, and
+// aborts runs still open on such hosts or older than maxRun, in every
+// workspace.
+func (s *Store) ReapStale(ctx context.Context, after, maxRun time.Duration) (map[string]Reaped, error) {
+	out := map[string]Reaped{}
+	gone := `(SELECT 1 FROM runner_hosts h WHERE h.workspace_id = x.workspace_id AND h.name = x.host
+	           AND h.last_seen_at < now() - $1::interval)`
+	jobs, err := s.failJobs(ctx, `x WHERE x.status = 'claimed' AND (EXISTS `+gone+`
+		OR (x.claimed_at < now() - $1::interval AND NOT EXISTS (SELECT 1 FROM runner_hosts h
+		    WHERE h.workspace_id = x.workspace_id AND h.name = x.host)))`,
+		"its host stopped reporting", after.String())
+	if err != nil {
+		return nil, err
+	}
+	for _, j := range jobs {
+		r := out[j.WorkspaceID]
+		r.Jobs = append(r.Jobs, j)
+		out[j.WorkspaceID] = r
+	}
+	runs, err := s.abortRuns(ctx, `x WHERE x.status = 'running' AND (EXISTS `+gone+`
+		OR x.started_at < now() - $2::interval)`,
+		"never finished: its host stopped reporting", after.String(), maxRun.String())
+	if err != nil {
+		return nil, err
+	}
+	for _, rn := range runs {
+		r := out[rn.WorkspaceID]
+		r.Runs = append(r.Runs, rn)
+		out[rn.WorkspaceID] = r
+	}
+	return out, nil
+}
+
+// failJobs marks matching claimed jobs failed. where may alias jobs as x; its
+// placeholders start at $1, and why is appended after them.
+func (s *Store) failJobs(ctx context.Context, where, why string, args ...any) ([]models.Job, error) {
+	if !strings.HasPrefix(strings.TrimSpace(where), "x ") {
+		where = "x " + where
+	}
+	args = append(args, why)
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		UPDATE jobs AS %s
+		RETURNING x.id::text, x.workspace_id::text`, strings.Replace(where, "WHERE",
+		fmt.Sprintf("SET status = 'failed', error = $%d, finished_at = now() WHERE", len(args)), 1)), args...)
+	if err != nil {
+		return nil, err
+	}
+	type key struct{ id, ws string }
+	var keys []key
+	for rows.Next() {
+		var k key
+		if err := rows.Scan(&k.id, &k.ws); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	rows.Close()
+	var out []models.Job
+	for _, k := range keys {
+		j, err := s.GetJob(ctx, k.ws, k.id)
+		if err != nil {
+			return nil, err
+		}
+		j.WorkspaceID = k.ws
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}
+
+// abortRuns marks matching open runs aborted, the same way failJobs works.
+func (s *Store) abortRuns(ctx context.Context, where, why string, args ...any) ([]models.Run, error) {
+	if !strings.HasPrefix(strings.TrimSpace(where), "x ") {
+		where = "x " + where
+	}
+	args = append(args, why)
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		UPDATE runs AS %s
+		RETURNING x.id::text, x.workspace_id::text`, strings.Replace(where, "WHERE",
+		fmt.Sprintf("SET status = 'aborted', agent_error = $%d, finished_at = now() WHERE", len(args)), 1)), args...)
+	if err != nil {
+		return nil, err
+	}
+	type key struct{ id, ws string }
+	var keys []key
+	for rows.Next() {
+		var k key
+		if err := rows.Scan(&k.id, &k.ws); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	rows.Close()
+	var out []models.Run
+	for _, k := range keys {
+		r, err := s.GetRun(ctx, k.ws, k.id)
+		if err != nil {
+			return nil, err
+		}
+		r.WorkspaceID = k.ws
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

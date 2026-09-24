@@ -97,7 +97,7 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 		SessionID:     session.SessionID,
 	}
 	if runner.Name() == "claude" && h.MCPURL != "" {
-		path, cleanup, err := writeMCPConfig(h.MCPURL, c.Token, a.ID)
+		path, cleanup, err := writeMCPConfig(h.MCPURL, c.Token, a.ID, c.Workspace)
 		if err != nil {
 			return nil, err
 		}
@@ -113,9 +113,8 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 	defer os.Remove(logFile.Name())
 	req.LogPath = logFile.Name()
 
-	host, _ := os.Hostname()
 	rec, recErr := c.StartRun(ctx, RunStartReq{IssueID: issue.ID, AgentID: a.ID, Kind: "chat",
-		Runner: runner.Name(), Model: effectiveModel(runner, req.Model), Attempt: 1, Host: host})
+		Runner: runner.Name(), Model: effectiveModel(runner, req.Model), Attempt: 1, Host: h.Name})
 	if recErr != nil {
 		h.logf("could not record the chat run: %v", recErr)
 	}
@@ -165,14 +164,15 @@ func resumable(r Runner) bool {
 // writeMCPConfig writes a one-run MCP config that reaches Raenil as the host,
 // naming the agent so what it writes is attributed to it. The file holds the
 // host's token, so it is private and removed after the run.
-func writeMCPConfig(url, token, agentID string) (string, func(), error) {
+func writeMCPConfig(url, token, agentID, workspace string) (string, func(), error) {
+	headers := map[string]string{"Authorization": "Bearer " + token, "X-Raenil-Agent": agentID}
+	if workspace != "" {
+		// The host's token may span several workspaces; the agent sees only
+		// the one its ticket is in.
+		headers["X-Raenil-Workspace"] = workspace
+	}
 	cfg := map[string]any{"mcpServers": map[string]any{"raenil": map[string]any{
-		"type": "http",
-		"url":  url,
-		"headers": map[string]string{
-			"Authorization":  "Bearer " + token,
-			"X-Raenil-Agent": agentID,
-		},
+		"type": "http", "url": url, "headers": headers,
 	}}}
 	b, _ := json.Marshal(cfg)
 	f, err := os.CreateTemp("", "raenil-mcp-*.json")

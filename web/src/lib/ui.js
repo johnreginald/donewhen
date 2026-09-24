@@ -9,6 +9,21 @@ export const toast = writable(null);
 // ticket's runs) rather than the issue list the layout already keeps current.
 export const liveEvent = writable(null);
 
+// onLive calls fn for each new server event. Use it instead of an $effect on
+// $liveEvent: a handler that updates state it also reads would re-run itself
+// inside an effect. It skips the event already current when it subscribes.
+// Returns the unsubscribe, so onMount(() => onLive(...)) cleans up.
+export function onLive(fn) {
+	let first = true;
+	return liveEvent.subscribe((ev) => {
+		if (first) {
+			first = false;
+			return;
+		}
+		if (ev) fn(ev);
+	});
+}
+
 // openComposer opens the create modal for the given entity, with optional
 // prefilled fields (e.g. a column's stateId when creating from that lane).
 export function openComposer(kind, prefill = {}) {

@@ -205,9 +205,10 @@ func (c *RaenilClient) FinishRun(ctx context.Context, runID string, o RunOutcome
 }
 
 // Heartbeat tells Raenil this host is alive and what it can run.
-func (c *RaenilClient) Heartbeat(ctx context.Context, host, version string, harnesses []models.HarnessStatus) error {
+// started marks the first heartbeat after the host came up.
+func (c *RaenilClient) Heartbeat(ctx context.Context, host, version string, harnesses []models.HarnessStatus, started bool) error {
 	return c.do(ctx, http.MethodPost, "/api/hosts/heartbeat",
-		map[string]any{"name": host, "version": version, "harnesses": harnesses}, nil)
+		map[string]any{"name": host, "version": version, "harnesses": harnesses, "started": started}, nil)
 }
 
 // ClaimedJob is a job handed to this host, with the agent it is for.

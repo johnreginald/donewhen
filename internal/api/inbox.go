@@ -21,12 +21,17 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
+	waiting, err := s.store.WaitingOnHuman(r.Context(), ws(r))
+	if handleStoreErr(w, err) {
+		return
+	}
 	var seenAt *time.Time
 	if u.ID != "" {
 		seenAt, _ = s.store.GetInboxSeen(r.Context(), u.ID)
 	}
 	writeJSON(w, 200, map[string]any{
 		"needsReview": orEmpty(needs),
+		"waiting":     orEmpty(waiting),
 		"recent":      orEmpty(recent),
 		"seenAt":      seenAt,
 	})

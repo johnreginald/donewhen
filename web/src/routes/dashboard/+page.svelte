@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { liveEvent } from '$lib/ui.js';
+	import { onLive } from '$lib/ui.js';
 	import { states } from '$lib/store.js';
 	import { rel, tokens, usd } from '$lib/format.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -49,12 +49,13 @@
 
 	// Anything that moves the numbers refreshes them, at most every few seconds.
 	let pending;
-	$effect(() => {
-		const ev = $liveEvent;
-		if (!ev) return;
-		clearTimeout(pending);
-		pending = setTimeout(load, 1500);
-	});
+	onMount(() =>
+		onLive((ev) => {
+			if (!ev) return;
+			clearTimeout(pending);
+			pending = setTimeout(load, 1500);
+		})
+	);
 </script>
 
 <div class="pg">

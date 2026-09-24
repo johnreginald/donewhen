@@ -44,6 +44,8 @@ type Host struct {
 
 	mu     sync.Mutex
 	status []models.HarnessStatus
+	busy   bool // a job is running
+	jobs   sync.WaitGroup
 }
 
 func (h *Host) logf(format string, args ...any) {
@@ -52,8 +54,9 @@ func (h *Host) logf(format string, args ...any) {
 	}
 }
 
-// Run serves until ctx ends. Jobs run one at a time: a Mac running two agents
-// in one repo at once is how worktrees and tokens collide.
+// Run serves until ctx ends. Jobs run one at a time — a Mac running two agents
+// in one repo at once is how worktrees and tokens collide — but beside the
+// heartbeat, so a long run does not make the host look gone.
 func (h *Host) Run(ctx context.Context) error {
 	if len(h.Clients) == 0 {
 		return errors.New("host serves no workspace")
@@ -64,17 +67,18 @@ func (h *Host) Run(ctx context.Context) error {
 	if h.Heartbeat <= 0 {
 		h.Heartbeat = 30 * time.Second
 	}
-	h.beat(ctx)
+	h.beat(ctx, true)
 	beat := time.NewTicker(h.Heartbeat)
 	defer beat.Stop()
 	poll := time.NewTicker(h.Poll)
 	defer poll.Stop()
+	defer h.jobs.Wait()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-beat.C:
-			h.beat(ctx)
+			h.beat(ctx, false)
 		case <-poll.C:
 			h.pollOnce(ctx)
 		}
@@ -82,7 +86,9 @@ func (h *Host) Run(ctx context.Context) error {
 }
 
 // beat re-checks every harness and reports the result to every workspace.
-func (h *Host) beat(ctx context.Context) {
+// The first beat after start-up also tells Raenil to release what this host
+// had claimed before it went down.
+func (h *Host) beat(ctx context.Context, started bool) {
 	probe := h.Probe
 	if probe == nil {
 		probe = probeHarness
@@ -95,7 +101,7 @@ func (h *Host) beat(ctx context.Context) {
 	h.status = status
 	h.mu.Unlock()
 	for _, c := range h.Clients {
-		if err := c.Heartbeat(ctx, h.Name, h.Version, status); err != nil {
+		if err := c.Heartbeat(ctx, h.Name, h.Version, status, started); err != nil {
 			h.logf("heartbeat to %s: %v", c.Workspace, err)
 		}
 	}
@@ -114,8 +120,15 @@ func (h *Host) ready() []string {
 	return out
 }
 
-// pollOnce claims and runs at most one job per workspace.
+// pollOnce claims one job when the host is idle and runs it in the
+// background, so the heartbeat keeps going while it works.
 func (h *Host) pollOnce(ctx context.Context) {
+	h.mu.Lock()
+	if h.busy {
+		h.mu.Unlock()
+		return
+	}
+	h.mu.Unlock()
 	harnesses := h.ready()
 	if len(harnesses) == 0 {
 		return
@@ -129,7 +142,20 @@ func (h *Host) pollOnce(ctx context.Context) {
 		if !ok {
 			continue
 		}
-		h.handle(ctx, c, job)
+		h.mu.Lock()
+		h.busy = true
+		h.mu.Unlock()
+		h.jobs.Add(1)
+		go func() {
+			defer h.jobs.Done()
+			defer func() {
+				h.mu.Lock()
+				h.busy = false
+				h.mu.Unlock()
+			}()
+			h.handle(ctx, c, job)
+		}()
+		return
 	}
 }
 

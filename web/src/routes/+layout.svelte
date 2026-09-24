@@ -9,7 +9,8 @@
 	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace } from '$lib/store.js';
+	import { get } from 'svelte/store';
+	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, agents, issues, inboxCount } from '$lib/store.js';
 	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer, liveEvent, navOpen } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 	import { CircleCheckBig, Inbox, History, LayoutDashboard } from '@lucide/svelte';
@@ -85,6 +86,14 @@
 		liveEvent.set(ev);
 		applyEvent(ev);
 		if (ev.issue) flashIssue(ev.issue.id);
+		// Paperclip's "Agent is asking a question": say so wherever you are.
+		if (ev.type === 'interaction.created' && ev.interaction) {
+			const who = get(agents).find((a) => a.id === ev.interaction.agentId)?.name || 'An agent';
+			const key = get(issues).find((i) => i.id === ev.interaction.issueId)?.key || 'a ticket';
+			showToast(ev.interaction.kind === 'questions' ? `${who} is asking you something on ${key}` : `${who} proposes tickets on ${key}`);
+			inboxCount.update((n) => n + 1);
+		}
+		if (ev.type === 'interaction.updated') inboxCount.update((n) => Math.max(0, n - 1));
 		if (ev.type === 'issue.state_changed' && ev.issue && ev.to) {
 			const who = ev.actor === 'ai' ? 'Clanker' : 'you';
 			showToast(`${ev.issue.key} → ${ev.to.name} (by ${who})`);

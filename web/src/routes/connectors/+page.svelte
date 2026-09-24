@@ -4,7 +4,7 @@
 	// proves what it is signed into and this page shows that proof.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { liveEvent, showToast } from '$lib/ui.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import { HARNESSES, hostOnline } from '$lib/harness.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -17,9 +17,7 @@
 		loaded = true;
 	}
 	onMount(load);
-	$effect(() => {
-		if ($liveEvent?.type === 'host.updated') load();
-	});
+	onMount(() => onLive((ev) => ev.type === 'host.updated' && load()));
 	// Re-render "last seen" and online-ness without a reload.
 	let tick = $state(0);
 	onMount(() => {

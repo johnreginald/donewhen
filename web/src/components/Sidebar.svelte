@@ -48,7 +48,7 @@
 		allIssues = (await api.issues()) || [];
 		try {
 			const r = await api.inbox();
-			inboxCount.set((r?.needsReview || []).length);
+			inboxCount.set((r?.needsReview || []).length + (r?.waiting || []).length);
 		} catch {
 			/* not logged in yet / offline — leave badge as-is */
 		}

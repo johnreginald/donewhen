@@ -127,3 +127,113 @@ func TestAgentModel(t *testing.T) {
 		}
 	}
 }
+
+// slowRunner holds a test prompt until released, like a long run.
+type slowRunner struct{ release chan struct{} }
+
+func (slowRunner) Name() string                                       { return "claude" }
+func (slowRunner) Run(context.Context, RunRequest) (RunResult, error) { return RunResult{}, nil }
+func (s slowRunner) Ask(ctx context.Context, _, _ string) (string, float64, error) {
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+	}
+	return "hello", 0, nil
+}
+func (s slowRunner) AskIn(ctx context.Context, m, p, _ string) (string, float64, error) {
+	return s.Ask(ctx, m, p)
+}
+
+func TestHostKeepsBeatingDuringAJob(t *testing.T) {
+	var mu sync.Mutex
+	var beats []bool // the started flag of each heartbeat
+	claimed, finished := false, false
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/hosts/heartbeat", func(w http.ResponseWriter, r *http.Request) {
+		var b struct{ Started bool }
+		json.NewDecoder(r.Body).Decode(&b)
+		mu.Lock()
+		beats = append(beats, b.Started)
+		mu.Unlock()
+	})
+	mux.HandleFunc("POST /api/jobs/claim", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if claimed {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		claimed = true
+		json.NewEncoder(w).Encode(ClaimedJob{Job: models.Job{ID: "job-00002", Kind: "test_env"},
+			Agent: &models.Agent{Harness: "claude"}})
+	})
+	mux.HandleFunc("POST /api/jobs/{id}/finish", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		finished = true
+		mu.Unlock()
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	release := make(chan struct{})
+	h := &Host{
+		Name:    "mac",
+		Clients: []*RaenilClient{{BaseURL: srv.URL, Token: "t", Workspace: "ws"}},
+		Runners: RunnerSet{"claude": slowRunner{release: release}},
+		Probe: func(_ context.Context, harness string, r Runner) models.HarnessStatus {
+			return models.HarnessStatus{Harness: harness, Ready: r != nil}
+		},
+		Poll: 10 * time.Millisecond, Heartbeat: 15 * time.Millisecond,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { h.Run(ctx); close(done) }()
+
+	// Let the job start, then count beats while it is held.
+	for ctx.Err() == nil {
+		mu.Lock()
+		c := claimed
+		mu.Unlock()
+		if c {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	before := len(beats)
+	mu.Unlock()
+	time.Sleep(120 * time.Millisecond)
+	mu.Lock()
+	during := len(beats) - before
+	mu.Unlock()
+	close(release)
+	for ctx.Err() == nil {
+		mu.Lock()
+		f := finished
+		mu.Unlock()
+		if f {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	<-done
+
+	if during < 3 {
+		t.Errorf("only %d heartbeats while a job ran: a long run would make the host look gone", during)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !finished {
+		t.Error("the job never finished")
+	}
+	if len(beats) == 0 || !beats[0] {
+		t.Error("the first heartbeat did not say the host started")
+	}
+	for i, s := range beats[1:] {
+		if s {
+			t.Errorf("heartbeat %d claimed a restart", i+2)
+		}
+	}
+}

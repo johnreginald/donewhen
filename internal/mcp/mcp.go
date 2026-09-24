@@ -65,7 +65,16 @@ func (d *deps) reachable(ctx context.Context) ([]models.Membership, error) {
 				kept = append(kept, m)
 			}
 		}
-		return kept, nil
+		all = kept
+	}
+	if w, _ := ctx.Value(workspaceHeaderKey{}).(string); w != "" {
+		kept := all[:0]
+		for _, m := range all {
+			if m.ID == w || strings.EqualFold(m.Slug, w) {
+				kept = append(kept, m)
+			}
+		}
+		all = kept
 	}
 	return all, nil
 }
@@ -210,6 +219,11 @@ func NewHandler(svc *service.Service, st *store.Store, cfg config.Config) http.H
 			if a := strings.TrimSpace(r.Header.Get("X-Raenil-Agent")); a != "" {
 				ctx = context.WithValue(ctx, agentKey{}, a)
 			}
+			// A runner host narrows an agent to the workspace its ticket is
+			// in. It can only narrow: membership is still checked below.
+			if w := strings.TrimSpace(r.Header.Get("X-Raenil-Workspace")); w != "" {
+				ctx = context.WithValue(ctx, workspaceHeaderKey{}, w)
+			}
 			return ctx
 		}))
 	return requireBearer(st, httpSrv)
@@ -241,6 +255,8 @@ func requireBearer(st *store.Store, next http.Handler) http.Handler {
 }
 
 type agentKey struct{}
+
+type workspaceHeaderKey struct{}
 
 // agentFrom is the agent id a runner host named for this call, or "".
 func agentFrom(ctx context.Context) string {

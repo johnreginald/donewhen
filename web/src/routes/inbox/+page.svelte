@@ -9,6 +9,7 @@
 	import { GitCommitHorizontal, FileText, Check, Undo2, Inbox as InboxIcon } from '@lucide/svelte';
 
 	let needsReview = $state([]);
+	let waiting = $state([]); // agents' open questions and proposals
 	let recent = $state([]);
 	let seenAt = $state(null);
 	let loading = $state(true);
@@ -23,9 +24,10 @@
 		try {
 			const r = (await api.inbox()) || {};
 			needsReview = r.needsReview || [];
+			waiting = r.waiting || [];
 			recent = r.recent || [];
 			seenAt = r.seenAt || null;
-			inboxCount.set(needsReview.length);
+			inboxCount.set(needsReview.length + waiting.length);
 			// mark reviewed so the "new" highlight resets next visit + badge is a live queue count
 			await api.inboxSeen();
 		} finally {
@@ -44,7 +46,7 @@
 		try {
 			await api.updateIssue(item.id, { stateId: st.id });
 			needsReview = needsReview.filter((x) => x.id !== item.id);
-			inboxCount.set(needsReview.length);
+			inboxCount.set(needsReview.length + waiting.length);
 			showToast(`${item.key} — ${label}`);
 		} catch (e) {
 			showToast(e.message || 'Failed', 'error');
@@ -81,6 +83,32 @@
 	</div>
 
 	<div class="ib-body">
+		<!-- Waiting on you: agents' questions and proposals -->
+		{#if waiting.length}
+			<section>
+				<h2 class="sec">Waiting on you <span class="count">{waiting.length}</span></h2>
+				<div class="cards">
+					{#each waiting as w (w.id)}
+						<button class="card card-main" onclick={() => openIssue(w.issueKey)}>
+							<div class="row1">
+								<span class="key">{w.issueKey}</span>
+								<span class="ttl">{w.issueTitle}</span>
+							</div>
+							<div class="meta faint">
+								{w.agentName || 'An agent'}
+								{#if w.kind === 'questions'}
+									asked {w.payload?.questions?.length || 0} question{(w.payload?.questions?.length || 0) === 1 ? '' : 's'}
+								{:else}
+									proposes {w.payload?.tickets?.length || 0} ticket{(w.payload?.tickets?.length || 0) === 1 ? '' : 's'}
+								{/if}
+								· {rel(w.createdAt)}
+							</div>
+						</button>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
 		<!-- Needs review -->
 		<section>
 			<h2 class="sec">

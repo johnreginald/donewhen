@@ -23,7 +23,9 @@ export function connectSSE(onEvent) {
 			'run.finished',
 			'job.updated',
 			'host.updated',
-			'agent.saved'
+			'agent.saved',
+			'interaction.created',
+			'interaction.updated'
 		];
 		for (const t of types) {
 			es.addEventListener(t, (e) => {

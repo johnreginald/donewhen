@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { agents } from '$lib/store.js';
-	import { liveEvent, showToast } from '$lib/ui.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import { HARNESSES, harnessName, harnessOn } from '$lib/harness.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -23,10 +23,11 @@
 		lastRun = latest;
 	}
 	onMount(load);
-	$effect(() => {
-		const ev = $liveEvent;
-		if (ev?.type === 'host.updated' || ev?.type === 'run.finished' || ev?.type === 'run.started') load();
-	});
+	onMount(() =>
+		onLive((ev) => {
+			if (ev?.type === 'host.updated' || ev?.type === 'run.finished' || ev?.type === 'run.started') load();
+		})
+	);
 
 	const ready = (a) => harnessOn(hosts, a.harness)?.status?.ready && harnessOn(hosts, a.harness)?.online;
 	const shown = $derived(

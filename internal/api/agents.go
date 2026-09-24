@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"raenil/internal/auth"
 	"raenil/internal/events"
@@ -141,6 +144,9 @@ func (s *Server) handleHostHeartbeat(w http.ResponseWriter, r *http.Request) {
 		Name      string                 `json:"name"`
 		Version   string                 `json:"version"`
 		Harnesses []models.HarnessStatus `json:"harnesses"`
+		// Started is set on a host's first heartbeat: whatever it had
+		// claimed before it restarted will never be finished.
+		Started bool `json:"started"`
 	}
 	if err := readJSON(r, &body); err != nil || body.Name == "" {
 		writeErr(w, http.StatusBadRequest, "name required")
@@ -149,6 +155,13 @@ func (s *Server) handleHostHeartbeat(w http.ResponseWriter, r *http.Request) {
 	h, err := s.store.HostHeartbeat(r.Context(), ws(r), body.Name, body.Version, body.Harnesses)
 	if handleStoreErr(w, err) {
 		return
+	}
+	if body.Started {
+		jobs, runs, err := s.store.ReleaseHost(r.Context(), ws(r), body.Name, "the host restarted before finishing")
+		if handleStoreErr(w, err) {
+			return
+		}
+		s.publishReaped(ws(r), jobs, runs)
 	}
 	s.publish(r, events.Event{Type: "host.updated", Host: &h})
 	writeJSON(w, 200, h)
@@ -265,6 +278,18 @@ func (s *Server) handleFinishJob(w http.ResponseWriter, r *http.Request) {
 // publish sends an event to this workspace's live stream.
 func (s *Server) publish(r *http.Request, e events.Event) {
 	e.WorkspaceID = ws(r)
+	// Every event about a ticket names it, so a page following one ticket
+	// can pick out its own events.
+	if e.IssueID == "" {
+		switch {
+		case e.Job != nil && e.Job.IssueID != nil:
+			e.IssueID = *e.Job.IssueID
+		case e.Run != nil && e.Run.IssueID != nil:
+			e.IssueID = *e.Run.IssueID
+		case e.Interaction != nil:
+			e.IssueID = e.Interaction.IssueID
+		}
+	}
 	if e.Actor == "" {
 		e.Actor = auth.ActorFrom(r.Context())
 	}
@@ -304,4 +329,35 @@ func (s *Server) handleRunIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publish(r, events.Event{Type: "job.updated", Job: &j, IssueID: is.ID})
 	writeJSON(w, http.StatusCreated, j)
+}
+
+// publishReaped announces work the store closed because its host went away.
+func (s *Server) publishReaped(wsID string, jobs []models.Job, runs []models.Run) {
+	for i := range jobs {
+		e := events.Event{Type: "job.updated", WorkspaceID: wsID, Actor: auth.ActorAI, Job: &jobs[i]}
+		if jobs[i].IssueID != nil {
+			e.IssueID = *jobs[i].IssueID
+		}
+		s.bus.Publish(e)
+	}
+	for i := range runs {
+		e := events.Event{Type: "run.finished", WorkspaceID: wsID, Actor: auth.ActorAI, Run: &runs[i]}
+		if runs[i].IssueID != nil {
+			e.IssueID = *runs[i].IssueID
+		}
+		s.bus.Publish(e)
+	}
+}
+
+// Reap closes work whose machine has gone away, across every workspace, and
+// announces it. The server calls it every minute.
+func (s *Server) Reap(ctx context.Context) {
+	byWS, err := s.store.ReapStale(ctx, 5*time.Minute, 3*time.Hour)
+	if err != nil {
+		log.Printf("reap: %v", err)
+		return
+	}
+	for wsID, r := range byWS {
+		s.publishReaped(wsID, r.Jobs, r.Runs)
+	}
 }

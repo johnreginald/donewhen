@@ -5,7 +5,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
 	import { agents } from '$lib/store.js';
-	import { liveEvent, showToast } from '$lib/ui.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import { Play, LoaderCircle, Check, X } from '@lucide/svelte';
 
@@ -19,10 +19,11 @@
 		const list = await api.jobs({ issue: issue.key, kind: 'run_ticket', limit: 1 }).catch(() => []);
 		job = list?.[0] || null;
 	});
-	$effect(() => {
-		const ev = $liveEvent;
-		if (ev?.job && ev.job.kind === 'run_ticket' && ev.job.issueId === issue.id) job = ev.job;
-	});
+	onMount(() =>
+		onLive((ev) => {
+			if (ev?.job && ev.job.kind === 'run_ticket' && ev.job.issueId === issue.id) job = ev.job;
+		})
+	);
 
 	async function run() {
 		try {

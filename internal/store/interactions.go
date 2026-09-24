@@ -277,3 +277,38 @@ func NormaliseProposal(p Proposal) (Proposal, error) {
 	}
 	return p, nil
 }
+
+// Waiting is an open interaction with what the inbox shows beside it.
+type Waiting struct {
+	models.Interaction
+	IssueKey   string `json:"issueKey"`
+	IssueTitle string `json:"issueTitle"`
+	AgentName  string `json:"agentName"`
+}
+
+// WaitingOnHuman lists open questions and proposals across the workspace,
+// newest first — what the inbox shows as waiting on you.
+func (s *Store) WaitingOnHuman(ctx context.Context, wsID string) ([]Waiting, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT x.id, x.issue_id, x.agent_id, x.kind, x.payload, x.status, x.response, x.created_at, x.resolved_at,
+		       i.key, i.title, coalesce(a.name, '')
+		FROM interactions x JOIN issues i ON i.id = x.issue_id LEFT JOIN agents a ON a.id = x.agent_id
+		WHERE x.workspace_id = $1 AND x.status = 'open'
+		ORDER BY x.created_at DESC LIMIT 100`, wsID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Waiting
+	for rows.Next() {
+		var w Waiting
+		var payload, response []byte
+		if err := rows.Scan(&w.ID, &w.IssueID, &w.AgentID, &w.Kind, &payload, &w.Status, &response, &w.CreatedAt,
+			&w.ResolvedAt, &w.IssueKey, &w.IssueTitle, &w.AgentName); err != nil {
+			return nil, err
+		}
+		w.Payload, w.Response = payload, response
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}
