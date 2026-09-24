@@ -1,4 +1,5 @@
 <script>
+	import PageHeader from '$components/PageHeader.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api.js';
@@ -136,6 +137,9 @@
 	}
 </script>
 
+<div class="pg">
+	<PageHeader crumbs={[{ label: 'Artifacts' }]} />
+	<div class="pg-body">
 <div class="docs" class:reading={sel}>
 	<aside class="index">
 		<div class="ihead"><span class="it">Artifacts</span><span class="isub">{docs.length}</span></div>
@@ -292,6 +296,8 @@
 			</div>
 		{/if}
 	</section>
+</div>
+	</div>
 </div>
 
 <style>

@@ -1,4 +1,5 @@
 <script>
+	import PageHeader from '$components/PageHeader.svelte';
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
 	import { appConfig, workspaces, activeWorkspace, loadWorkspaces, switchWorkspace } from '$lib/store.js';
@@ -146,6 +147,9 @@
 	const mcpUrl = $derived(($appConfig.baseUrl || '') + '/mcp');
 </script>
 
+<div class="pg">
+	<PageHeader crumbs={[{ label: 'Settings' }]} />
+	<div class="pg-body">
 <div class="settings">
 	<h1>Settings</h1>
 
@@ -290,6 +294,8 @@
 			{/each}
 		</ul>
 	</section>
+</div>
+	</div>
 </div>
 
 <style>

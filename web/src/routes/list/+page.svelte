@@ -1,5 +1,7 @@
 <script>
-	import { issues, states, projects, initiatives, activeInitiative } from '$lib/store.js';
+	import { visibleIssues, states, projects, initiatives, activeInitiative } from '$lib/store.js';
+	import PageHeader from '$components/PageHeader.svelte';
+	import IssuesToolbar from '$components/IssuesToolbar.svelte';
 	import { openIssue } from '$lib/ui.js';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
@@ -27,7 +29,7 @@
 	}
 
 	// Group issues by Epic (project), then Epics by Project (initiative).
-	const groups = $derived(build($issues, $projects, $initiatives, $states, $activeInitiative));
+	const groups = $derived(build($visibleIssues, $projects, $initiatives, $states, $activeInitiative));
 	function build(iss, projs, inis, sts, activeIni) {
 		const projById = new Map(projs.map((p) => [p.id, p]));
 		const iniById = new Map(inis.map((i) => [i.id, i]));
@@ -66,6 +68,9 @@
 	}
 </script>
 
+<div class="page">
+<PageHeader crumbs={[{ label: 'Tasks', href: '/tasks' }, { label: 'By epic' }]} />
+<IssuesToolbar />
 <div class="list">
 	{#each groups as g (g.id)}
 		<div class="proj-group">
@@ -100,10 +105,17 @@
 		<div class="empty faint">No issues yet. Press ⌘K to create one.</div>
 	{/if}
 </div>
+</div>
 
 <style>
-	.list {
+	.page {
 		height: 100%;
+		display: flex;
+		flex-direction: column;
+	}
+	.list {
+		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
 		padding: 0 0 40px;
 	}

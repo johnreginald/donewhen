@@ -13,6 +13,9 @@
 	import LabelPicker from '$components/LabelPicker.svelte';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
 	import RunBlock from '$components/RunBlock.svelte';
+	import PageHeader from '$components/PageHeader.svelte';
+	import { touchRecent } from '$lib/recent.js';
+	import { activeWorkspace } from '$lib/store.js';
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
 
 	let issue = $state(null);
@@ -52,6 +55,7 @@
 		try {
 			issue = await api.issue(key);
 			titleDraft = issue.title;
+			touchRecent($activeWorkspace?.slug, issue);
 			descDraft = issue.descriptionMd || '';
 			comments = (await api.comments(issue.id)) || [];
 			docs = (await api.documents({ issue: issue.id })) || [];
@@ -63,7 +67,7 @@
 			runs = (await api.issueRuns(issue.id)) || [];
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
-			goto('/');
+			goto('/tasks');
 		} finally {
 			loading = false;
 		}
@@ -114,7 +118,7 @@
 		try {
 			await api.deleteIssue(issue.id);
 			showToast(`${issue.key} deleted`);
-			goto('/');
+			goto('/tasks');
 		} catch (e) {
 			showToast('Delete failed: ' + e.message, 'error');
 		}
@@ -162,16 +166,15 @@
 
 {#if issue}
 	<div class="detail">
-		<div class="dtop">
-			<button class="crumb" onclick={() => goto('/')}>← Board</button>
-			{#if epic}
-				<span class="sep">/</span>
-				<button class="crumb epic" onclick={() => goto('/')}>{epic.name}</button>
-			{/if}
-			<span class="dkey">{issue.key}</span>
-			<span class="dspacer"></span>
+		<PageHeader
+			crumbs={[
+				{ label: 'Tasks', href: '/tasks' },
+				...(epic ? [{ label: epic.name, upper: false }] : []),
+				{ label: issue.key, upper: false }
+			]}
+		>
 			<button class="btn danger sm" onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
-		</div>
+		</PageHeader>
 
 		<div class="dbody">
 			<main class="dmain">
@@ -366,38 +369,6 @@
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-	}
-	.dtop {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 12px 20px;
-		border-bottom: 1px solid var(--border);
-		flex-shrink: 0;
-	}
-	.crumb {
-		background: none;
-		border: none;
-		color: var(--text-dim);
-		font-size: 13.5px;
-		padding: 3px 6px;
-		border-radius: 6px;
-	}
-	.crumb:hover {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.sep {
-		color: var(--text-faint);
-	}
-	.dkey {
-		font-family: var(--mono);
-		font-size: 13px;
-		color: var(--text-faint);
-		margin-left: 6px;
-	}
-	.dspacer {
-		flex: 1;
 	}
 	.dbody {
 		flex: 1;

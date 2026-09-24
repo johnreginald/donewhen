@@ -37,8 +37,11 @@
 		}
 
 		const nav = [
-			{ label: 'Go to Board', to: '/' },
-			{ label: 'Go to List', to: '/list' },
+			{ label: 'Go to Tasks', to: '/tasks' },
+			{ label: 'Go to Board', to: '/board' },
+			{ label: 'Go to Tasks by epic', to: '/list' },
+			{ label: 'Go to Inbox', to: '/inbox' },
+			{ label: 'Go to Audit', to: '/log' },
 			{ label: 'Go to Artifacts', to: '/artifacts' },
 			{ label: 'Go to Settings', to: '/settings' }
 		];

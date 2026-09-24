@@ -1,0 +1,112 @@
+<script>
+	// The controls above every issue view — New Task, search, scope, labels and
+	// the List / By epic / Board switch — laid out like Paperclip's Tasks bar.
+	import { page } from '$app/stores';
+	import { issueQuery } from '$lib/store.js';
+	import { openComposer } from '$lib/ui.js';
+	import ProjectSwitcher from './ProjectSwitcher.svelte';
+	import LabelFilter from './LabelFilter.svelte';
+	import { Plus, Search, List, Rows3, Columns3 } from '@lucide/svelte';
+
+	const views = [
+		{ href: '/tasks', label: 'List', icon: List },
+		{ href: '/list', label: 'By epic', icon: Rows3 },
+		{ href: '/board', label: 'Board', icon: Columns3 }
+	];
+</script>
+
+<div class="bar">
+	<button class="btn np" onclick={() => openComposer('issue')}><Plus size={15} strokeWidth={2.2} />New Task</button>
+	<label class="search">
+		<Search size={14} strokeWidth={2} />
+		<input bind:value={$issueQuery} placeholder="Search tasks…" />
+	</label>
+	<ProjectSwitcher />
+	<LabelFilter />
+	<div class="spacer"></div>
+	<div class="vtoggle" role="tablist">
+		{#each views as v (v.href)}
+			{@const Icon = v.icon}
+			<a href={v.href} class="vt" class:on={$page.url.pathname === v.href} aria-label={v.label}>
+				<Icon size={14} strokeWidth={2} /><span class="vt-txt">{v.label}</span>
+			</a>
+		{/each}
+	</div>
+</div>
+
+<style>
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 20px;
+		flex-wrap: wrap;
+		flex-shrink: 0;
+	}
+	.np {
+		font-size: 13px;
+		padding: 5px 11px;
+	}
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		background: var(--bg-elev);
+		border: 1px solid var(--border);
+		border-radius: 7px;
+		padding: 5px 10px;
+		color: var(--text-faint);
+		width: min(260px, 100%);
+	}
+	.search:focus-within {
+		border-color: var(--border-strong);
+	}
+	.search input {
+		background: none;
+		border: none;
+		outline: none;
+		font-size: 13px;
+		width: 100%;
+	}
+	.search input::placeholder {
+		color: var(--text-faint);
+	}
+	.spacer {
+		flex: 1;
+	}
+	.vtoggle {
+		display: flex;
+		gap: 2px;
+		background: var(--bg-elev);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 2px;
+	}
+	.vt {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 10px;
+		border-radius: 6px;
+		font-size: 12.5px;
+		color: var(--text-dim);
+	}
+	.vt:hover {
+		color: var(--text);
+	}
+	.vt.on {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	@media (max-width: 720px) {
+		.bar {
+			padding: 8px 14px;
+		}
+		.vt-txt {
+			display: none;
+		}
+		.search {
+			flex: 1;
+		}
+	}
+</style>

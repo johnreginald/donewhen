@@ -1,4 +1,5 @@
 <script>
+	import PageHeader from '$components/PageHeader.svelte';
 	import { api } from '$lib/api.js';
 	import { activeInitiative, initiatives } from '$lib/store.js';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
@@ -25,6 +26,9 @@
 	});
 </script>
 
+<div class="pg">
+	<PageHeader crumbs={[{ label: 'Audit' }, { label: 'Activity' }]} />
+	<div class="pg-body">
 <div class="log">
 	<div class="log-head">
 		<div class="lh-left">
@@ -43,6 +47,8 @@
 		{:else}
 			<div class="empty faint">{loading ? 'Loading…' : 'No activity recorded yet.'}</div>
 		{/if}
+	</div>
+</div>
 	</div>
 </div>
 

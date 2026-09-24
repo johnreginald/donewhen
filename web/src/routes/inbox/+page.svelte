@@ -1,4 +1,5 @@
 <script>
+	import PageHeader from '$components/PageHeader.svelte';
 	import { get } from 'svelte/store';
 	import { api } from '$lib/api.js';
 	import { states, projectById, inboxCount } from '$lib/store.js';
@@ -70,6 +71,9 @@
 	});
 </script>
 
+<div class="pg">
+	<PageHeader crumbs={[{ label: 'Inbox' }]} />
+	<div class="pg-body">
 <div class="inbox">
 	<div class="ib-head">
 		<span class="ib-title"><InboxIcon size={17} strokeWidth={2} /> Inbox</span>
@@ -141,6 +145,8 @@
 				<div class="empty faint">{loading ? 'Loading…' : 'No Clanker activity yet.'}</div>
 			{/if}
 		</section>
+	</div>
+</div>
 	</div>
 </div>
 

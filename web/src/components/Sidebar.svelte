@@ -16,7 +16,12 @@
 		switchWorkspace
 	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check, ChevronsUpDown, Settings } from '@lucide/svelte';
+	import { recent } from '$lib/recent.js';
+	import { me } from '$lib/store.js';
+	import {
+		FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check,
+		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut
+	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
 	// issues, labels, the inbox badge) belongs to the selected workspace only.
@@ -25,7 +30,7 @@
 		wsOpen = false;
 		if (slug === $activeWorkspace?.slug) return;
 		await switchWorkspace(slug);
-		if ($page.url.pathname !== '/' && $page.url.pathname !== '/list') goto('/');
+		if (!onIssues) goto('/tasks');
 		onnavigate();
 	}
 
@@ -88,8 +93,7 @@
 		activeInitiative.set(initiativeId);
 		activeProject.set('');
 		loadIssues();
-		const p = $page.url.pathname;
-		if (p !== '/' && p !== '/list') goto('/');
+		if (!onIssues) goto('/tasks');
 		onnavigate();
 	}
 	// Click an Epic → filter every view to that epic.
@@ -97,8 +101,7 @@
 		activeProject.set(projectId);
 		activeInitiative.set('');
 		loadIssues();
-		const p = $page.url.pathname;
-		if (p !== '/' && p !== '/list') goto('/');
+		if (!onIssues) goto('/tasks');
 		onnavigate();
 	}
 
@@ -119,11 +122,15 @@
 		return { groups: [...byIni.values()].filter((g) => g.projects.length), orphan };
 	}
 
-	const nav = [
-		{ label: 'Artifacts', to: '/artifacts', comp: FileText },
-		{ label: 'Activities', to: '/log', comp: History }
-	];
-	const onIssues = $derived($page.url.pathname === '/' || $page.url.pathname === '/list');
+	const ISSUE_VIEWS = ['/tasks', '/list', '/board'];
+	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
+	const recentTasks = $derived($recent[$activeWorkspace?.slug] || []);
+
+	let userOpen = $state(false);
+	async function logout() {
+		await api.logout();
+		goto('/login');
+	}
 </script>
 
 <nav class="sidebar">
@@ -153,35 +160,32 @@
 		{/if}
 	</div>
 
-	<button class="cmdk" onclick={() => paletteOpen.set(true)}>
-		<span class="cmdk-l"><Search size={14} strokeWidth={2} /> Search…</span>
-		<kbd>⌘K</kbd>
-	</button>
-
 	<div class="section">
-		<a
-			href="/inbox"
-			class="nav-item"
-			class:active={$page.url.pathname === '/inbox'}
-			onclick={onnavigate}
-		>
+		<button class="nav-item" onclick={() => (openComposer('issue'), onnavigate())}>
+			<span class="icon"><SquarePen size={16} strokeWidth={2} /></span>New Task
+		</button>
+		<button class="nav-item" onclick={() => paletteOpen.set(true)}>
+			<span class="icon"><Search size={16} strokeWidth={2} /></span>Search<kbd class="kbd">⌘K</kbd>
+		</button>
+		<a href="/inbox" class="nav-item" class:active={$page.url.pathname === '/inbox'} onclick={onnavigate}>
 			<span class="icon"><Inbox size={16} strokeWidth={2} /></span>Inbox
 			{#if $inboxCount > 0}<span class="badge">{$inboxCount}</span>{/if}
 		</a>
-		<button class="nav-item" class:active={onIssues && !$activeInitiative && !$activeProject} onclick={() => pick('')}>
-			<span class="icon"><Layers size={16} strokeWidth={2} /></span>All Issues
-		</button>
-		{#each nav as n}
-			{@const Icon = n.comp}
-			<a
-				href={n.to}
-				class="nav-item"
-				class:active={$page.url.pathname === n.to}
-				onclick={onnavigate}
-			>
-				<span class="icon"><Icon size={16} strokeWidth={2} /></span>{n.label}
-			</a>
-		{/each}
+	</div>
+
+	<div class="section">
+		<div class="section-head"><span class="section-title">Work</span></div>
+		<a
+			href="/tasks"
+			class="nav-item"
+			class:active={onIssues && !$activeInitiative && !$activeProject}
+			onclick={() => (activeInitiative.set(''), activeProject.set(''), loadIssues(), onnavigate())}
+		>
+			<span class="icon"><CircleCheckBig size={16} strokeWidth={2} /></span>Tasks
+		</a>
+		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
+			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts
+		</a>
 	</div>
 
 	<div class="section">
@@ -225,6 +229,46 @@
 				{/each}
 			{/if}
 		{/each}
+	</div>
+
+	<div class="section">
+		<div class="section-head"><span class="section-title">Org</span></div>
+		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log'} onclick={onnavigate}>
+			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
+		</a>
+	</div>
+
+	{#if recentTasks.length}
+		<div class="section">
+			<div class="section-head"><span class="section-title">Recent tasks</span></div>
+			{#each recentTasks as t (t.key)}
+				<a
+					href="/issue/{t.key}"
+					class="nav-item recent"
+					class:active={$page.url.pathname === '/issue/' + t.key}
+					onclick={onnavigate}
+					title="{t.key} · {t.title}"
+				>
+					<span class="pname">{t.title}</span>
+				</a>
+			{/each}
+		</div>
+	{/if}
+
+	<div class="foot">
+		<button class="user" onclick={() => (userOpen = !userOpen)}>
+			<span class="avatar">{($me?.email || '?').slice(0, 2).toUpperCase()}</span>
+			<span class="uname">{$me?.email || ''}</span>
+		</button>
+		{#if userOpen}
+			<div class="menu-backdrop" role="presentation" onclick={() => (userOpen = false)}></div>
+			<div class="user-menu">
+				<a href="/settings" class="ws-item" onclick={() => ((userOpen = false), onnavigate())}>
+					<Settings size={14} strokeWidth={2} />Settings
+				</a>
+				<button class="ws-item danger" onclick={logout}><LogOut size={14} strokeWidth={2} />Log out</button>
+			</div>
+		{/if}
 	</div>
 </nav>
 
@@ -361,22 +405,6 @@
 	.name {
 		font-weight: 600;
 		font-size: 15px;
-	}
-	.cmdk {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
-		color: var(--text-dim);
-		padding: 8px 11px;
-		font-size: 14px;
-	}
-	.cmdk-l {
-		display: inline-flex;
-		align-items: center;
-		gap: 7px;
 	}
 	kbd {
 		font-family: var(--mono);
@@ -646,5 +674,82 @@
 	}
 	.nav-item.active .icon {
 		color: var(--text);
+	}
+	.kbd {
+		margin-left: auto;
+		font-family: var(--mono);
+		font-size: 10.5px;
+		color: var(--text-faint);
+		border: 1px solid var(--border-strong);
+		border-radius: 4px;
+		padding: 0 4px;
+	}
+	.nav-item.recent {
+		font-size: 13px;
+		color: var(--text-dim);
+	}
+	.nav-item.recent .pname {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.foot {
+		margin-top: auto;
+		position: relative;
+		padding-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+	.user {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		width: 100%;
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		padding: 5px 6px;
+		border-radius: 8px;
+		text-align: left;
+		font-size: 13px;
+	}
+	.user:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.avatar {
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: var(--accent-grad);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 600;
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+	}
+	.uname {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.user-menu {
+		position: absolute;
+		bottom: 42px;
+		left: 0;
+		right: 0;
+		z-index: 31;
+		background: var(--bg-elev2);
+		border: 1px solid var(--border-strong);
+		border-radius: 9px;
+		box-shadow: var(--shadow);
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+	.ws-item.danger {
+		color: #f87171;
 	}
 </style>

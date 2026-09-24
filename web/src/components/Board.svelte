@@ -1,6 +1,6 @@
 <script>
 	import { dndzone } from 'svelte-dnd-action';
-	import { states, issues } from '$lib/store.js';
+	import { states, visibleIssues, issueQuery } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { showToast, openComposer } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
@@ -42,7 +42,7 @@
 	// Rebuild columns from live data, except while a drag is in flight.
 	$effect(() => {
 		const st = $states;
-		const is = $issues;
+		const is = $visibleIssues;
 		if (dragging) return;
 		cols = st.map((s) => ({
 			id: s.id,
@@ -102,7 +102,7 @@
 			</div>
 			<div
 				class="col-body"
-				use:dndzone={{ items: col.items, flipDurationMs: 150, dropTargetStyle: {} }}
+				use:dndzone={{ items: col.items, flipDurationMs: 150, dropTargetStyle: {}, dragDisabled: !!$issueQuery.trim() }}
 				onconsider={(e) => consider(i, e)}
 				onfinalize={(e) => finalize(i, e)}
 			>

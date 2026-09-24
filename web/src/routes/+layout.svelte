@@ -10,31 +10,24 @@
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace } from '$lib/store.js';
-	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer, liveEvent } from '$lib/ui.js';
+	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer, liveEvent, navOpen } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
-	import { Columns3, List, Plus, Settings, LogOut, Inbox, Activity, FileText } from '@lucide/svelte';
-	import LabelFilter from '$components/LabelFilter.svelte';
-	import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
+	import { CircleCheckBig, Inbox, History, FileText } from '@lucide/svelte';
 
 	// Mobile bottom-tab nav — surfaces the record surfaces (review / work / history / artifacts).
 	const tabs = [
 		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
-		{ label: 'Board', href: '/', icon: Columns3, match: (p) => p === '/' || p === '/list' },
-		{ label: 'Activity', href: '/log', icon: Activity, match: (p) => p === '/log' },
+		{ label: 'Tasks', href: '/tasks', icon: CircleCheckBig, match: (p) => ['/tasks', '/list', '/board'].includes(p) },
+		{ label: 'Audit', href: '/log', icon: History, match: (p) => p === '/log' },
 		{ label: 'Artifacts', href: '/artifacts', icon: FileText, match: (p) => p.startsWith('/artifacts') }
 	];
 
 	let { children } = $props();
 	let ready = $state(false);
 	let noWorkspace = $state(false);
-	let mobileNav = $state(false);
-	let userOpen = $state(false);
 	let disconnect;
 
-	const initials = $derived(($me?.email || '?').slice(0, 2).toUpperCase());
-
 	const isLogin = $derived($page.url.pathname === '/login');
-	const showView = $derived(['/', '/list'].includes($page.url.pathname));
 
 	onMount(() => {
 		registerServiceWorker();
@@ -115,10 +108,6 @@
 		}
 	}
 
-	async function logout() {
-		await api.logout();
-		goto('/login');
-	}
 </script>
 
 {#if isLogin}
@@ -135,38 +124,13 @@
 	</div>
 {:else if ready}
 	<div class="shell">
-		<div class="nav-col" class:open={mobileNav}>
-			<Sidebar onnavigate={() => (mobileNav = false)} />
+		<div class="nav-col" class:open={$navOpen}>
+			<Sidebar onnavigate={() => navOpen.set(false)} />
 		</div>
-		{#if mobileNav}
-			<div class="nav-backdrop" role="presentation" onclick={() => (mobileNav = false)}></div>
+		{#if $navOpen}
+			<div class="nav-backdrop" role="presentation" onclick={() => navOpen.set(false)}></div>
 		{/if}
 		<main>
-			<header class="topbar">
-				<ProjectSwitcher />
-				{#if showView}
-					<div class="vtoggle">
-						<a href="/" class="vt" class:on={$page.url.pathname === '/'} aria-label="Board"><Columns3 size={15} strokeWidth={2} /><span class="vt-txt">Board</span></a>
-						<a href="/list" class="vt" class:on={$page.url.pathname === '/list'} aria-label="List"><List size={15} strokeWidth={2} /><span class="vt-txt">List</span></a>
-					</div>
-					<LabelFilter />
-				{/if}
-				<div class="spacer"></div>
-				<button class="btn primary np" onclick={() => openComposer('issue')}><Plus size={16} strokeWidth={2.4} /><span class="np-label">New issue</span></button>
-				<div class="usermenu">
-					<button class="avatar" title={$me?.email} onclick={() => (userOpen = !userOpen)}>{initials}</button>
-					{#if userOpen}
-						<div class="umbd" role="presentation" onclick={() => (userOpen = false)}></div>
-						<div class="umenu">
-							<div class="umhead">{$me?.email}</div>
-							<a href="/settings" class="umitem" onclick={() => (userOpen = false)}>
-								<Settings size={15} strokeWidth={2} />Settings
-							</a>
-							<button class="umitem danger" onclick={logout}><LogOut size={15} strokeWidth={2} />Log out</button>
-						</div>
-					{/if}
-				</div>
-			</header>
 			<div class="content">
 				{@render children()}
 			</div>
@@ -229,122 +193,6 @@
 		flex-direction: column;
 		min-width: 0;
 	}
-	.topbar {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 8px 14px;
-		/* PWA / notch: fill the safe area, keep controls below the status bar */
-		padding-top: calc(8px + env(safe-area-inset-top, 0px));
-		padding-left: calc(14px + env(safe-area-inset-left, 0px));
-		padding-right: calc(14px + env(safe-area-inset-right, 0px));
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
-	}
-	.spacer {
-		flex: 1;
-	}
-	.vtoggle {
-		display: flex;
-		gap: 2px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 2px;
-	}
-	.vt {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 4px 11px;
-		border-radius: 6px;
-		font-size: 13px;
-		color: var(--text-dim);
-	}
-	.vt:hover {
-		color: var(--text);
-	}
-	.vt.on {
-		background: var(--bg-hover);
-		color: var(--text);
-	}
-	.usermenu {
-		position: relative;
-	}
-	.avatar {
-		width: 28px;
-		height: 28px;
-		border-radius: 50%;
-		border: none;
-		background: var(--accent-grad);
-		color: #fff;
-		font-size: 11px;
-		font-weight: 600;
-		letter-spacing: 0.02em;
-		display: grid;
-		place-items: center;
-	}
-	.avatar:hover {
-		filter: brightness(1.1);
-	}
-	.umbd {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-	}
-	.umenu {
-		position: absolute;
-		top: 36px;
-		right: 0;
-		z-index: 41;
-		min-width: 200px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
-		border-radius: 10px;
-		box-shadow: var(--shadow);
-		padding: 5px;
-		display: flex;
-		flex-direction: column;
-	}
-	.umhead {
-		font-size: 12px;
-		color: var(--text-faint);
-		padding: 7px 9px 6px;
-		border-bottom: 1px solid var(--border);
-		margin-bottom: 4px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.umitem {
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		background: none;
-		border: none;
-		color: var(--text);
-		text-align: left;
-		padding: 8px 9px;
-		border-radius: 6px;
-		font-size: 13.5px;
-	}
-	.umitem:hover {
-		background: var(--bg-hover);
-	}
-	.umitem.danger {
-		color: #f87171;
-	}
-	.umi {
-		width: 15px;
-		text-align: center;
-		color: var(--text-faint);
-	}
-	.umitem.danger .umi {
-		color: #f87171;
-	}
-	.hamburger {
-		display: none;
-	}
 	.content {
 		flex: 1;
 		min-height: 0;
@@ -382,9 +230,6 @@
 	}
 
 	@media (max-width: 720px) {
-		.hamburger {
-			display: inline-flex;
-		}
 		/* reserve room for the fixed bottom tab bar */
 		main {
 			padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
@@ -414,23 +259,6 @@
 		}
 		.btab.on {
 			color: var(--accent);
-		}
-		.topbar {
-			gap: 6px;
-		}
-		.np-label {
-			display: none;
-		}
-		.np {
-			padding-left: 10px;
-			padding-right: 10px;
-		}
-		/* board/list toggle → icon-only, so the topbar fits */
-		.vt-txt {
-			display: none;
-		}
-		.vt {
-			padding: 5px 9px;
 		}
 		.nav-col {
 			position: fixed;

@@ -279,3 +279,15 @@ select {
 .priority-4 {
 	color: #94a3b8;
 }
+
+/* A page: its header bar, then a body that fills the rest and scrolls. */
+.pg {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+.pg-body {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}

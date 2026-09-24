@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { api, getWorkspace, setWorkspace } from './api.js';
 
 export const workspaces = writable([]); // the caller's memberships
@@ -14,6 +14,14 @@ export const activeProject = writable(''); // '' = all (epic-level filter)
 export const activeInitiative = writable(''); // '' = all (Project-level filter)
 export const activeLabel = writable(''); // '' = all (label filter)
 export const inboxCount = writable(0); // needs-review queue size (sidebar badge)
+export const issueQuery = writable(''); // the search box above every issue view
+
+// visibleIssues is the issue list narrowed by the search box, by title or key.
+export const visibleIssues = derived([issues, issueQuery], ([list, q]) => {
+	const needle = q.trim().toLowerCase();
+	if (!needle) return list;
+	return list.filter((i) => i.title.toLowerCase().includes(needle) || i.key.toLowerCase().includes(needle));
+});
 
 // loadWorkspaces resolves which workspaces the caller can reach and settles on
 // one. It must run before loadMeta: every other request is scoped to the result.

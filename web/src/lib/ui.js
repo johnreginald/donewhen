@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 
 export const paletteOpen = writable(false);
+export const navOpen = writable(false); // the sidebar, on a phone
 export const composer = writable(null); // { kind: 'issue'|'project'|'initiative', prefill }
 export const toast = writable(null);
 // liveEvent is the latest server event, for views that follow one thing (a

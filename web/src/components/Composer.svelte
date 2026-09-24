@@ -10,8 +10,10 @@
 		activeInitiative,
 		loadIssues,
 		loadMeta,
+		activeWorkspace,
 		PRIORITIES
 	} from '$lib/store.js';
+	import { X } from '@lucide/svelte';
 	import { composer, closeComposer, showToast, openIssue } from '$lib/ui.js';
 	import PriorityMenu from './PriorityMenu.svelte';
 	import StatusMenu from './StatusMenu.svelte';
@@ -43,6 +45,37 @@
 	const NOUN = { issue: 'issue', project: 'epic', initiative: 'project' };
 	const heading = $derived((editId ? 'Edit ' : 'New ') + NOUN[kind]);
 
+	// A new task's title and description survive closing the dialog, as a
+	// draft per workspace, until it is created or discarded.
+	const draftKey = () => 'raenil.draft.' + (get(activeWorkspace)?.slug || '');
+	function readDraft() {
+		try {
+			return JSON.parse(localStorage.getItem(draftKey()) || 'null');
+		} catch {
+			return null;
+		}
+	}
+	function writeDraft(d) {
+		try {
+			if (d) localStorage.setItem(draftKey(), JSON.stringify(d));
+			else localStorage.removeItem(draftKey());
+		} catch {
+			/* private mode: no drafts */
+		}
+	}
+	$effect(() => {
+		if (!$composer || kind !== 'issue' || editId) return;
+		const t = title,
+			d = desc;
+		writeDraft(t || d ? { title: t, desc: d } : null);
+	});
+	function discardDraft() {
+		writeDraft(null);
+		title = '';
+		desc = '';
+		closeComposer();
+	}
+
 	function defaultStateId() {
 		const st = get(states);
 		return st.find((s) => s.name === 'Backlog')?.id || st[0]?.id || '';
@@ -57,9 +90,10 @@
 		kind = c.kind;
 		editId = pf.id || '';
 		confirmDel = false;
-		title = '';
+		const draft = c.kind === 'issue' && !pf.id ? readDraft() : null;
+		title = draft?.title || '';
 		name = pf.name || '';
-		desc = pf.description || pf.descriptionMd || '';
+		desc = pf.description || pf.descriptionMd || draft?.desc || '';
 		priority = 0;
 		selLabels = new Set();
 		initiativeId = pf.initiativeId || '';
@@ -93,6 +127,9 @@
 					labelIds: [...selLabels]
 				});
 				await loadIssues();
+				writeDraft(null);
+				title = '';
+				desc = '';
 				showToast(`${is.key} created`);
 				closeComposer();
 				openIssue(is.key);
@@ -172,37 +209,25 @@
 	<div class="backdrop" role="presentation" onclick={closeComposer}></div>
 	<div class="modal" role="dialog" aria-modal="true" onkeydown={onKey}>
 		<div class="head">
-			<span class="dot" class:issue={kind === 'issue'} class:project={kind === 'project'}></span>
-			<span class="htitle">{heading}</span>
+			{#if kind === 'issue'}
+				<span class="wschip">{$activeWorkspace?.keyPrefix || ''}</span>
+				<span class="hsep">›</span>
+				<span class="htitle">New task</span>
+			{:else}
+				<span class="dot" class:project={kind === 'project'}></span>
+				<span class="htitle">{heading}</span>
+			{/if}
+			<button class="hclose" onclick={closeComposer} aria-label="Close"><X size={15} strokeWidth={2} /></button>
 		</div>
 
 		<div class="body">
 			{#if kind === 'issue'}
-				<input
-					bind:this={firstInput}
-					bind:value={title}
-					class="big"
-					placeholder="Issue title"
-				/>
-				<textarea bind:value={desc} class="desc" placeholder="Description (markdown, mermaid…)"></textarea>
-				<div class="meta">
-					<div class="field">
-						<span>Status</span>
-						<StatusMenu value={stateId} onchange={(v) => (stateId = v)} />
-					</div>
-					<div class="field">
-						<span>Epic</span>
-						<EpicMenu value={projectId} options={epicOptions} onchange={(v) => (projectId = v)} />
-					</div>
-					<div class="field">
-						<span>Priority</span>
-						<PriorityMenu value={priority} onchange={(v) => (priority = v)} />
-					</div>
+				<input bind:this={firstInput} bind:value={title} class="big" placeholder="Task title" />
+				<div class="for-row">
+					<span class="faint">in</span>
+					<EpicMenu value={projectId} options={epicOptions} onchange={(v) => (projectId = v)} />
 				</div>
-				<div class="field wide">
-					<span>Labels</span>
-					<LabelPicker selected={[...selLabels]} onchange={(ids) => (selLabels = new Set(ids))} />
-				</div>
+				<textarea bind:value={desc} class="desc" placeholder="Add description… (markdown, mermaid)"></textarea>
 			{:else}
 				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
 				<textarea bind:value={desc} class="desc" placeholder="Description (optional)"></textarea>
@@ -225,6 +250,16 @@
 		</div>
 
 		<div class="foot">
+			{#if kind === 'issue'}
+				<StatusMenu value={stateId} onchange={(v) => (stateId = v)} />
+				<PriorityMenu value={priority} onchange={(v) => (priority = v)} />
+				<LabelPicker selected={[...selLabels]} onchange={(ids) => (selLabels = new Set(ids))} />
+				<span class="spacer"></span>
+				<button class="btn ghost" onclick={discardDraft}>Discard Draft</button>
+				<button class="btn primary" onclick={save} disabled={saving || !title.trim()}>
+					{saving ? 'Creating…' : 'Create Task'}
+				</button>
+			{:else}
 			{#if editId}
 				<button class="btn danger" onclick={del} disabled={saving}>
 					{confirmDel ? 'Confirm delete' : 'Delete'}
@@ -236,6 +271,7 @@
 			<button class="btn primary" onclick={save} disabled={saving}>
 				{saving ? 'Saving…' : editId ? 'Save' : 'Create'}
 			</button>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -253,7 +289,7 @@
 		left: 50%;
 		transform: translateX(-50%);
 		width: min(760px, 94vw);
-		height: min(680px, 84vh);
+		max-height: min(680px, 84vh);
 		background: var(--bg-elev);
 		border: 1px solid var(--border-strong);
 		border-radius: 14px;
@@ -283,6 +319,45 @@
 	.htitle {
 		font-weight: 600;
 		font-size: 14px;
+	}
+	.wschip {
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--text-dim);
+		background: var(--bg-elev2);
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		padding: 1px 6px;
+	}
+	.hsep {
+		color: var(--text-faint);
+	}
+	.head .htitle:not(:first-child) {
+		font-weight: 500;
+		color: var(--text-dim);
+	}
+	.hclose {
+		margin-left: auto;
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		display: inline-flex;
+		padding: 4px;
+		border-radius: 6px;
+	}
+	.hclose:hover {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.for-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
+		margin-top: -6px;
+	}
+	.faint {
+		color: var(--text-faint);
 	}
 	.body {
 		flex: 1;
