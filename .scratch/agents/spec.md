@@ -202,6 +202,22 @@ MCP connector catalog (user: out), multi-company, cloud sandboxes.
 - A worker (work run) that needs an answer uses the same `ask_user`; its run ends
   and the ticket waits for the answer before the next Run.
 
+## Slice status (2026-09-25)
+
+All twelve slices are built and committed on `feat/agents`, each with Go tests;
+the backend flow is proven live on the subscription (Claude Haiku): run a
+ticket from the queue, chat turns with resume, ask_user → answer → propose →
+approve, routines firing on schedule, budgets pausing an agent, live
+transcript streaming.
+
+**Not yet seen in a browser.** Every screen type-checks and builds, but the
+user has not signed in to the local instance, so none has been looked at.
+The epic's "from the web UI" items stay unticked until they are.
+
+Waiting on the user:
+- sign in once at http://localhost:5173 so the screens can be checked;
+- `orchestrator connect claude` to prove isolated runs (no user hooks) live.
+
 ## Done when (epic)
 
 - [ ] An agent can be created, configured and environment-tested entirely from the web UI, for each of Claude, Codex and OpenCode (incl. an opencode-go model).
