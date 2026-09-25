@@ -276,6 +276,18 @@ func (r *OpenCodeRunner) Run(ctx context.Context, req RunRequest) (RunResult, er
 	}
 	res.SessionID = sessionID
 
+	// Raenil's tools for this run: registered on the server for its duration,
+	// then disconnected, so the next run — maybe another agent's, maybe a judge
+	// that should have none — never inherits them. The host runs one job at a
+	// time, so runs never share the registration.
+	if req.MCP != nil && !req.DisableTools {
+		if err := r.addMCP(ctx, dirQ, *req.MCP); err != nil {
+			return res, fmt.Errorf("give the run Raenil's tools: %w", err)
+		}
+		defer r.do(context.WithoutCancel(ctx), r.client(), http.MethodPost,
+			"/mcp/"+req.MCP.Name+"/disconnect", dirQ, nil, nil)
+	}
+
 	// 2. Dispatch without blocking, so permissions can be serviced while it runs.
 	prompt := map[string]any{
 		"parts": []map[string]any{{"type": "text", "text": req.Prompt}},
@@ -371,8 +383,36 @@ loop:
 		res.AgentError = summariseAgentError(agentErr)
 	default:
 		res.Exit = 0
+		// The final reply, for a host that posts it — a conversation turn.
+		res.Answer, _ = r.finalAnswer(tailCtx, sessionID, req.Cwd)
 	}
 	return res, nil
+}
+
+// finalAnswer reads the last assistant text of a finished session. A
+// message's completed timestamp can land fractionally before its text parts
+// are readable, so a single fetch intermittently sees an answer with no
+// content: poll briefly rather than report silence the model did not mean.
+func (r *OpenCodeRunner) finalAnswer(ctx context.Context, sessionID, dir string) (string, error) {
+	q := url.Values{"directory": {dir}}
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var msgs []ocMessage
+		if err := r.do(ctx, r.client(), http.MethodGet, "/session/"+sessionID+"/message", q, nil, &msgs); err != nil {
+			return "", err
+		}
+		if text := lastAssistantText(msgs); text != "" {
+			return text, nil
+		}
+		if time.Now().After(deadline) {
+			return "", nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
 }
 
 // pollCompletion reports whether the agent has finished its turn, along with the
@@ -544,28 +584,11 @@ func (r *OpenCodeRunner) askIn(ctx context.Context, model, prompt, dir string, n
 		return "", res.CostUSD, fmt.Errorf("judge failed: %s", res.AgentError)
 	}
 
-	// A message's completed timestamp can land fractionally before its text parts
-	// are readable, so a single fetch here intermittently sees an answer with no
-	// content. Poll briefly rather than reporting silence the model did not mean.
-	q := url.Values{"directory": {dir}}
-	deadline := time.Now().Add(15 * time.Second)
-	for {
-		var msgs []ocMessage
-		if err := r.do(ctx, r.client(), http.MethodGet, "/session/"+res.SessionID+"/message", q, nil, &msgs); err != nil {
-			return "", res.CostUSD, err
-		}
-		if text := lastAssistantText(msgs); text != "" {
-			return text, res.CostUSD, nil
-		}
-		if time.Now().After(deadline) {
-			return "", res.CostUSD, nil
-		}
-		select {
-		case <-ctx.Done():
-			return "", res.CostUSD, ctx.Err()
-		case <-time.After(250 * time.Millisecond):
-		}
+	if res.Answer != "" {
+		return res.Answer, res.CostUSD, nil
 	}
+	text, err := r.finalAnswer(ctx, res.SessionID, dir)
+	return text, res.CostUSD, err
 }
 
 // lastAssistantText returns the text of the most recent assistant message that
@@ -617,4 +640,18 @@ func summariseAgentError(raw json.RawMessage) string {
 		return e.Name + ": " + msg
 	}
 	return msg
+}
+
+// addMCP registers (or replaces) a remote MCP server on the opencode server,
+// with this run's agent and workspace in its headers.
+func (r *OpenCodeRunner) addMCP(ctx context.Context, dirQ url.Values, m MCPServer) error {
+	h := m.headers()
+	h["Authorization"] = "Bearer " + m.Token
+	body := map[string]any{"name": m.Name, "config": map[string]any{
+		"type": "remote", "url": m.URL, "headers": h, "oauth": false, "enabled": true,
+	}}
+	if err := r.do(ctx, r.client(), http.MethodPost, "/mcp", dirQ, body, nil); err != nil {
+		return err
+	}
+	return r.do(ctx, r.client(), http.MethodPost, "/mcp/"+m.Name+"/connect", dirQ, nil, nil)
 }

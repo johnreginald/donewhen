@@ -76,10 +76,9 @@ type Orchestrator struct {
 	// Instructions are the agent's own, given ahead of the ticket on every
 	// work run, as a chat turn gets them.
 	Instructions string
-	// MCPConfig and ExtraTools give a work run Raenil's tools — ask_user, so
-	// a worker that needs a decision asks for it instead of guessing.
-	MCPConfig  string
-	ExtraTools []string
+	// MCP gives a work run Raenil's tools — ask_user, so a worker that needs a
+	// decision asks for it instead of guessing.
+	MCP *MCPServer
 	// HostName names this machine on run records; empty means its hostname.
 	// A runner host sets its own name, so its runs can be matched to it.
 	HostName string
@@ -284,7 +283,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 			prompt += "\n\n## Decisions already made\n\n" + d
 		}
 	}
-	if o.MCPConfig != "" {
+	if o.MCP != nil {
 		prompt += "\n\n## When you need a decision\n\nIf you cannot finish without a decision only the user can make, " +
 			"call the Raenil tool ask_user on " + issue.Key + " with a few concrete options, then end your turn. " +
 			"Do not guess, and do not stop for anything you can decide yourself.\n"
@@ -319,14 +318,13 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
 	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), runner.Name())
 	res, runErr = runner.Run(ctx, RunRequest{
-		Prompt:       prompt,
-		Cwd:          wtPath,
-		Model:        model,
-		Timeout:      cfg.Timeout,
-		LogPath:      runDir.File("worker.log"),
-		SessionID:    spec.SessionID,
-		MCPConfig:    o.MCPConfig,
-		AllowedTools: o.ExtraTools,
+		Prompt:    prompt,
+		Cwd:       wtPath,
+		Model:     model,
+		Timeout:   cfg.Timeout,
+		LogPath:   runDir.File("worker.log"),
+		SessionID: spec.SessionID,
+		MCP:       o.MCP,
 	})
 	stopStream()
 	if runErr != nil {

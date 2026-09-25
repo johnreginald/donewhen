@@ -980,21 +980,14 @@ func cmdHost(ctx context.Context, args []string) error {
 	// Running a ticket from the dashboard is `orchestrator work KEY --handoff`
 	// with the agent's settings: attempts, retries, and a kept worktree for
 	// review. The agent's harness decides — a runner: label on the ticket does
-	// not override the agent that was asked. A Claude worker can ask the user
-	// through Raenil; a question stops the attempts until it is answered.
+	// not override the agent that was asked. A worker on any harness can ask
+	// the user through Raenil; a question stops the attempts until answered.
 	runTicket := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (any, error) {
-		o, runner, err := agentOrch(c, job)
+		o, _, err := agentOrch(c, job)
 		if err != nil {
 			return nil, err
 		}
-		if runner.Name() == "claude" {
-			path, cleanup, err := orchestrator.WriteMCPConfig(rc.BaseURL+"/mcp", c.Token, job.Agent.ID, c.Workspace)
-			if err != nil {
-				return nil, err
-			}
-			defer cleanup()
-			o.MCPConfig, o.ExtraTools = path, []string{"mcp__raenil__ask_user"}
-		}
+		o.MCP = orchestrator.RaenilMCP(rc.BaseURL, c.Token, job.Agent.ID, c.Workspace, orchestrator.WorkMCPTools...)
 		return o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
 			Triage: orchestrator.TriagePolicy{MaxAttempts: *maxAttempts, EscalateAfter: *maxAttempts},
 		})

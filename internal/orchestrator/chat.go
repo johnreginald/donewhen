@@ -20,19 +20,6 @@ import (
 // helps, answer — or ask structured questions — and stop. It never edits
 // files: that is what a Run is for.
 
-// chatTools are the Raenil tools a conversation turn may call without asking.
-// Posting its own reply is the host's job, so save_comment is not among them.
-var chatTools = []string{
-	"mcp__raenil__ask_user",
-	"mcp__raenil__propose_tickets",
-	"mcp__raenil__get_issue",
-	"mcp__raenil__list_comments",
-	"mcp__raenil__get_criteria",
-	"mcp__raenil__list_issues",
-	"mcp__raenil__get_document",
-	"mcp__raenil__list_documents",
-}
-
 // ChatResult is what a turn reports back to the job.
 type ChatResult struct {
 	Replied   bool   `json:"replied"`
@@ -106,13 +93,8 @@ func (h *Host) chat(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, 
 		ReadOnlyTools: true,
 		SessionID:     session.SessionID,
 	}
-	if runner.Name() == "claude" && h.MCPURL != "" {
-		path, cleanup, err := WriteMCPConfig(h.MCPURL, c.Token, a.ID, c.Workspace)
-		if err != nil {
-			return nil, err
-		}
-		defer cleanup()
-		req.MCPConfig, req.AllowedTools = path, chatTools
+	if h.MCPURL != "" {
+		req.MCP = &MCPServer{Name: "raenil", URL: h.MCPURL, Token: c.Token, AgentID: a.ID, Workspace: c.Workspace, Tools: ChatMCPTools}
 	}
 
 	logFile, err := os.CreateTemp("", "raenil-chat-*.log")
@@ -211,40 +193,6 @@ func resumable(r Runner) bool {
 		return true
 	}
 	return false
-}
-
-// WriteMCPConfig writes a one-run MCP config that reaches Raenil as the host,
-// naming the agent so what it writes is attributed to it. The file holds the
-// host's token, so it is private and removed after the run.
-func WriteMCPConfig(url, token, agentID, workspace string) (string, func(), error) {
-	headers := map[string]string{"Authorization": "Bearer " + token, "X-Raenil-Agent": agentID}
-	if workspace != "" {
-		// The host's token may span several workspaces; the agent sees only
-		// the one its ticket is in.
-		headers["X-Raenil-Workspace"] = workspace
-	}
-	cfg := map[string]any{"mcpServers": map[string]any{"raenil": map[string]any{
-		"type": "http", "url": url, "headers": headers,
-	}}}
-	b, _ := json.Marshal(cfg)
-	f, err := os.CreateTemp("", "raenil-mcp-*.json")
-	if err != nil {
-		return "", nil, err
-	}
-	name := f.Name()
-	cleanup := func() { os.Remove(name) }
-	if err := f.Chmod(0o600); err != nil {
-		f.Close()
-		cleanup()
-		return "", nil, err
-	}
-	if _, err := f.Write(b); err != nil {
-		f.Close()
-		cleanup()
-		return "", nil, err
-	}
-	f.Close()
-	return name, cleanup, nil
 }
 
 // chatBrief is the opening of a conversation: who the agent is, how Raenil

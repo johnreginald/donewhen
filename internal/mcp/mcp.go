@@ -190,6 +190,15 @@ func (d *deps) scopeOne(ctx context.Context, req mcp.CallToolRequest, refs ...re
 	}
 }
 
+// agentTools are the tools an agent running a ticket gets. Every tool's
+// definition sits in the agent's context on every turn — the full set measured
+// about 7,000 tokens a turn — so an agent is given only what its work uses.
+var agentTools = map[string]bool{
+	"ask_user": true, "propose_tickets": true,
+	"get_issue": true, "list_comments": true, "get_criteria": true,
+	"list_issues": true, "get_document": true, "list_documents": true,
+}
+
 func buildServer(d *deps) *server.MCPServer {
 	s := server.NewMCPServer("raenil", version,
 		server.WithToolCapabilities(true),
@@ -209,24 +218,52 @@ func buildServer(d *deps) *server.MCPServer {
 	return s
 }
 
+// buildAgentServer is the same server narrowed to agentTools, with a short
+// preamble: an agent reads it every turn too.
+func buildAgentServer(d *deps) *server.MCPServer {
+	s := server.NewMCPServer("raenil", version,
+		server.WithToolCapabilities(true),
+		server.WithInstructions("Raenil, the issue tracker your ticket lives in. Use ask_user when you need "+
+			"a decision only the user can make, and propose_tickets to split work into tickets."),
+	)
+	d.register(s)
+	var drop []string
+	for name := range s.ListTools() {
+		if !agentTools[name] {
+			drop = append(drop, name)
+		}
+	}
+	s.DeleteTools(drop...)
+	return s
+}
+
 // NewHandler builds the bearer-authed MCP HTTP handler mounted at /mcp.
 func NewHandler(svc *service.Service, st *store.Store, cfg config.Config) http.Handler {
 	d := &deps{svc: svc, store: st, cfg: cfg, mgr: auth.NewManager(st, cfg.SecureCookies())}
-	httpSrv := server.NewStreamableHTTPServer(buildServer(d),
-		// A runner host names the agent it is running in this header, so what
-		// the agent writes through these tools is attributed to it.
-		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			if a := strings.TrimSpace(r.Header.Get("X-Raenil-Agent")); a != "" {
-				ctx = context.WithValue(ctx, agentKey{}, a)
-			}
-			// A runner host narrows an agent to the workspace its ticket is
-			// in. It can only narrow: membership is still checked below.
-			if w := strings.TrimSpace(r.Header.Get("X-Raenil-Workspace")); w != "" {
-				ctx = context.WithValue(ctx, workspaceHeaderKey{}, w)
-			}
-			return ctx
-		}))
-	return requireBearer(st, httpSrv)
+	// A runner host names the agent it is running in this header, so what
+	// the agent writes through these tools is attributed to it.
+	withAgent := server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+		if a := strings.TrimSpace(r.Header.Get("X-Raenil-Agent")); a != "" {
+			ctx = context.WithValue(ctx, agentKey{}, a)
+		}
+		// A runner host narrows an agent to the workspace its ticket is
+		// in. It can only narrow: membership is still checked below.
+		if w := strings.TrimSpace(r.Header.Get("X-Raenil-Workspace")); w != "" {
+			ctx = context.WithValue(ctx, workspaceHeaderKey{}, w)
+		}
+		return ctx
+	})
+	full := server.NewStreamableHTTPServer(buildServer(d), withAgent)
+	agent := server.NewStreamableHTTPServer(buildAgentServer(d), withAgent)
+	// X-Raenil-Tools: agent picks the narrow set. A session stays on the
+	// server that created it, since every request of a run carries the header.
+	return requireBearer(st, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Raenil-Tools")), "agent") {
+			agent.ServeHTTP(w, r)
+			return
+		}
+		full.ServeHTTP(w, r)
+	}))
 }
 
 // ServeStdio runs the MCP server over stdio (local fallback transport).

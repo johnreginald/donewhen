@@ -177,11 +177,17 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 	if provider, model := splitModel(req.Model); provider == "codex" && model != "" && model != "default" {
 		args = append(args, "-m", model)
 	}
+	if req.MCP != nil && !req.DisableTools {
+		args = append(args, codexMCPArgs(*req.MCP, codexMCPTokenEnv)...)
+	}
 	args = append(args, req.Prompt)
 
 	cmd := exec.CommandContext(ctx, r.bin(), args...)
 	cmd.Dir = req.Cwd
 	cmd.Env = r.env()
+	if req.MCP != nil {
+		cmd.Env = append(cmd.Env, codexMCPTokenEnv+"="+req.MCP.Token)
+	}
 	// Never inherit a live stdin: a child that blocks on it hangs with no output,
 	// which is exactly how the OpenCode CLI wedged.
 	cmd.Stdin = nil
@@ -334,3 +340,7 @@ func codexTokens(logPath string) int {
 	}
 	return total
 }
+
+// codexMCPTokenEnv carries Raenil's token to a codex run's MCP server, so the
+// token is never on a command line where `ps` would show it.
+const codexMCPTokenEnv = "RAENIL_MCP_TOKEN"

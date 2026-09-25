@@ -45,12 +45,9 @@ type RunRequest struct {
 	// ReadOnlyTools allows only the tools needed to look at code, never to
 	// change it. Used for review, where a reviewer that can edit is not one.
 	ReadOnlyTools bool
-	// MCPConfig is an MCP config file for this run, overriding the runner's.
-	// It is how a conversation turn reaches Raenil's tools.
-	MCPConfig string
-	// AllowedTools are extra permission rules for this run, e.g. the Raenil
-	// MCP tools a conversation turn may call without asking.
-	AllowedTools []string
+	// MCP gives the run Raenil's tools — asking the user, proposing tickets —
+	// through whichever means its CLI takes. Nil gives it none.
+	MCP *MCPServer
 }
 
 // readyChecker is an optional Runner interface for backends that can say
