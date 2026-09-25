@@ -65,14 +65,22 @@ func redact(s string) string {
 	return s
 }
 
-// runLogTail returns the end of a run's log, readable and redacted. Claude's
-// stream-json is rendered as a transcript; anything else is kept as written.
+// runLogTail returns the end of a run's log, readable and redacted. Each
+// harness's own format is rendered as a transcript; anything else is kept as
+// written.
 func runLogTail(path, runner string) string {
 	var text string
-	if runner == "claude" {
+	switch runner {
+	case "claude":
 		text = claudeReadable(path)
-	} else if b, err := os.ReadFile(path); err == nil {
-		text = string(b)
+	case "codex", "opencode":
+		if lines := readableLines(path, runner); len(lines) > 0 {
+			text = strings.Join(lines, "\n") + "\n"
+		}
+	default:
+		if b, err := os.ReadFile(path); err == nil {
+			text = string(b)
+		}
 	}
 	if len(text) > maxRunLogTail {
 		text = text[len(text)-maxRunLogTail:]
@@ -220,6 +228,15 @@ func streamLog(ctx context.Context, c *RaenilClient, runID, path, runner string)
 		var offset int64
 		var partial []byte
 		flush := func(final bool) {
+			// OpenCode's session is saved whole when the run ends, as one
+			// JSON document: it is rendered once, at the end.
+			if runner == "opencode" {
+				if !final {
+					return
+				}
+				post(ctx, c, runID, readableLines(path, runner))
+				return
+			}
 			f, err := os.Open(path)
 			if err != nil {
 				return
@@ -239,19 +256,18 @@ func streamLog(ctx context.Context, c *RaenilClient, runID, path, runner string)
 			}
 			var lines []string
 			for _, p := range parts {
-				if runner == "claude" {
-					for _, l := range claudeLine(p) {
-						lines = append(lines, redact(l))
+				switch runner {
+				case "claude":
+					lines = append(lines, claudeLine(p)...)
+				case "codex":
+					lines = append(lines, codexLine(p)...)
+				default:
+					if t := strings.TrimRight(string(p), "\r"); t != "" {
+						lines = append(lines, t)
 					}
-				} else if t := strings.TrimRight(string(p), "\r"); t != "" {
-					lines = append(lines, redact(t))
 				}
 			}
-			for len(lines) > 0 {
-				n := min(len(lines), 200)
-				_ = c.AppendRunEvents(context.WithoutCancel(ctx), runID, lines[:n])
-				lines = lines[n:]
-			}
+			post(ctx, c, runID, lines)
 		}
 		t := time.NewTicker(1500 * time.Millisecond)
 		defer t.Stop()
@@ -271,5 +287,22 @@ func streamLog(ctx context.Context, c *RaenilClient, runID, path, runner string)
 			close(done)
 			<-finished
 		})
+	}
+}
+
+// worktreePrefix is the machine-local path to a ticket's worktree. File tools
+// report absolute paths; the reader wants them relative to the repository.
+var worktreePrefix = regexp.MustCompile(`/\S*?/worktrees/[^/\s]+/`)
+
+// post sends transcript lines to Raenil in batches, redacted and with
+// worktree paths made relative here, before they leave the machine.
+func post(ctx context.Context, c *RaenilClient, runID string, lines []string) {
+	for i, l := range lines {
+		lines[i] = redact(worktreePrefix.ReplaceAllString(l, ""))
+	}
+	for len(lines) > 0 {
+		n := min(len(lines), 200)
+		_ = c.AppendRunEvents(context.WithoutCancel(ctx), runID, lines[:n])
+		lines = lines[n:]
 	}
 }

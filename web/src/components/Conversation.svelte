@@ -9,7 +9,7 @@
 	import { rel } from '$lib/format.js';
 	import Markdown from './Markdown.svelte';
 	import PermissionCard from './PermissionCard.svelte';
-	import RunBlock from './RunBlock.svelte';
+	import RunThread from './RunThread.svelte';
 	import QuestionCard from './QuestionCard.svelte';
 	import ProposalCard from './ProposalCard.svelte';
 	import EpicMenu from './EpicMenu.svelte';
@@ -212,7 +212,7 @@
 				</article>
 			{/if}
 		{:else if item.kind === 'run'}
-			<div class="runline"><RunBlock run={item.r} /></div>
+			{#key item.r.id}<RunThread run={item.r} />{/key}
 			{#if item.r.id === lastWork?.id && item.r.agentId === issue.agentId && item.r.status !== 'running' && item.r.deniedTools?.length}
 				<PermissionCard run={item.r} {issue} />
 			{/if}
@@ -407,9 +407,6 @@
 	}
 	.aq::after {
 		content: ' →';
-	}
-	.runline {
-		margin: -4px -8px;
 	}
 	.note {
 		display: inline-flex;

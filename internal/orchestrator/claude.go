@@ -419,7 +419,7 @@ func parseClaudeTranscript(path string) (claudeTranscript, error) {
 func claudeToolInput(raw json.RawMessage) string {
 	var in map[string]any
 	if json.Unmarshal(raw, &in) == nil {
-		for _, k := range []string{"command", "file_path", "path", "pattern"} {
+		for _, k := range []string{"command", "file_path", "filePath", "path", "pattern", "url", "query"} {
 			if s, ok := in[k].(string); ok {
 				return s
 			}
