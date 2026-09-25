@@ -13,15 +13,14 @@
 		workspaces,
 		activeWorkspace,
 		switchWorkspace,
-		activeJobs,
-		agents
+		activeJobs
 	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
 	import { recent } from '$lib/recent.js';
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
-		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, ChevronRight, LoaderCircle
+		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, ChevronRight, Activity
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -98,18 +97,8 @@
 		}
 	}
 
-	// Tickets an agent is working on or about to, one row each, newest first.
-	const running = $derived.by(() => {
-		const seen = new Set();
-		const out = [];
-		for (const j of $activeJobs) {
-			if (seen.has(j.issueId)) continue;
-			seen.add(j.issueId);
-			const is = $issues.find((i) => i.id === j.issueId) || allIssues.find((i) => i.id === j.issueId);
-			out.push({ job: j, key: j.issueKey || is?.key, title: is?.title || j.issueKey, agent: $agents.find((a) => a.id === j.agentId)?.name });
-		}
-		return out;
-	});
+	// How many tickets an agent is working on or about to.
+	const runningCount = $derived(new Set($activeJobs.map((j) => j.issueId)).size);
 
 	const ISSUE_VIEWS = ['/tasks', '/list', '/board'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
@@ -163,7 +152,7 @@
 	</div>
 
 	<div class="section">
-		<div class="section-head"><span class="section-title">Work</span></div>
+		<div class="section-head"><span class="section-title">Workspace</span></div>
 		<a
 			href="/board"
 			class="nav-item"
@@ -172,8 +161,21 @@
 		>
 			<span class="icon"><CircleCheckBig size={16} strokeWidth={2} /></span>Tasks
 		</a>
+		<a href="/running" class="nav-item" class:active={$page.url.pathname === '/running'} onclick={onnavigate}>
+			<span class="icon"><Activity size={16} strokeWidth={2} /></span>Running
+			{#if runningCount}<span class="badge live">{runningCount}</span>{/if}
+		</a>
 		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
 			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts
+		</a>
+		<a href="/agents" class="nav-item" class:active={$page.url.pathname.startsWith('/agents')} onclick={onnavigate}>
+			<span class="icon"><Bot size={16} strokeWidth={2} /></span>Agents
+		</a>
+		<a href="/connectors" class="nav-item" class:active={$page.url.pathname === '/connectors'} onclick={onnavigate}>
+			<span class="icon"><Plug size={16} strokeWidth={2} /></span>Connectors
+		</a>
+		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log' || $page.url.pathname.startsWith('/audit')} onclick={onnavigate}>
+			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
 		</a>
 	</div>
 
@@ -198,36 +200,6 @@
 		{/if}
 	</div>
 
-	<div class="section">
-		<div class="section-head"><span class="section-title">Org</span></div>
-		<a href="/agents" class="nav-item" class:active={$page.url.pathname.startsWith('/agents')} onclick={onnavigate}>
-			<span class="icon"><Bot size={16} strokeWidth={2} /></span>Agents
-		</a>
-		<a href="/connectors" class="nav-item" class:active={$page.url.pathname === '/connectors'} onclick={onnavigate}>
-			<span class="icon"><Plug size={16} strokeWidth={2} /></span>Connectors
-		</a>
-		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log' || $page.url.pathname.startsWith('/audit')} onclick={onnavigate}>
-			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
-		</a>
-	</div>
-
-	{#if running.length}
-		<div class="section">
-			<div class="section-head"><span class="section-title">Running</span><span class="section-n">{running.length}</span></div>
-			{#each running as r (r.job.issueId)}
-				<a
-					href="/issue/{r.key}"
-					class="nav-item recent run"
-					class:active={$page.url.pathname === '/issue/' + r.key}
-					onclick={onnavigate}
-					title="{r.key} · {r.title} — {r.agent || 'agent'} {r.job.status === 'queued' ? 'queued' : 'working'}"
-				>
-					<span class="icon spin-ic" class:queued={r.job.status === 'queued'}><LoaderCircle size={13} strokeWidth={2.2} /></span>
-					<span class="pname">{r.title}</span>
-				</a>
-			{/each}
-		</div>
-	{/if}
 
 	{#if recentTasks.length}
 		<div class="section">
@@ -280,29 +252,6 @@
 	}
 	.section-toggle .chev.open {
 		transform: rotate(90deg);
-	}
-	.section-n {
-		margin-left: 6px;
-		font-size: 11px;
-		color: var(--text-faint);
-		font-variant-numeric: tabular-nums;
-	}
-	.run .spin-ic {
-		color: var(--st-progress);
-	}
-	.run .spin-ic :global(svg) {
-		animation: sb-spin 1.2s linear infinite;
-	}
-	.run .spin-ic.queued {
-		color: var(--text-faint);
-	}
-	.run .spin-ic.queued :global(svg) {
-		animation: none;
-	}
-	@keyframes sb-spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 	.menu-backdrop {
 		position: fixed;
@@ -627,6 +576,9 @@
 		border-radius: 9px;
 		padding: 1px 6px;
 		line-height: 1.4;
+	}
+	.badge.live {
+		background: color-mix(in srgb, var(--st-progress) 80%, #000);
 	}
 	.icon {
 		width: 16px;

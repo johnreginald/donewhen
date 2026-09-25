@@ -13,13 +13,14 @@
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, agents, issues, inboxCount } from '$lib/store.js';
 	import { paletteOpen, toast, showToast, flashIssue, liveEvent, navOpen } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
-	import { CircleCheckBig, Inbox, History, LayoutDashboard } from '@lucide/svelte';
+	import { CircleCheckBig, Inbox, History, LayoutDashboard, Activity } from '@lucide/svelte';
 
 	// Mobile bottom-tab nav — surfaces the record surfaces (review / work / history / artifacts).
 	const tabs = [
 		{ label: 'Home', href: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
 		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
 		{ label: 'Tasks', href: '/board', icon: CircleCheckBig, match: (p) => ['/tasks', '/list', '/board'].includes(p) },
+		{ label: 'Running', href: '/running', icon: Activity, match: (p) => p === '/running' },
 		{ label: 'Audit', href: '/log', icon: History, match: (p) => p === '/log' || p.startsWith('/audit') },
 	];
 
