@@ -1,8 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
-	import { issues, states, loadIssues } from '$lib/store.js';
-	import { api } from '$lib/api.js';
-	import { paletteOpen, openIssue, showToast } from '$lib/ui.js';
+	import { issues, states } from '$lib/store.js';
+	import { paletteOpen, openIssue } from '$lib/ui.js';
 
 	let query = $state('');
 	let sel = $state(0);
@@ -22,19 +21,6 @@
 	function build(q, allIssues, allStates) {
 		const list = [];
 		const ql = q.trim().toLowerCase();
-
-		if (ql) {
-			list.push({
-				kind: 'action',
-				label: `Create issue: “${q.trim()}”`,
-				run: async () => {
-					const is = await api.createIssue({ title: q.trim(), stateName: 'Backlog' });
-					await loadIssues();
-					showToast(`${is.key} created`);
-					openIssue(is.key);
-				}
-			});
-		}
 
 		const nav = [
 			{ label: 'Go to Tasks', to: '/tasks' },

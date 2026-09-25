@@ -1,12 +1,11 @@
 <script>
-	// The controls above every issue view — New Task, search, scope, labels and
+	// The controls above every issue view — search, scope, labels and
 	// the List / By epic / Board switch — laid out like Paperclip's Tasks bar.
 	import { page } from '$app/stores';
 	import { issueQuery } from '$lib/store.js';
-	import { openComposer } from '$lib/ui.js';
 	import ProjectSwitcher from './ProjectSwitcher.svelte';
 	import LabelFilter from './LabelFilter.svelte';
-	import { Plus, Search, List, Rows3, Columns3 } from '@lucide/svelte';
+	import { Search, List, Rows3, Columns3 } from '@lucide/svelte';
 
 	const views = [
 		{ href: '/tasks', label: 'List', icon: List },
@@ -16,7 +15,6 @@
 </script>
 
 <div class="bar">
-	<button class="btn np" onclick={() => openComposer('issue')}><Plus size={15} strokeWidth={2.2} />New Task</button>
 	<label class="search">
 		<Search size={14} strokeWidth={2} />
 		<input bind:value={$issueQuery} placeholder="Search tasks…" />
@@ -42,10 +40,6 @@
 		padding: 10px 20px;
 		flex-wrap: wrap;
 		flex-shrink: 0;
-	}
-	.np {
-		font-size: 13px;
-		padding: 5px 11px;
 	}
 	.search {
 		display: flex;

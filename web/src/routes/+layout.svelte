@@ -11,7 +11,7 @@
 	import { connectSSE } from '$lib/sse.js';
 	import { get } from 'svelte/store';
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, agents, issues, inboxCount } from '$lib/store.js';
-	import { paletteOpen, toast, showToast, flashIssue, composer, openComposer, liveEvent, navOpen } from '$lib/ui.js';
+	import { paletteOpen, toast, showToast, flashIssue, liveEvent, navOpen } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 	import { CircleCheckBig, Inbox, History, LayoutDashboard } from '@lucide/svelte';
 
@@ -100,20 +100,11 @@
 		}
 	}
 
-	function isTyping(e) {
-		const t = e.target;
-		return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-	}
-
 	function globalKeys(e) {
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			paletteOpen.update((v) => !v);
 			return;
-		}
-		if (e.key === 'c' && !isTyping(e) && !$paletteOpen && !$composer) {
-			e.preventDefault();
-			openComposer('issue');
 		}
 	}
 

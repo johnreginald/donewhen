@@ -20,7 +20,7 @@
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check,
-		ChevronsUpDown, Settings, SquarePen, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, Repeat
+		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, Repeat
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -161,9 +161,6 @@
 	</div>
 
 	<div class="section">
-		<button class="nav-item" onclick={() => (openComposer('issue'), onnavigate())}>
-			<span class="icon"><SquarePen size={16} strokeWidth={2} /></span>New Task
-		</button>
 		<button class="nav-item" onclick={() => paletteOpen.set(true)}>
 			<span class="icon"><Search size={16} strokeWidth={2} /></span>Search<kbd class="kbd">⌘K</kbd>
 		</button>

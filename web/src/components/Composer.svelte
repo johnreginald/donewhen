@@ -1,90 +1,31 @@
 <script>
-	import { get } from 'svelte/store';
 	import { api } from '$lib/api.js';
 	import {
-		states,
-		projects,
 		initiatives,
-		labels,
-		activeProject,
-		activeInitiative,
 		loadIssues,
-		loadMeta,
-		activeWorkspace,
-		agents,
-		PRIORITIES
+		loadMeta
 	} from '$lib/store.js';
-	import { X, Bot } from '@lucide/svelte';
-	import { composer, closeComposer, showToast, openIssue } from '$lib/ui.js';
-	import PriorityMenu from './PriorityMenu.svelte';
-	import StatusMenu from './StatusMenu.svelte';
-	import EpicMenu from './EpicMenu.svelte';
-	import LabelPicker from './LabelPicker.svelte';
+	import { X } from '@lucide/svelte';
+	import { composer, closeComposer, showToast } from '$lib/ui.js';
 
-	// Epics shown when creating an issue: scoped to the active Project if one is
-	// selected, otherwise all.
-	const epicOptions = $derived(
-		$activeInitiative ? $projects.filter((p) => p.initiativeId === $activeInitiative) : $projects
-	);
-
-	let kind = $state('issue');
-	let title = $state('');
+	// Creates and edits Projects and Epics. Tasks are not created here: they
+	// arrive from planning (RePPIT) through the MCP tools, or from an agent's
+	// accepted proposal.
+	let kind = $state('project');
 	let name = $state('');
 	let desc = $state('');
-	let stateId = $state('');
-	let projectId = $state('');
-	let agentId = $state('');
 	let initiativeId = $state('');
-	let priority = $state(0);
 	let repoUrl = $state('');
-	let selLabels = $state(new Set());
 	let saving = $state(false);
 	let firstInput = $state(null);
 	let editId = $state(''); // set when editing an existing project/epic
 	let confirmDel = $state(false);
 
 	// Raenil's Project entity is shown as "Epic"; its Initiative entity as "Project".
-	const NOUN = { issue: 'issue', project: 'epic', initiative: 'project' };
+	const NOUN = { project: 'epic', initiative: 'project' };
 	const heading = $derived((editId ? 'Edit ' : 'New ') + NOUN[kind]);
 
-	// A new task's title and description survive closing the dialog, as a
-	// draft per workspace, until it is created or discarded.
-	const draftKey = () => 'raenil.draft.' + (get(activeWorkspace)?.slug || '');
-	function readDraft() {
-		try {
-			return JSON.parse(localStorage.getItem(draftKey()) || 'null');
-		} catch {
-			return null;
-		}
-	}
-	function writeDraft(d) {
-		try {
-			if (d) localStorage.setItem(draftKey(), JSON.stringify(d));
-			else localStorage.removeItem(draftKey());
-		} catch {
-			/* private mode: no drafts */
-		}
-	}
-	$effect(() => {
-		if (!$composer || kind !== 'issue' || editId) return;
-		const t = title,
-			d = desc;
-		writeDraft(t || d ? { title: t, desc: d } : null);
-	});
-	function discardDraft() {
-		writeDraft(null);
-		title = '';
-		desc = '';
-		closeComposer();
-	}
-
-	function defaultStateId() {
-		const st = get(states);
-		return st.find((s) => s.name === 'Backlog')?.id || st[0]?.id || '';
-	}
-
-	// Reset the form each time the composer opens. Reads stores via get() so the
-	// effect only re-runs when the composer itself changes, not on data updates.
+	// Reset the form each time the composer opens.
 	$effect(() => {
 		const c = $composer;
 		if (!c) return;
@@ -92,52 +33,18 @@
 		kind = c.kind;
 		editId = pf.id || '';
 		confirmDel = false;
-		const draft = c.kind === 'issue' && !pf.id ? readDraft() : null;
-		title = draft?.title || '';
 		name = pf.name || '';
-		desc = pf.description || pf.descriptionMd || draft?.desc || '';
-		priority = 0;
-		selLabels = new Set();
+		desc = pf.description || pf.descriptionMd || '';
 		initiativeId = pf.initiativeId || '';
 		repoUrl = pf.repoUrl || '';
-		stateId = pf.stateId || defaultStateId();
-		projectId = pf.projectId || get(activeProject) || '';
-		agentId = pf.agentId || '';
 		queueMicrotask(() => firstInput && firstInput.focus());
 	});
-
-	function toggleLabel(id) {
-		const next = new Set(selLabels);
-		next.has(id) ? next.delete(id) : next.add(id);
-		selLabels = next;
-	}
 
 	async function save() {
 		if (saving) return;
 		saving = true;
 		try {
-			if (kind === 'issue') {
-				if (!title.trim()) {
-					showToast('Title required', 'error');
-					return;
-				}
-				const is = await api.createIssue({
-					title: title.trim(),
-					descriptionMd: desc,
-					stateId,
-					projectId: projectId || undefined,
-					agentId: agentId || undefined,
-					priority,
-					labelIds: [...selLabels]
-				});
-				await loadIssues();
-				writeDraft(null);
-				title = '';
-				desc = '';
-				showToast(`${is.key} created`);
-				closeComposer();
-				openIssue(is.key);
-			} else if (kind === 'project') {
+			if (kind === 'project') {
 				if (!name.trim()) {
 					showToast('Name required', 'error');
 					return;
@@ -213,28 +120,12 @@
 	<div class="backdrop" role="presentation" onclick={closeComposer}></div>
 	<div class="modal" role="dialog" aria-modal="true" onkeydown={onKey}>
 		<div class="head">
-			{#if kind === 'issue'}
-				<span class="wschip">{$activeWorkspace?.keyPrefix || ''}</span>
-				<span class="hsep">›</span>
-				<span class="htitle">New task</span>
-			{:else}
-				<span class="dot" class:project={kind === 'project'}></span>
-				<span class="htitle">{heading}</span>
-			{/if}
+			<span class="dot" class:project={kind === 'project'}></span>
+			<span class="htitle">{heading}</span>
 			<button class="hclose" onclick={closeComposer} aria-label="Close"><X size={15} strokeWidth={2} /></button>
 		</div>
 
 		<div class="body">
-			{#if kind === 'issue'}
-				<input bind:this={firstInput} bind:value={title} class="big" placeholder="Task title" />
-				<div class="for-row">
-					<span class="faint">For</span>
-					<EpicMenu value={agentId} options={$agents} icon={Bot} none="Assignee" onchange={(v) => (agentId = v)} />
-					<span class="faint">in</span>
-					<EpicMenu value={projectId} options={epicOptions} onchange={(v) => (projectId = v)} />
-				</div>
-				<textarea bind:value={desc} class="desc" placeholder="Add description… (markdown, mermaid)"></textarea>
-			{:else}
 				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
 				<textarea bind:value={desc} class="desc" placeholder="Description (optional)"></textarea>
 				<label class="field wide">
@@ -252,20 +143,9 @@
 						</select>
 					</label>
 				{/if}
-			{/if}
 		</div>
 
 		<div class="foot">
-			{#if kind === 'issue'}
-				<StatusMenu value={stateId} onchange={(v) => (stateId = v)} />
-				<PriorityMenu value={priority} onchange={(v) => (priority = v)} />
-				<LabelPicker selected={[...selLabels]} onchange={(ids) => (selLabels = new Set(ids))} />
-				<span class="spacer"></span>
-				<button class="btn ghost" onclick={discardDraft}>Discard Draft</button>
-				<button class="btn primary" onclick={save} disabled={saving || !title.trim()}>
-					{saving ? 'Creating…' : 'Create Task'}
-				</button>
-			{:else}
 			{#if editId}
 				<button class="btn danger" onclick={del} disabled={saving}>
 					{confirmDel ? 'Confirm delete' : 'Delete'}
@@ -277,7 +157,6 @@
 			<button class="btn primary" onclick={save} disabled={saving}>
 				{saving ? 'Saving…' : editId ? 'Save' : 'Create'}
 			</button>
-			{/if}
 		</div>
 	</div>
 {/if}
@@ -316,27 +195,12 @@
 		border-radius: 3px;
 		background: var(--text-faint);
 	}
-	.dot.issue {
-		background: var(--accent);
-	}
 	.dot.project {
 		background: var(--accent2);
 	}
 	.htitle {
 		font-weight: 600;
 		font-size: 14px;
-	}
-	.wschip {
-		font-family: var(--mono);
-		font-size: 11px;
-		color: var(--text-dim);
-		background: var(--bg-elev2);
-		border: 1px solid var(--border);
-		border-radius: 5px;
-		padding: 1px 6px;
-	}
-	.hsep {
-		color: var(--text-faint);
 	}
 	.head .htitle:not(:first-child) {
 		font-weight: 500;
@@ -354,13 +218,6 @@
 	.hclose:hover {
 		background: var(--bg-hover);
 		color: var(--text);
-	}
-	.for-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: 13px;
-		margin-top: -6px;
 	}
 	.faint {
 		color: var(--text-faint);
