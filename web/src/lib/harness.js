@@ -13,9 +13,9 @@ export const HARNESSES = [
 	{
 		id: 'opencode',
 		name: 'OpenCode',
-		plan: 'API key (OpenCode Go)',
-		connect: 'opencode serve, then set OPENCODE_URL for the host',
-		models: ['opencode-go/glm-5.3-flash']
+		plan: 'Keys kept in OpenCode',
+		connect: 'opencode auth login, then opencode serve (OPENCODE_URL for the host)',
+		models: []
 	}
 ];
 

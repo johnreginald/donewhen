@@ -9,6 +9,7 @@
 	import { rel } from '$lib/format.js';
 	import { HARNESSES, harnessName, harnessOn } from '$lib/harness.js';
 	import PageHeader from '$components/PageHeader.svelte';
+	import ModelPicker from '$components/ModelPicker.svelte';
 	import { Plus, Bot, X } from '@lucide/svelte';
 
 	let hosts = $state([]);
@@ -114,7 +115,7 @@
 					{@const h = harnessOn(hosts, hz.id)}
 					<button class="hz" class:on={draft.harness === hz.id} onclick={() => ((draft.harness = hz.id), (draft.model = ''))}>
 						<span class="hzn">{hz.name}</span>
-						<span class="hzp">{hz.plan}</span>
+						<span class="hzp">{harnessOn(hosts, hz.id)?.status?.auth || hz.plan}</span>
 						<span class="hzs" class:ok={h?.status?.ready && h?.online}>
 							{h?.status?.ready && h?.online ? 'Ready on ' + h.host.name : 'Not connected'}
 						</span>
@@ -122,14 +123,17 @@
 				{/each}
 			</div>
 			<div class="lbl">Model</div>
-			<input class="field mono" bind:value={draft.model} list="models-{draft.harness}" placeholder="default" />
-			<datalist id="models-{draft.harness}">
-				{#each HARNESSES.find((x) => x.id === draft.harness)?.models || [] as m}<option value={m}></option>{/each}
-			</datalist>
+			{#key draft.harness}
+				<ModelPicker
+					bind:value={draft.model}
+					harness={draft.harness}
+					models={harnessOn(hosts, draft.harness)?.status?.models || []}
+				/>
+			{/key}
 		</div>
 		<div class="mf">
 			<button class="btn ghost" onclick={() => (creating = false)}>Cancel</button>
-			<button class="btn primary" onclick={create} disabled={!draft.name.trim()}>Create agent</button>
+			<button class="btn primary" onclick={create} disabled={!draft.name.trim() || (draft.harness === 'opencode' && !draft.model)}>Create agent</button>
 		</div>
 	</div>
 {/if}

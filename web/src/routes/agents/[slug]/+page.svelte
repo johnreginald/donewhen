@@ -14,6 +14,7 @@
 	import RunBlock from '$components/RunBlock.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
 	import Markdown from '$components/Markdown.svelte';
+	import ModelPicker from '$components/ModelPicker.svelte';
 	import { Bot, Plus, Pause, Play, FlaskConical, Check, X, LoaderCircle, Copy } from '@lucide/svelte';
 
 	let agent = $state(null);
@@ -241,7 +242,7 @@
 							</label>
 							<div class="conn" class:ready={conn?.status?.ready && conn?.online}>
 								<div class="ct">
-									<span class="cn">{hz?.plan}</span>
+									<span class="cn">{conn?.status?.auth || hz?.plan}</span>
 									{#if conn?.status?.ready && conn.online}
 										<span class="ok"><Check size={13} strokeWidth={2.4} /> Ready on {conn.host.name}</span>
 									{:else if conn}
@@ -258,15 +259,17 @@
 									</div>
 									{#if !conn}<div class="cd">Start the runner host on your Mac: <code>orchestrator host</code></div>{/if}
 								{/if}
-								<div class="cd">Uses your {hz?.plan} login on the host — no API key{hz?.id === 'opencode' ? ' except OpenCode Go' : ''}.</div>
+								<div class="cd">
+									{#if hz?.id === 'opencode'}Uses the keys OpenCode keeps on the host (opencode auth login); Raenil never sees them.
+									{:else}Uses your {hz?.plan} login on the host — no API key.{/if}
+								</div>
 							</div>
 							<div class="grid2">
-								<label>Model
-									<input class="mono" bind:value={form.model} list="agent-models" placeholder="default" />
-									<datalist id="agent-models">
-										{#each conn?.status?.models || hz?.models || [] as m}<option value={m}></option>{/each}
-									</datalist>
-								</label>
+								<div class="lab">Model
+									{#key form.harness}
+										<ModelPicker bind:value={form.model} harness={form.harness} models={conn?.status?.models || []} />
+									{/key}
+								</div>
 								{#if form.harness === 'claude'}
 									<label>Thinking effort
 										<select bind:value={form.effort}>
@@ -541,7 +544,6 @@
 		outline: none;
 		font-family: inherit;
 	}
-	input.mono,
 	textarea.mono {
 		font-family: var(--mono);
 	}
@@ -549,6 +551,13 @@
 	select:focus,
 	textarea:focus {
 		border-color: var(--border-strong);
+	}
+	.lab {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		font-size: 12px;
+		color: var(--text-faint);
 	}
 	.grid2 {
 		display: grid;

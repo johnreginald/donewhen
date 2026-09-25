@@ -266,7 +266,7 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 	defer cancel()
 	switch rr := r.(type) {
 	case *ClaudeRunner:
-		st.Models = []string{"default", "sonnet", "opus", "haiku"}
+		st.Models = claudeModels
 		err := rr.Available(ctx)
 		st.Installed = err == nil || !strings.Contains(err.Error(), "not on PATH")
 		st.Ready = err == nil
@@ -279,7 +279,7 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 			st.Fix = "orchestrator connect claude"
 		}
 	case *CodexRunner:
-		st.Models = []string{"default"}
+		st.Models = CodexModels(rr.Home)
 		err := rr.Available(ctx)
 		st.Installed = err == nil || !strings.Contains(err.Error(), "not on PATH")
 		st.Ready = err == nil
@@ -292,15 +292,30 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 			st.Fix = "orchestrator connect codex"
 		}
 	case *OpenCodeRunner:
-		st.Auth = "API key (OpenCode Go)"
+		// The keys are OpenCode's own (opencode auth login); Raenil only asks
+		// the server which providers it holds them for.
 		v, err := rr.Health(ctx)
 		st.Installed = err == nil
-		st.Ready = err == nil
 		if err != nil {
 			st.Detail = err.Error()
 			st.Fix = "opencode serve, and set OPENCODE_URL for the host"
-		} else {
+			break
+		}
+		prov, err := rr.Providers(ctx)
+		switch {
+		case err != nil:
+			st.Detail = "server " + v + ", but it did not list its providers: " + err.Error()
+		case len(prov.Connected) == 0:
+			st.Detail = "server " + v + ", but no provider has a key"
+			st.Fix = "opencode auth login"
+		default:
+			st.Ready = true
+			st.Models = prov.Models
+			st.Auth = "keys in OpenCode: " + strings.Join(prov.Connected, ", ")
 			st.Detail = "server " + v
+			if !contains(prov.Connected, "opencode-go") {
+				st.Detail += " · no OpenCode Go key (opencode auth login)"
+			}
 		}
 	case nil:
 		st.Detail = "not configured on this host"
@@ -327,4 +342,13 @@ func (h *Host) runnerFor(a models.Agent) (Runner, error) {
 		return r, nil
 	}
 	return nil, fmt.Errorf("%s is not set up on %s", a.Harness, h.Name)
+}
+
+func contains(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
