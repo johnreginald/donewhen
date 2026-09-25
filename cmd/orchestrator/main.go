@@ -60,6 +60,8 @@ func main() {
 		err = cmdHost(ctx, args)
 	case "connect":
 		err = cmdConnect(ctx, args)
+	case "service":
+		err = cmdService(ctx, args)
 	case "status":
 		err = cmdStatus(args)
 	case "bench":
@@ -101,6 +103,8 @@ func usage() {
   orchestrator connect claude|codex   connect a subscription for Raenil's agents
                                       (claude setup-token / codex device login);
                                       "connect status" shows what is connected
+  orchestrator service install        run the host in the background as a login service
+                                      (also: uninstall, restart, status)
   orchestrator host                   serve Raenil's web UI from this machine: report
                                       which agents can run here, and run the work
                                       queued from the dashboard
