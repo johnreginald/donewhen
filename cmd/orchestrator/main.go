@@ -31,6 +31,10 @@ import (
 )
 
 func main() {
+	if err := loadEnvFile(envFile()); err != nil {
+		fmt.Fprintf(os.Stderr, "orchestrator: reading %s: %v\n", envFile(), err)
+		os.Exit(1)
+	}
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
@@ -150,6 +154,8 @@ Environment:
                      that spans several: the workspace is then taken from the
                      ticket key, so API-42 finds its own project.
   ORCHESTRATOR_REPOS default --repos routing
+  ORCHESTRATOR_ENV   settings file read on start (default ~/.config/raenil/orchestrator.env);
+                     a variable already set in the shell wins over the file
   OPENCODE_URL       running 'opencode serve', e.g. http://127.0.0.1:4096
   ORCHESTRATOR_MODEL default worker model, e.g. opencode-go/glm-5.3-flash
   ORCHESTRATOR_JUDGE_MODEL     model for judgment criteria (falls back to the escalate model)

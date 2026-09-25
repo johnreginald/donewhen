@@ -1,4 +1,4 @@
-.PHONY: build run web web-dev migrate token genvapid test up down logs engine backup clean tidy
+.PHONY: install-orchestrator build run web web-dev migrate token genvapid test up down logs engine backup clean tidy
 
 BIN := ./raenil
 
@@ -9,6 +9,9 @@ COMPOSE ?= $(shell command -v podman >/dev/null 2>&1 && echo "podman compose" ||
 
 # Optional compose profile, e.g. make up PROFILE=edge
 PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
+
+install-orchestrator: ## install the orchestrator CLI on PATH (~/.local/bin)
+	GOBIN=$(HOME)/.local/bin go install ./cmd/orchestrator
 
 build: ## build the Go binary
 	go build -o $(BIN) ./cmd/raenil
