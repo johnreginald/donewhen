@@ -34,10 +34,13 @@ func RaenilMCP(baseURL, token, agentID, workspace string, tools ...string) *MCPS
 }
 
 // Tool sets: what a conversation turn and a work run may call without asking.
+// Both may read the tracker — a ticket often names others it depends on, and
+// a worker refused get_issue has to guess at them. Only a conversation may
+// propose new tickets; a worker that finds one missing asks instead.
 var (
-	ChatMCPTools = []string{"ask_user", "propose_tickets", "get_issue", "list_comments", "get_criteria",
-		"list_issues", "get_document", "list_documents"}
-	WorkMCPTools = []string{"ask_user"}
+	readMCPTools = []string{"get_issue", "list_comments", "get_criteria", "list_issues", "get_document", "list_documents"}
+	ChatMCPTools = append([]string{"ask_user", "propose_tickets"}, readMCPTools...)
+	WorkMCPTools = append([]string{"ask_user"}, readMCPTools...)
 )
 
 // claudeMCPConfig writes a private one-run config file for Claude.

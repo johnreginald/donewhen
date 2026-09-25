@@ -83,3 +83,24 @@ func TestWorktreePrefixStripped(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// A worker may read the tracker without asking — a ticket names the tickets it
+// depends on — but may not propose new ones.
+func TestWorkRunMayReadTheTracker(t *testing.T) {
+	m := RaenilMCP("https://r", "tok", "agent-1", "ws", WorkMCPTools...)
+	args := (&ClaudeRunner{}).args(RunRequest{MCP: m}, "mcp.json")
+	allowed := ""
+	for i, a := range args {
+		if a == "--allowedTools" {
+			allowed = args[i+1]
+		}
+	}
+	for _, want := range []string{"mcp__raenil__get_issue", "mcp__raenil__list_comments", "mcp__raenil__ask_user"} {
+		if !strings.Contains(allowed, want) {
+			t.Errorf("work run cannot call %s without asking: %s", want, allowed)
+		}
+	}
+	if strings.Contains(allowed, "propose_tickets") {
+		t.Errorf("a work run may propose tickets: %s", allowed)
+	}
+}
