@@ -35,6 +35,24 @@ func TestTriageQuestionBouncesImmediately(t *testing.T) {
 	}
 }
 
+// A refused command is refused again on every retry: the rule is missing,
+// not the effort. Only a person can add the rule, so the first attempt that
+// was refused stops the run instead of spending the remaining attempts.
+func TestTriageRefusedCommandBouncesImmediately(t *testing.T) {
+	v := Verdict{Status: StatusFailed, Attempt: 1, DeniedTools: []string{"Bash node -e x"}}
+	d := policy().Decide(v, nil)
+	if d.Action != ActionBounce {
+		t.Fatalf("action = %s, want bounce on attempt 1", d.Action)
+	}
+	if !strings.Contains(d.Reason, "node -e x") {
+		t.Errorf("the refused command should be the reason, got %q", d.Reason)
+	}
+	// Refusals on a run that passed anyway do not hold it back.
+	if d := policy().Decide(Verdict{Status: StatusPassed, Attempt: 1, DeniedTools: v.DeniedTools}, nil); d.Action != ActionReview {
+		t.Errorf("a passing run with refusals: action = %s, want review", d.Action)
+	}
+}
+
 // A worker that tried to weaken the tests must not be retried in place.
 func TestTriageRewardHackNeverRetries(t *testing.T) {
 	ev := []Evidence{{

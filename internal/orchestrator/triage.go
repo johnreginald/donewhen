@@ -70,6 +70,17 @@ func (p TriagePolicy) Decide(v Verdict, ev []Evidence) Decision {
 		}
 	}
 
+	// A refused command is refused again on every retry. The missing piece is
+	// a rule only a person can add, so stop here rather than pay for the same
+	// refusal twice more.
+	if len(v.DeniedTools) > 0 {
+		return Decision{
+			Action: ActionBounce,
+			Reason: "the worker was refused commands it needed: " + strings.Join(v.DeniedTools, "; ") +
+				". Allow them for the agent and run the ticket again.",
+		}
+	}
+
 	// A worker that tried to weaken the tests has told us something about its
 	// judgment. Retrying the same model invites the same shortcut, so this
 	// escalates or stops — it never retries in place.

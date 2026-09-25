@@ -116,6 +116,9 @@ type Verdict struct {
 	// Questions is anything the worker asked. A daemon cannot answer, so these
 	// are why a ticket bounces to a human rather than retrying forever.
 	Questions []string `json:"questions,omitempty"`
+	// DeniedTools are the calls the harness refused. Retrying meets the same
+	// refusals, so these stop the attempts until a person allows them.
+	DeniedTools []string `json:"denied_tools,omitempty"`
 	// Next is the recommended action: retry, escalate, review, bounce.
 	Next string `json:"next,omitempty"`
 	// Blocked explains a StatusBlocked verdict.
