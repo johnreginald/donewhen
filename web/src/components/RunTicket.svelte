@@ -1,10 +1,12 @@
 <script>
-	// "Run" on a ticket: queue it for its agent, then follow the job until a
-	// runner host has worked it. You decide when an agent runs — nothing here
-	// starts on its own.
+	// The ticket's one action, by where it stands. Before Ready it is "Start
+	// task": the agent reads the ticket and talks it through in the
+	// conversation. From Ready it is "Run": queue it for its agent, then follow
+	// the job until a runner host has worked it. Done and canceled tickets have
+	// neither. You decide when an agent runs — nothing here starts on its own.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { agents } from '$lib/store.js';
+	import { agents, states } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import { Play, LoaderCircle, Check, X } from '@lucide/svelte';
@@ -14,6 +16,12 @@
 
 	const agent = $derived($agents.find((a) => a.id === issue.agentId));
 	const busy = $derived(job && (job.status === 'queued' || job.status === 'claimed'));
+
+	const state = $derived($states.find((s) => s.id === issue.stateId));
+	const ready = $derived($states.find((s) => s.name === 'Ready'));
+	const closed = $derived(state && (state.category === 'completed' || state.category === 'canceled'));
+	const aligning = $derived(state && ready && state.position < ready.position);
+	let starting = $state(false);
 
 	onMount(async () => {
 		const list = await api.jobs({ issue: issue.key, kind: 'run_ticket', limit: 1 }).catch(() => []);
@@ -32,10 +40,24 @@
 			showToast(e.message, 'error');
 		}
 	}
+	async function start() {
+		starting = true;
+		try {
+			await api.post(`/issues/${issue.key}/ask`, { agent: agent.id, start: true });
+		} catch (e) {
+			showToast(e.message, 'error');
+		} finally {
+			starting = false;
+		}
+	}
 	const verdict = $derived(job?.result?.status);
 </script>
 
-{#if agent}
+{#if agent && aligning}
+	<button class="btn primary sm" onclick={start} disabled={starting || agent.status === 'paused'}>
+		<Play size={13} strokeWidth={2.4} />Start task
+	</button>
+{:else if agent && !closed}
 	<div class="rt">
 		{#if job}
 			<span class="st {job.status}" title={job.error || ''}>
