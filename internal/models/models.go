@@ -306,14 +306,17 @@ type RunnerHost struct {
 // HarnessStatus is what a host proved about one harness: installed, signed
 // in, on which kind of plan, and what to do when it is not.
 type HarnessStatus struct {
-	Harness   string    `json:"harness"`
-	Installed bool      `json:"installed"`
-	Ready     bool      `json:"ready"`
-	Auth      string    `json:"auth,omitempty"` // e.g. "claude.ai subscription", "ChatGPT", "API key"
-	Detail    string    `json:"detail,omitempty"`
-	Fix       string    `json:"fix,omitempty"` // the command that would make it ready
-	Models    []string  `json:"models,omitempty"`
-	CheckedAt time.Time `json:"checkedAt"`
+	Harness   string   `json:"harness"`
+	Installed bool     `json:"installed"`
+	Ready     bool     `json:"ready"`
+	Auth      string   `json:"auth,omitempty"` // e.g. "claude.ai subscription", "ChatGPT", "API key"
+	Detail    string   `json:"detail,omitempty"`
+	Fix       string   `json:"fix,omitempty"` // the command that would make it ready
+	Models    []string `json:"models,omitempty"`
+	// AlwaysAllowed are the commands this harness runs without asking on
+	// every agent, before the agent's own rules are added.
+	AlwaysAllowed []string  `json:"alwaysAllowed,omitempty"`
+	CheckedAt     time.Time `json:"checkedAt"`
 }
 
 // Job is work Raenil has queued for a runner host.

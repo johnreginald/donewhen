@@ -70,6 +70,21 @@ var claudeWorkTools = []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"}
 // anything more is granted per repo as a pattern such as "Bash(go test *)".
 var claudeWorkAllowed = []string{"Read", "Edit", "Write", "Glob", "Grep"}
 
+// ClaudeDefaultCommands are the shell commands every work run may use without
+// asking, so an agent can look at the history and run the usual checks with no
+// rules written for it. Each one reads, or builds and tests inside the
+// worktree. Nothing that commits, pushes, deletes, fetches from the network or
+// runs an arbitrary script is here: the orchestrator commits, and anything
+// else an agent needs is a rule on that agent.
+var ClaudeDefaultCommands = []string{
+	"Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git show*)",
+	"Bash(ls*)", "Bash(pwd)",
+	"Bash(go build *)", "Bash(go test *)", "Bash(go vet *)", "Bash(gofmt -l *)",
+	"Bash(npm test*)", "Bash(npm run build*)", "Bash(npm run check*)", "Bash(npm run lint*)", "Bash(npm run test*)",
+	"Bash(pnpm test*)", "Bash(pnpm build*)", "Bash(pnpm check*)", "Bash(pnpm lint*)",
+	"Bash(make test*)", "Bash(make build*)", "Bash(make check*)", "Bash(make lint*)",
+}
+
 // claudeReadTools are what a reviewer may use: enough to look, never to change.
 var claudeReadTools = []string{"Read", "Glob", "Grep"}
 
@@ -173,7 +188,7 @@ func (r *ClaudeRunner) args(req RunRequest, mcpConfig string) []string {
 		args = append(args, "--tools", strings.Join(claudeReadTools, ","),
 			"--allowedTools", strings.Join(allowed, ","))
 	default:
-		allowed := append(append(append([]string{}, claudeWorkAllowed...), r.AllowedTools...), mcpTools(req)...)
+		allowed := append(append(append(append([]string{}, claudeWorkAllowed...), ClaudeDefaultCommands...), r.AllowedTools...), mcpTools(req)...)
 		args = append(args, "--permission-mode", "acceptEdits",
 			"--tools", strings.Join(claudeWorkTools, ","),
 			"--allowedTools", strings.Join(allowed, ","))

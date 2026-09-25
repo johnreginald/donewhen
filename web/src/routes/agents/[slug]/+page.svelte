@@ -7,7 +7,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { agents, issues, states } from '$lib/store.js';
-	import { onLive, showToast, openComposer } from '$lib/ui.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import { rel, tokens, usd, duration } from '$lib/format.js';
 	import { HARNESSES, harnessName, harnessOn } from '$lib/harness.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -15,7 +15,7 @@
 	import StateIcon from '$components/StateIcon.svelte';
 	import Markdown from '$components/Markdown.svelte';
 	import ModelPicker from '$components/ModelPicker.svelte';
-	import { Bot, Plus, Pause, Play, FlaskConical, Check, X, LoaderCircle, Copy } from '@lucide/svelte';
+	import { Bot, Pause, Play, FlaskConical, Check, X, LoaderCircle, Copy } from '@lucide/svelte';
 
 	let agent = $state(null);
 	let form = $state(null); // editable copy on the runtime / instructions tabs
@@ -24,6 +24,27 @@
 	let test = $state(null); // latest environment test job
 	let saving = $state(false);
 	let previewInstr = $state(false);
+
+	// A starting point for an agent's instructions: how this workspace works,
+	// so a new agent does not have to learn it from its first refusal.
+	const DEFAULT_INSTRUCTIONS = `# How we work
+
+## Before building
+- A ticket in Aligning is not ready. Read it, its done-when and the code, then ask what you need to know, propose how to split it, or say it is ready to run.
+- Don't guess at scope. If the ticket is unclear, ask.
+
+## While building
+- Work only inside the ticket's worktree, on what the ticket asks. Leave unrelated code alone.
+- The done-when list is the gate. Make every item true; don't change the list to fit the work.
+- Run the project's tests and build before you finish.
+- Don't commit, push or open pull requests: Raenil commits your work and a person reviews it.
+
+## When you are stuck
+- If you cannot finish without a decision or an answer, stop and ask. Say what you tried and what you need.
+
+## Handing back
+- Say what you changed, how you checked it, and anything left for the reviewer.
+`;
 
 	const TABS = [
 		{ id: 'overview', label: 'Overview', group: 'Agent' },
@@ -154,7 +175,6 @@
 					</div>
 				</div>
 				<div class="ha">
-					<button class="btn sm" onclick={() => openComposer('issue', { agentId: agent.id })}><Plus size={14} />Assign Task</button>
 					<button class="btn sm" onclick={runTest}><FlaskConical size={14} />Test environment</button>
 					{#if agent.status === 'paused'}
 						<button class="btn sm" onclick={() => setStatus('active')}><Play size={14} />Resume</button>
@@ -214,10 +234,15 @@
 						{/each}
 					{:else if tab === 'instructions'}
 						<h2>Instructions</h2>
-						<p class="hint">What this agent should know about how you work. Given to it at the start of each fresh session.</p>
-						<div class="seg">
-							<button class:on={!previewInstr} onclick={() => (previewInstr = false)}>Write</button>
-							<button class:on={previewInstr} onclick={() => (previewInstr = true)}>Preview</button>
+						<p class="hint">What this agent should know about how you work, given to it at the start of each fresh session. It also reads the repository's own <code>CLAUDE.md</code> / <code>AGENTS.md</code>, and Raenil tells it the ticket, its done-when and what the turn is for — no need to repeat those here.</p>
+						<div class="instr-bar">
+							<div class="seg">
+								<button class:on={!previewInstr} onclick={() => (previewInstr = false)}>Write</button>
+								<button class:on={previewInstr} onclick={() => (previewInstr = true)}>Preview</button>
+							</div>
+							{#if !form.instructionsMd?.trim()}
+								<button class="btn sm" onclick={() => (form.instructionsMd = DEFAULT_INSTRUCTIONS)}>Start from the default</button>
+							{/if}
 						</div>
 						{#if previewInstr}
 							<div class="preview">{#if form.instructionsMd}<Markdown source={form.instructionsMd} />{:else}<span class="faint">Nothing yet.</span>{/if}</div>
@@ -289,8 +314,22 @@
 						</section>
 						<section class="block">
 							<h3>Allowed commands</h3>
-							<p class="hint">What the agent may run without asking, one rule per line, e.g. <code>Bash(go test *)</code>. Everything else it needs is refused and shown on the run. Bare <code>Bash</code> is not allowed: it would let the agent write anywhere.</p>
-							<textarea class="rules mono" bind:value={form.allowedTools} placeholder={'Bash(go test *)\nBash(go build *)\nBash(git status*)'}></textarea>
+							{#if form.harness === 'claude'}
+								<p class="hint">Every agent may read and edit files in its worktree, look at git history, and build and test without asking. Anything else it needs is refused and shown on the run.</p>
+								{#if conn?.status?.alwaysAllowed?.length}
+									<div class="defaults">
+										{#each conn.status.alwaysAllowed as c (c)}<code>{c.replace(/^Bash\((.*)\)$/, '$1')}</code>{/each}
+									</div>
+								{/if}
+								<div class="lab">Also allow for this agent
+									<textarea class="rules mono" bind:value={form.allowedTools} placeholder={'Bash(docker compose ps*)\nBash(psql -c *)'}></textarea>
+								</div>
+								<p class="hint">One rule per line, e.g. <code>Bash(cargo test *)</code>. Bare <code>Bash</code> is not allowed: it would let the agent write anywhere.</p>
+							{:else if form.harness === 'codex'}
+								<p class="hint">Codex runs any command inside its own sandbox without asking: it can write only in the ticket's worktree and has no network. Nothing to list here.</p>
+							{:else}
+								<p class="hint">OpenCode approves every tool call it makes. It works in a throwaway worktree, and the ticket's checks decide whether the work passes.</p>
+							{/if}
 						</section>
 						<section class="block">
 							<h3>Test your agent</h3>
@@ -551,6 +590,27 @@
 	select:focus,
 	textarea:focus {
 		border-color: var(--border-strong);
+	}
+	.instr-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+	.defaults {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 5px;
+		margin-bottom: 12px;
+	}
+	.defaults code {
+		font-size: 11.5px;
+		font-family: var(--mono);
+		background: var(--bg-elev2);
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		padding: 1px 6px;
+		color: var(--text-dim);
 	}
 	.lab {
 		display: flex;

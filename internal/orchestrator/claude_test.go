@@ -153,3 +153,35 @@ func TestClaudeRunDropsAPIKeys(t *testing.T) {
 		t.Error("unrelated environment was dropped too")
 	}
 }
+
+// The default commands are granted to every agent without anyone reading
+// them, so none may write outside the worktree, publish, or run whatever it is
+// handed: no bare Bash, no wildcard over every command, nothing that commits,
+// pushes, deletes, fetches or evaluates a string.
+func TestDefaultCommandsStayNarrow(t *testing.T) {
+	r := &ClaudeRunner{}
+	work := r.args(RunRequest{}, "m")
+	i := slices.Index(work, "--allowedTools")
+	if i < 0 {
+		t.Fatalf("no allowlist: %v", work)
+	}
+	granted := strings.Split(work[i+1], ",")
+	for _, c := range ClaudeDefaultCommands {
+		if !slices.Contains(granted, c) {
+			t.Errorf("default %q not granted to a work run", c)
+		}
+	}
+	if review := r.args(RunRequest{ReadOnlyTools: true}, "m"); strings.Contains(strings.Join(review, " "), "Bash(") {
+		t.Errorf("a read-only run was given shell commands: %v", review)
+	}
+	for _, c := range ClaudeDefaultCommands {
+		if c == "Bash" || c == "Bash(*)" || !strings.HasPrefix(c, "Bash(") {
+			t.Errorf("%q is not a narrow command rule", c)
+		}
+		for _, bad := range []string{"git commit", "git push", "git checkout", "git reset", "rm ", "curl", "wget", "npx", "bash -c", "sh -c", "eval", "sudo"} {
+			if strings.Contains(c, bad) {
+				t.Errorf("%q grants %q", c, bad)
+			}
+		}
+	}
+}

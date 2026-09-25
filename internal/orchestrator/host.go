@@ -267,6 +267,7 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 	switch rr := r.(type) {
 	case *ClaudeRunner:
 		st.Models = ClaudeModels(ctx, rr.OAuthToken)
+		st.AlwaysAllowed = ClaudeDefaultCommands
 		err := rr.Available(ctx)
 		st.Installed = err == nil || !strings.Contains(err.Error(), "not on PATH")
 		st.Ready = err == nil
