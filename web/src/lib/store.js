@@ -8,6 +8,10 @@ export const projects = writable([]);
 export const initiatives = writable([]);
 export const labels = writable([]);
 export const agents = writable([]); // the workspace's configured agents
+// Work an agent is doing or about to do on a ticket — runs, conversation
+// turns, verify and finish — newest first. Kept live from job events.
+export const activeJobs = writable([]);
+const isActive = (j) => j.issueId && j.kind !== 'test_env' && (j.status === 'queued' || j.status === 'claimed');
 // priority -> agent id: who works a task nobody chose an agent for.
 export const priorityAgents = writable({});
 export const issues = writable([]);
@@ -63,15 +67,17 @@ export async function switchWorkspace(slug) {
 }
 
 export async function loadMeta() {
-	const [st, pr, ini, lb, cfg, ag, pa] = await Promise.all([
+	const [st, pr, ini, lb, cfg, ag, pa, aj] = await Promise.all([
 		api.states(),
 		api.projects(),
 		api.initiatives(),
 		api.labels(),
 		api.config(),
 		api.agents().catch(() => []),
-		api.get('/priority-agents').catch(() => [])
+		api.get('/priority-agents').catch(() => []),
+		api.jobs({ active: 1, limit: 100 }).catch(() => [])
 	]);
+	activeJobs.set((aj || []).filter(isActive));
 	agents.set(ag || []);
 	priorityAgents.set(Object.fromEntries((pa || []).map((p) => [p.priority, p.agentId])));
 	states.set(st || []);
@@ -96,6 +102,13 @@ export async function loadIssues() {
 // applyEvent reconciles a live SSE event into the issues store.
 export function applyEvent(ev) {
 	if (!ev) return;
+	if (ev.job?.issueId && ev.job.kind !== 'test_env') {
+		const j = ev.job;
+		activeJobs.update((l) => {
+			const rest = l.filter((x) => x.id !== j.id);
+			return isActive(j) ? [j, ...rest] : rest;
+		});
+	}
 	if (ev.type === 'agent.saved' && ev.agent) {
 		agents.update((l) => {
 			const rest = l.filter((a) => a.id !== ev.agent.id);
@@ -140,4 +153,11 @@ export const PRIORITIES = [
 // its priority. The server resolves it the same way when it queues work.
 export function taskAgentId(issue, defaults) {
 	return issue?.agentId || defaults?.[issue?.priority ?? 0] || '';
+}
+
+// The work going on for each ticket, by issue id: the newest active job.
+export function jobsByIssue(jobs) {
+	const m = {};
+	for (const j of jobs) if (!m[j.issueId]) m[j.issueId] = j;
+	return m;
 }

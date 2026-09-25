@@ -2,14 +2,23 @@
 	import LabelPill from './LabelPill.svelte';
 	import PriorityIcon from './PriorityIcon.svelte';
 	import StateIcon from './StateIcon.svelte';
-	import { Box } from '@lucide/svelte';
+	import { Box, Bot, LoaderCircle } from '@lucide/svelte';
 	import { openIssue, flashIssueId } from '$lib/ui.js';
-	import { states, projects, activeProject, activeInitiative, activeLabel, loadIssues } from '$lib/store.js';
+	import {
+		states, projects, activeProject, activeInitiative, activeLabel, loadIssues,
+		agents, activeJobs, priorityAgents, taskAgentId
+	} from '$lib/store.js';
 
 	let { issue } = $props();
 	const flashing = $derived($flashIssueId === issue.id);
 	const state = $derived($states.find((s) => s.id === issue.stateId));
 	const project = $derived($projects.find((p) => p.id === issue.projectId));
+
+	// What an agent is doing on this ticket right now, and who works it.
+	const job = $derived($activeJobs.find((j) => j.issueId === issue.id));
+	const agent = $derived($agents.find((a) => a.id === (job?.agentId || taskAgentId(issue, $priorityAgents))));
+	const DOING = { run_ticket: 'Working', chat: 'Thinking', verify: 'Verifying', finish: 'Finishing' };
+	const doing = $derived(job && (job.status === 'queued' ? 'Queued' : DOING[job.kind] || 'Working'));
 
 	// Click the epic tag → filter the board to that epic.
 	function filterEpic(e) {
@@ -32,6 +41,7 @@
 <div
 	class="card"
 	class:live={flashing}
+	class:running={job?.status === 'claimed'}
 	role="button"
 	tabindex="0"
 	onclick={() => openIssue(issue.key)}
@@ -66,7 +76,16 @@
 		{/each}
 	</div>
 
-	<div class="foot">Created {shortDate(issue.createdAt)}</div>
+	<div class="foot">
+		{#if doing}
+			<span class="doing" class:queued={job.status === 'queued'}>
+				<LoaderCircle size={12} strokeWidth={2.4} />{doing}{#if agent} · {agent.name}{/if}
+			</span>
+		{:else if agent}
+			<span class="agent" title={issue.agentId ? 'Agent' : 'Default agent for its priority'}><Bot size={12} strokeWidth={2} />{agent.name}</span>
+		{/if}
+		<span class="created">Created {shortDate(issue.createdAt)}</span>
+	</div>
 </div>
 
 <style>
@@ -166,8 +185,53 @@
 		border-color: var(--accent2);
 	}
 	.foot {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		font-size: 12px;
 		color: var(--text-faint);
 		margin-top: 1px;
+		min-width: 0;
+	}
+	.created {
+		margin-left: auto;
+		white-space: nowrap;
+	}
+	.agent,
+	.doing {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.agent {
+		color: var(--text-dim);
+	}
+	.doing {
+		color: var(--st-progress);
+		font-weight: 500;
+	}
+	.doing :global(svg) {
+		flex-shrink: 0;
+		animation: card-spin 1.2s linear infinite;
+	}
+	.doing.queued {
+		color: var(--text-dim);
+		font-weight: 400;
+	}
+	.doing.queued :global(svg) {
+		animation: none;
+	}
+	@keyframes card-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	/* A card an agent is working on says so at a glance. */
+	.card.running {
+		border-color: color-mix(in srgb, var(--st-progress) 45%, var(--border));
 	}
 </style>

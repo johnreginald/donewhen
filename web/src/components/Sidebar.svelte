@@ -12,14 +12,16 @@
 		inboxCount,
 		workspaces,
 		activeWorkspace,
-		switchWorkspace
+		switchWorkspace,
+		activeJobs,
+		agents
 	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
 	import { recent } from '$lib/recent.js';
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
-		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug
+		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, ChevronRight, LoaderCircle
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -77,6 +79,37 @@
 	const epics = $derived(
 		$projects.map((p) => ({ ...p, count: allIssues.filter((is) => is.projectId === p.id).length }))
 	);
+
+	// Epics fold away; the choice is kept per browser.
+	let epicsOpen = $state(true);
+	onMount(() => {
+		try {
+			epicsOpen = localStorage.getItem('raenil.epicsOpen') !== '0';
+		} catch {
+			/* storage blocked: stay open */
+		}
+	});
+	function toggleEpics() {
+		epicsOpen = !epicsOpen;
+		try {
+			localStorage.setItem('raenil.epicsOpen', epicsOpen ? '1' : '0');
+		} catch {
+			/* storage blocked: not remembered */
+		}
+	}
+
+	// Tickets an agent is working on or about to, one row each, newest first.
+	const running = $derived.by(() => {
+		const seen = new Set();
+		const out = [];
+		for (const j of $activeJobs) {
+			if (seen.has(j.issueId)) continue;
+			seen.add(j.issueId);
+			const is = $issues.find((i) => i.id === j.issueId) || allIssues.find((i) => i.id === j.issueId);
+			out.push({ job: j, key: j.issueKey || is?.key, title: is?.title || j.issueKey, agent: $agents.find((a) => a.id === j.agentId)?.name });
+		}
+		return out;
+	});
 
 	const ISSUE_VIEWS = ['/tasks', '/list', '/board'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
@@ -146,9 +179,13 @@
 
 	<div class="section">
 		<div class="section-head">
-			<span class="section-title">Epics</span>
+			<button class="section-toggle" onclick={toggleEpics} aria-expanded={epicsOpen}>
+				<span class="chev" class:open={epicsOpen}><ChevronRight size={12} strokeWidth={2.4} /></span>
+				<span class="section-title">Epics</span>
+			</button>
 			<button class="add-btn" title="New epic" onclick={() => openComposer('project')}><Plus size={15} strokeWidth={2.2} /></button>
 		</div>
+		{#if epicsOpen}
 		{#each epics as p (p.id)}
 			<div class="epic-row">
 				<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
@@ -158,6 +195,7 @@
 				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
 			</div>
 		{/each}
+		{/if}
 	</div>
 
 	<div class="section">
@@ -172,6 +210,24 @@
 			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
 		</a>
 	</div>
+
+	{#if running.length}
+		<div class="section">
+			<div class="section-head"><span class="section-title">Running</span><span class="section-n">{running.length}</span></div>
+			{#each running as r (r.job.issueId)}
+				<a
+					href="/issue/{r.key}"
+					class="nav-item recent run"
+					class:active={$page.url.pathname === '/issue/' + r.key}
+					onclick={onnavigate}
+					title="{r.key} · {r.title} — {r.agent || 'agent'} {r.job.status === 'queued' ? 'queued' : 'working'}"
+				>
+					<span class="icon spin-ic" class:queued={r.job.status === 'queued'}><LoaderCircle size={13} strokeWidth={2.2} /></span>
+					<span class="pname">{r.title}</span>
+				</a>
+			{/each}
+		</div>
+	{/if}
 
 	{#if recentTasks.length}
 		<div class="section">
@@ -208,6 +264,46 @@
 </nav>
 
 <style>
+	.section-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: none;
+		border: none;
+		padding: 0;
+		color: inherit;
+	}
+	.section-toggle .chev {
+		display: inline-flex;
+		color: var(--text-faint);
+		transition: transform 0.15s;
+	}
+	.section-toggle .chev.open {
+		transform: rotate(90deg);
+	}
+	.section-n {
+		margin-left: 6px;
+		font-size: 11px;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.run .spin-ic {
+		color: var(--st-progress);
+	}
+	.run .spin-ic :global(svg) {
+		animation: sb-spin 1.2s linear infinite;
+	}
+	.run .spin-ic.queued {
+		color: var(--text-faint);
+	}
+	.run .spin-ic.queued :global(svg) {
+		animation: none;
+	}
+	@keyframes sb-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 	.menu-backdrop {
 		position: fixed;
 		inset: 0;

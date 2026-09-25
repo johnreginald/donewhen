@@ -220,6 +220,7 @@ type JobFilter struct {
 	AgentID string
 	IssueID string
 	Kind    string
+	Active  bool // only jobs still queued or being worked
 	Limit   int
 }
 
@@ -239,6 +240,9 @@ func (s *Store) ListJobs(ctx context.Context, wsID string, f JobFilter) ([]model
 	}
 	if f.Kind != "" {
 		add("j.kind", f.Kind)
+	}
+	if f.Active {
+		q += " AND j.status IN ('queued', 'claimed')"
 	}
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 50

@@ -174,7 +174,7 @@ func (s *Server) handleHostHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := store.JobFilter{AgentID: q.Get("agent"), Kind: q.Get("kind")}
+	f := store.JobFilter{AgentID: q.Get("agent"), Kind: q.Get("kind"), Active: q.Get("active") != ""}
 	if ref := q.Get("issue"); ref != "" {
 		is, err := s.resolveIssue(r, ref)
 		if handleStoreErr(w, err) {
