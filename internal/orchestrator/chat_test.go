@@ -89,3 +89,16 @@ func TestDecisionsMade(t *testing.T) {
 		t.Errorf("decisions = %q", got)
 	}
 }
+
+func TestStartTurnGivesTheAgentItsOpening(t *testing.T) {
+	a := models.Agent{ID: "ag-1", Name: "Eng"}
+	brief := chatBrief(a, models.Issue{Key: "RAE-1", Title: "t"}, nil, nil, nil, chatInput{Reason: "start"})
+	for _, want := range []string{"The user has started this task", "ask_user", "propose_tickets", "ready to run"} {
+		if !strings.Contains(brief, want) {
+			t.Errorf("start brief lacks %q", want)
+		}
+	}
+	if strings.Contains(brief, "Reply to the user's latest message") {
+		t.Error("a start turn asks the agent to reply to a message nobody wrote")
+	}
+}

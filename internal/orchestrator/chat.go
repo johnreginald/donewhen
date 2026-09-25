@@ -267,8 +267,17 @@ func chatFollowUp(a models.Agent, comments []models.Comment, interactions []mode
 }
 
 func turnAsk(in chatInput) string {
-	if in.Reason == "response" {
+	switch in.Reason {
+	case "response":
 		return "The user answered your questions (above). Continue from their answers.\n"
+	case "start":
+		return "The user has started this task. Read the ticket and its done-when, and look at the code it " +
+			"concerns. Then do one of these, whichever fits:\n" +
+			"- If decisions only the user can make are open, ask them with ask_user.\n" +
+			"- If the work is too big for one ticket, propose the split with propose_tickets.\n" +
+			"- If it is clear and its done-when can be checked by a program, say it is ready to run, " +
+			"and in a few lines how you would do it.\n" +
+			"- If it is clear but the done-when is missing or only manual, say which checks it should have.\n"
 	}
 	return "Reply to the user's latest message.\n"
 }

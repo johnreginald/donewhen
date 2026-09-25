@@ -18,6 +18,8 @@ func (s *Server) handleAskAgent(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Agent   string `json:"agent"`
 		Message string `json:"message"`
+		// Start opens the conversation from the ticket itself: nothing typed.
+		Start bool `json:"start"`
 	}
 	_ = readJSON(r, &body)
 	is, err := s.resolveIssue(r, r.PathValue("id"))
@@ -33,7 +35,11 @@ func (s *Server) handleAskAgent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.queueTurn(w, r, is, a, map[string]any{"reason": "message"}, http.StatusCreated)
+	reason := "message"
+	if body.Start && strings.TrimSpace(body.Message) == "" {
+		reason = "start"
+	}
+	s.queueTurn(w, r, is, a, map[string]any{"reason": reason}, http.StatusCreated)
 }
 
 // agentFor resolves the agent a request names, or else the ticket's own.

@@ -12,7 +12,8 @@
 	import QuestionCard from './QuestionCard.svelte';
 	import ProposalCard from './ProposalCard.svelte';
 	import EpicMenu from './EpicMenu.svelte';
-	import { Bot, LoaderCircle, CircleHelp, Send } from '@lucide/svelte';
+	import { tick } from 'svelte';
+	import { Bot, LoaderCircle, CircleHelp, Send, Play } from '@lucide/svelte';
 
 	let { issue } = $props();
 
@@ -23,6 +24,23 @@
 	let draft = $state('');
 	let askAgent = $state('');
 	let sending = $state(false);
+	let scroller = $state(null);
+
+	// Keep the newest message in view, as a chat does, unless the reader has
+	// scrolled up to read something older.
+	let pinned = true;
+	$effect(() => {
+		timeline.length;
+		thinking;
+		if (!scroller) return;
+		if (pinned) tick().then(() => scroller && (scroller.scrollTop = scroller.scrollHeight));
+	});
+	$effect(() => {
+		if (!scroller) return;
+		const onScroll = () => (pinned = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 40);
+		scroller.addEventListener('scroll', onScroll);
+		return () => scroller?.removeEventListener('scroll', onScroll);
+	});
 
 	const agentById = (id) => $agents.find((a) => a.id === id);
 	const theAgent = $derived(agentById(askAgent || issue.agentId || ''));
@@ -85,6 +103,20 @@
 			sending = false;
 		}
 	}
+	// Start: the agent opens the conversation from the ticket itself — nothing
+	// to type first.
+	async function start() {
+		if (!theAgent) return;
+		sending = true;
+		try {
+			turn = await api.post(`/issues/${issue.key}/ask`, { agent: theAgent.id, start: true });
+		} catch (e) {
+			showToast(e.message, 'error');
+		} finally {
+			sending = false;
+		}
+	}
+
 	async function ask() {
 		if (!theAgent) return;
 		sending = true;
@@ -115,7 +147,26 @@
 </script>
 
 <section class="conv">
-	<div class="rh">Conversation</div>
+	<header class="ch">
+		<span class="rh">Conversation</span>
+		{#if theAgent}<span class="with"><Bot size={13} strokeWidth={2} />{theAgent.name}</span>{/if}
+	</header>
+
+	<div class="scroll" bind:this={scroller}>
+	{#if !timeline.length && !thinking}
+		<div class="start">
+			{#if theAgent}
+				<div class="st-t">Start with {theAgent.name}</div>
+				<p>It reads the ticket and its done-when, looks at the code, and either asks you what it needs to know, proposes how to split the work, or tells you it's ready to run.</p>
+				<button class="btn primary" onclick={start} disabled={sending || theAgent.status === 'paused'}>
+					<Play size={14} strokeWidth={2.4} />Start task
+				</button>
+			{:else}
+				<div class="st-t">No agent yet</div>
+				<p>Choose an agent for this ticket — in the bar under the title, or below — to start the conversation.</p>
+			{/if}
+		</div>
+	{/if}
 
 	{#each timeline as item (item.kind + (item.c?.id || item.r?.id || item.x?.id))}
 		{#if item.kind === 'comment'}
@@ -163,6 +214,8 @@
 		{/if}
 	{/each}
 
+	</div>
+
 	{#if thinking}
 		<div class="thinking">
 			<LoaderCircle size={14} class="spin" />
@@ -193,9 +246,55 @@
 
 <style>
 	.conv {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.ch {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--border);
+		flex-shrink: 0;
+	}
+	.with {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 12.5px;
+		color: var(--text-dim);
+		margin-left: auto;
+	}
+	.scroll {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding: 16px;
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
+	}
+	.start {
+		margin: auto 0;
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+		padding: 24px 12px;
+	}
+	.st-t {
+		font-weight: 600;
+		font-size: 15px;
+	}
+	.start p {
+		margin: 0;
+		font-size: 13px;
+		color: var(--text-dim);
+		max-width: 340px;
+		line-height: 1.5;
 	}
 	.rh {
 		font-size: 13px;
@@ -280,6 +379,10 @@
 	}
 	.thinking,
 	.failed {
+		padding: 0 16px 8px;
+	}
+	.thinking,
+	.failed {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -299,6 +402,8 @@
 		}
 	}
 	.composer {
+		flex-shrink: 0;
+		margin: 0 12px 12px;
 		border: 1px solid var(--border);
 		border-radius: 12px;
 		background: var(--bg-elev);

@@ -174,6 +174,15 @@
 					onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.target.blur())}
 				></textarea>
 
+				<div class="props">
+					<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
+					<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
+					<EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none="No agent" onchange={(v) => patch({ agentId: v })} />
+					<EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} />
+					<LabelPicker selected={issue.labels.map((l) => l.id)} onchange={(ids) => patch({ labelIds: ids })} />
+					<span class="created" title={fmtDate(issue.createdAt)}>Created {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+				</div>
+
 				<div class="desc">
 					{#if editingDesc}
 						<textarea class="desc-area" bind:value={descDraft} onblur={saveDesc} use:autofocus></textarea>
@@ -271,7 +280,6 @@
 				{/if}
 
 				{#key issue.id}<ReviewBlock {issue} stateName={stOf(issue)?.name} />{/key}
-				{#key issue.id}<Conversation {issue} />{/key}
 
 				{#if activity.length}
 					<section class="block">
@@ -282,34 +290,8 @@
 				</div>
 			</main>
 
-			<aside class="drail">
-				<div class="rail-prop">
-					<span class="rl">Status</span>
-					<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
-				</div>
-				<div class="rail-prop">
-					<span class="rl">Priority</span>
-					<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
-				</div>
-				<div class="rail-prop">
-					<span class="rl">Agent</span>
-					<EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none="Unassigned" onchange={(v) => patch({ agentId: v })} />
-				</div>
-				<div class="rail-prop">
-					<span class="rl">Epic</span>
-					<EpicMenu value={issue.projectId || ''} options={$projects} onchange={(v) => patch({ projectId: v })} />
-				</div>
-				<div class="rail-prop">
-					<span class="rl">Labels</span>
-					<LabelPicker
-						selected={issue.labels.map((l) => l.id)}
-						onchange={(ids) => patch({ labelIds: ids })}
-					/>
-				</div>
-				<div class="rail-prop">
-					<span class="rl">Created</span>
-					<span class="rv faint">{fmtDate(issue.createdAt)}</span>
-				</div>
+			<aside class="chat">
+				{#key issue.id}<Conversation {issue} />{/key}
 			</aside>
 		</div>
 	</div>
@@ -327,20 +309,42 @@
 	.dbody {
 		flex: 1;
 		display: flex;
-		justify-content: center;
 		min-height: 0;
 		overflow: hidden;
 	}
 	.dmain {
-		flex: 0 1 760px;
+		flex: 1 1 0;
 		min-width: 0;
 		overflow-y: auto;
 	}
 	.dmain-inner {
-		padding: 28px clamp(20px, 4vw, 48px);
+		max-width: 820px;
+		margin: 0 auto;
+		padding: 24px clamp(20px, 3vw, 40px) 48px;
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
+	}
+	/* The conversation, side by side with the task, as Paperclip lays it out. */
+	.chat {
+		flex: 0 0 min(460px, 42%);
+		min-width: 0;
+		border-left: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		background: var(--bg);
+	}
+	.props {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		margin-top: -8px;
+	}
+	.created {
+		font-size: 12px;
+		color: var(--text-faint);
+		margin-left: 4px;
 	}
 	.parent-crumb {
 		display: flex;
@@ -568,41 +572,6 @@
 		font-size: 11px;
 		color: var(--accent2);
 	}
-	.drail {
-		flex: 0 0 300px;
-		border-left: 1px solid var(--border);
-		padding: 28px 22px;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 18px;
-	}
-	.rail-prop {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-	.rl {
-		font-size: 11.5px;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--text-faint);
-	}
-	.rail-prop select {
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: 7px;
-		color: var(--text);
-		padding: 8px 10px;
-		font-size: 13.5px;
-		outline: none;
-	}
-	.rail-prop select:hover {
-		border-color: var(--border-strong);
-	}
-	.rv {
-		font-size: 13px;
-	}
 	.rail-labels {
 		display: flex;
 		flex-wrap: wrap;
@@ -672,22 +641,19 @@
 		height: 100%;
 		color: var(--text-dim);
 	}
-	@media (max-width: 800px) {
+	@media (max-width: 900px) {
 		.dbody {
 			flex-direction: column;
 			overflow-y: auto;
 		}
-		.drail {
-			width: 100%;
+		.dmain {
+			overflow: visible;
+		}
+		.chat {
+			flex: none;
 			border-left: none;
 			border-top: 1px solid var(--border);
-			flex-direction: row;
-			flex-wrap: wrap;
-			gap: 14px;
-		}
-		.rail-prop {
-			flex: 1;
-			min-width: 130px;
+			min-height: 70vh;
 		}
 	}
 </style>
