@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"slices"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -68,26 +69,45 @@ func (d *deps) registerContent(s *server.MCPServer) {
 
 	// ---- documents ----
 	s.AddTool(mcp.NewTool("list_documents",
-		mcp.WithDescription("List markdown documents, optionally attached to a project, issue, or initiative."),
+		mcp.WithDescription("List markdown documents, newest-updated first, optionally attached to a project, issue, "+
+			"or initiative. Rows carry no body; use get_document to read one."),
 		mcp.WithString("project", mcp.Description("Project id filter")),
-		mcp.WithString("issue", mcp.Description("Issue id filter")),
+		mcp.WithString("issue", mcp.Description("Issue id or key filter")),
 		mcp.WithString("initiative", mcp.Description("Initiative id filter")),
+		limitArg(),
+		verboseArg(),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		issueID := req.GetString("issue", "")
+		if issueID != "" && !isUUID(issueID) {
+			wsID, err := d.scopeOne(ctx, req, issueRef(issueID))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			is, err := d.resolveIssueRef(ctx, wsID, issueID)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			issueID = is.ID
+		}
 		docs, err := d.store.ListDocuments(ctx, "", store.DocFilter{
 			WorkspaceIDs: wsIDs,
 			ProjectID:    req.GetString("project", ""),
-			IssueID:      req.GetString("issue", ""),
+			IssueID:      issueID,
 			InitiativeID: req.GetString("initiative", ""),
 		})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return jsonResult(docs)
+		limit := listLimit(req)
+		if req.GetBool("verbose", false) {
+			return jsonResult(page("documents", docs, limit))
+		}
+		return jsonResult(page("documents", documentRows(docs), limit))
 	})
 
 	s.AddTool(mcp.NewTool("get_document",
@@ -171,7 +191,9 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	// ---- coverage ----
 	s.AddTool(mcp.NewTool("list_issues_missing_docs",
 		mcp.WithDescription("List completed (Done) issues that have no attached document yet — the gaps in the "+
-			"engineering journal. Write an implementation doc for each with save_document."),
+			"engineering journal, newest first. Write an implementation doc for each with save_document."),
+		limitArg(),
+		verboseArg(),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
@@ -182,7 +204,10 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return jsonResult(issues)
+		// The gap worth closing is the one just made. Issue numbers are per
+		// workspace, so only the update time orders them across workspaces.
+		slices.SortFunc(issues, func(a, b models.Issue) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
+		return d.issueList(ctx, req, wsIDs, issues, listLimit(req))
 	})
 
 	// ---- user ----
