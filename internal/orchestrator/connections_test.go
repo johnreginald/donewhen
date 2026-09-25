@@ -72,12 +72,13 @@ func TestClaudeRunIsolatedOnAConnection(t *testing.T) {
 }
 
 func TestVerifyClaudeToken(t *testing.T) {
-	status := http.StatusUnauthorized
+	status, body := http.StatusUnauthorized, ""
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+fakeToken || r.Header.Get("anthropic-beta") == "" {
 			t.Errorf("request headers: %v", r.Header)
 		}
 		w.WriteHeader(status)
+		w.Write([]byte(body))
 	}))
 	defer srv.Close()
 	defer func(u string) { oauthUsageURL = u }(oauthUsageURL)
@@ -90,7 +91,16 @@ func TestVerifyClaudeToken(t *testing.T) {
 	if err := VerifyClaudeToken(context.Background(), fakeToken); err != nil {
 		t.Errorf("an accepted token failed: %v", err)
 	}
-	status = http.StatusNotFound // a moved endpoint must not stop agents
+	// What a real setup-token gets: it is scoped to inference only.
+	status, body = http.StatusForbidden, `{"type":"error","error":{"type":"permission_error","details":{"error_code":"oauth_scope_insufficient"}}}`
+	if err := VerifyClaudeToken(context.Background(), fakeToken); err != nil {
+		t.Errorf("a setup-token's narrow scope was taken for a refusal: %v", err)
+	}
+	status, body = http.StatusForbidden, `{"error":{"details":{"error_code":"account_disabled"}}}`
+	if err := VerifyClaudeToken(context.Background(), fakeToken); err == nil {
+		t.Error("a real 403 passed")
+	}
+	status, body = http.StatusNotFound, "" // a moved endpoint must not stop agents
 	if err := VerifyClaudeToken(context.Background(), fakeToken); err != nil {
 		t.Errorf("an unknown answer blocked the connection: %v", err)
 	}

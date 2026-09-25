@@ -143,7 +143,7 @@ MCP connector catalog (user: out), multi-company, cloud sandboxes.
 ## Slice 1 — Claude runner: done when
 - [x] `ClaudeRunner` implements Runner, Asker, Ready, EffectiveModel (`internal/orchestrator/claude.go`).
 - [x] Prompt on stdin; `--setting-sources project`; `--strict-mcp-config`; user settings not loaded.
-- [ ] **No user hooks at all.** Built in slice 11 (token + own `CLAUDE_CONFIG_DIR`); unit-tested. Live check `TestClaudeLiveIsolated` (zero hook events, subscription billing) waits on the user running `orchestrator connect claude`.
+- [x] **No user hooks, plugins or settings reach an agent** — proven live 2026-09-26 on a `claude setup-token` connection (TestClaudeLiveIsolated): only Claude Code's built-in plugins load (agents-md, telemetry); no hook output; billed to the subscription.
 - [x] Work runs: writes inside the worktree allowed; writes outside by `touch`, shell redirect and `python3 -c` all refused and reported in `DeniedTools` (live test, 2026-09-25).
 - [x] Bare `Bash` never pre-approved; extra rules via `CLAUDE_ALLOWED_TOOLS` (machine-wide for now — per-repo/per-agent comes with the agents entity). Without rules a worker cannot run `go test`; criteria still run the checks themselves.
 - [x] API-key env vars (`ANTHROPIC_API_KEY`, Bedrock/Vertex switches, `OPENAI_API_KEY`, …) stripped from Claude and Codex child processes; Codex must be a ChatGPT login.

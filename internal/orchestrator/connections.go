@@ -2,8 +2,10 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -111,9 +113,22 @@ func VerifyClaudeToken(ctx context.Context, tok string) error {
 	if err != nil {
 		return nil
 	}
-	resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+	defer resp.Body.Close()
+	var body struct {
+		Error struct {
+			Details struct {
+				Code string `json:"error_code"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&body)
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return fmt.Errorf("the Claude connection was refused (%s): run `orchestrator connect claude` again", resp.Status)
+	case resp.StatusCode == http.StatusForbidden && body.Error.Details.Code != "oauth_scope_insufficient":
 		return fmt.Errorf("the Claude connection was refused (%s): run `orchestrator connect claude` again", resp.Status)
 	}
+	// A setup-token is scoped to inference only, so this endpoint answers it
+	// with a 403 oauth_scope_insufficient — the token is live, just narrow.
 	return nil
 }

@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,9 +94,30 @@ func TestClaudeLiveIsolated(t *testing.T) {
 	if err != nil || res.Exit != 0 {
 		t.Fatalf("run: %v %+v", err, res)
 	}
+	// Nothing of the user's may load: every plugin is Claude Code's own
+	// (agents-md, which reads a repo's AGENTS.md through a SessionStart hook,
+	// and telemetry), and no hook says anything. The user's own hooks — seven
+	// of them on this Mac — would show up as more plugins or non-empty output.
 	b, _ := os.ReadFile(log)
-	if n := strings.Count(string(b), `"subtype":"hook_`); n > 0 {
-		t.Errorf("%d hook events: the user's own settings reached the run", n)
+	for _, line := range strings.Split(string(b), "\n") {
+		var ev struct {
+			Subtype string `json:"subtype"`
+			Plugins []struct {
+				Source string `json:"source"`
+			} `json:"plugins"`
+			Output string `json:"output"`
+		}
+		if json.Unmarshal([]byte(line), &ev) != nil {
+			continue
+		}
+		for _, p := range ev.Plugins {
+			if !strings.HasSuffix(p.Source, "@builtin") {
+				t.Errorf("a plugin of the user's loaded: %s", p.Source)
+			}
+		}
+		if strings.HasPrefix(ev.Subtype, "hook_response") && strings.TrimSpace(ev.Output) != "{}" && ev.Output != "" {
+			t.Errorf("a hook said something to the agent: %q", ev.Output)
+		}
 	}
 	if res.Billing != "subscription" {
 		t.Errorf("billing = %q, want subscription", res.Billing)

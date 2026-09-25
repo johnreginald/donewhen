@@ -1118,6 +1118,13 @@ func cmdConnect(ctx context.Context, args []string) error {
 		if err := orchestrator.VerifyClaudeToken(ctx, strings.TrimSpace(tok)); err != nil {
 			return err
 		}
+		// The proof that matters: a real one-line run on the token, isolated
+		// from ~/.claude, billed to the subscription.
+		fmt.Println("Checking it with a one-line Claude run…")
+		probe := &orchestrator.ClaudeRunner{OAuthToken: strings.TrimSpace(tok), ConfigDir: conns.ClaudeConfigDir()}
+		if _, _, err := probe.Ask(ctx, "claude/haiku", "Reply with exactly: ok"); err != nil {
+			return fmt.Errorf("the token was saved, but a run on it failed: %w", err)
+		}
 		fmt.Println("Connected. Agents on this Mac now run Claude on this token, apart from your own ~/.claude.")
 		fmt.Println("Restart `orchestrator host` for it to take effect.")
 		return nil
