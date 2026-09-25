@@ -88,10 +88,15 @@
 		border: none;
 		padding: 0;
 	}
-	:global(.lp-x) {
+	/* The remove mark shows only on the label being pointed at. */
+	.lp-chip :global(.lp-x) {
 		color: var(--text-faint);
+		opacity: 0;
+		margin-left: -2px;
 	}
-	.lp-chip:hover :global(.lp-x) {
+	.lp-chip:hover :global(.lp-x),
+	.lp-chip:focus-visible :global(.lp-x) {
+		opacity: 1;
 		color: #f87171;
 	}
 	.lp-add {
@@ -101,11 +106,11 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
-		background: var(--bg-elev2);
-		border: 1px dashed var(--border-strong);
+		background: none;
+		border: 1px dashed var(--border);
 		border-radius: 6px;
-		color: var(--text-dim);
-		padding: 3px 9px;
+		color: var(--text-faint);
+		padding: 2px 8px;
 		font-size: 12.5px;
 	}
 	.lp-addbtn:hover {

@@ -148,7 +148,7 @@
 
 <section class="conv">
 	<header class="ch">
-		<span class="rh">Conversation</span>
+		<span class="rh">{theAgent ? 'Conversation' : 'Comments'}</span>
 		{#if theAgent}<span class="with"><Bot size={13} strokeWidth={2} />{theAgent.name}</span>{/if}
 	</header>
 
@@ -162,8 +162,8 @@
 					<Play size={14} strokeWidth={2.4} />Start task
 				</button>
 			{:else}
-				<div class="st-t">No agent yet</div>
-				<p>Choose an agent for this ticket — in the bar under the title, or below — to start the conversation.</p>
+				<div class="st-t">No comments yet</div>
+				<p>Leave a note below. To have an agent pick this up, choose one under Agent, or ask one from here.</p>
 			{/if}
 		</div>
 	{/if}

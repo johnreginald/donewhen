@@ -21,6 +21,7 @@
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal, Bot } from '@lucide/svelte';
 
 	let issue = $state(null);
+	let pane = $state('task'); // which half a narrow window shows
 	let docs = $state([]);
 	let children = $state([]);
 	let parent = $state(null);
@@ -109,7 +110,6 @@
 			showToast('Delete failed: ' + e.message, 'error');
 		}
 	}
-	const fmtDate = (s) => new Date(s).toLocaleString();
 	function autofocus(node) {
 		node.focus();
 	}
@@ -156,7 +156,14 @@
 			<button class="btn danger sm" onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
 		</PageHeader>
 
-		<div class="dbody">
+		<div class="panes" role="tablist">
+			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
+			<button role="tab" aria-selected={pane === 'chat'} class:on={pane === 'chat'} onclick={() => (pane = 'chat')}>
+				{issue.agentId ? 'Conversation' : 'Comments'}
+			</button>
+		</div>
+
+		<div class="dbody" data-pane={pane}>
 			<main class="dmain">
 				<div class="dmain-inner">
 				{#if parent}
@@ -174,14 +181,18 @@
 					onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.target.blur())}
 				></textarea>
 
-				<div class="props">
-					<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
-					<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
-					<EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none="No agent" onchange={(v) => patch({ agentId: v })} />
-					<EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} />
-					<LabelPicker selected={issue.labels.map((l) => l.id)} onchange={(ids) => patch({ labelIds: ids })} />
-					<span class="created" title={fmtDate(issue.createdAt)}>Created {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-				</div>
+				<dl class="props">
+					<dt>Status</dt>
+					<dd><StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} /></dd>
+					<dt>Priority</dt>
+					<dd><PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} /></dd>
+					<dt>Agent</dt>
+					<dd><EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none="No agent" onchange={(v) => patch({ agentId: v })} /></dd>
+					<dt>Epic</dt>
+					<dd><EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} /></dd>
+					<dt>Labels</dt>
+					<dd class="wide"><LabelPicker selected={issue.labels.map((l) => l.id)} onchange={(ids) => patch({ labelIds: ids })} /></dd>
+				</dl>
 
 				<div class="desc">
 					{#if editingDesc}
@@ -335,16 +346,44 @@
 		background: var(--bg);
 	}
 	.props {
-		display: flex;
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: 64px minmax(0, 1fr) 64px minmax(0, 1fr);
 		align-items: center;
-		gap: 6px;
-		margin-top: -8px;
+		gap: 2px 12px;
+		margin: -6px 0 0;
+		padding-bottom: 14px;
+		border-bottom: 1px solid var(--border);
 	}
-	.created {
+	.props dt {
 		font-size: 12px;
 		color: var(--text-faint);
-		margin-left: 4px;
+	}
+	.props dd {
+		margin: 0;
+		min-width: 0;
+	}
+	.props dd.wide {
+		grid-column: 2 / -1;
+		padding: 4px 0;
+	}
+	/* The menus read as values, not form fields, until pointed at. */
+	.props :global(.dd-btn) {
+		border-color: transparent;
+		background: none;
+		padding: 5px 7px;
+		margin-left: -7px;
+		font-size: 13px;
+	}
+	.props :global(.dd-btn:hover) {
+		background: var(--bg-hover);
+	}
+	@media (max-width: 560px) {
+		.props {
+			grid-template-columns: 64px minmax(0, 1fr);
+		}
+		.props dd.wide {
+			grid-column: 2;
+		}
 	}
 	.parent-crumb {
 		display: flex;
@@ -641,19 +680,37 @@
 		height: 100%;
 		color: var(--text-dim);
 	}
+	.panes {
+		display: none;
+	}
+	/* Too narrow for both side by side: show one at a time, switched by tabs,
+	   so the conversation is never buried under the whole task. */
 	@media (max-width: 900px) {
-		.dbody {
-			flex-direction: column;
-			overflow-y: auto;
+		.panes {
+			display: flex;
+			gap: 4px;
+			padding: 8px 16px 0;
+			border-bottom: 1px solid var(--border);
 		}
-		.dmain {
-			overflow: visible;
+		.panes button {
+			background: none;
+			border: none;
+			border-bottom: 2px solid transparent;
+			color: var(--text-dim);
+			font-size: 13px;
+			padding: 6px 10px;
+		}
+		.panes button.on {
+			color: var(--text);
+			border-bottom-color: var(--accent2);
 		}
 		.chat {
-			flex: none;
+			flex: 1 1 auto;
 			border-left: none;
-			border-top: 1px solid var(--border);
-			min-height: 70vh;
+		}
+		.dbody[data-pane='task'] .chat,
+		.dbody[data-pane='chat'] .dmain {
+			display: none;
 		}
 	}
 </style>
