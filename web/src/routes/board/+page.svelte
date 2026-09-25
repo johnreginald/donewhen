@@ -5,7 +5,7 @@
 </script>
 
 <div class="page">
-	<PageHeader crumbs={[{ label: 'Tasks', href: '/tasks' }, { label: 'Board' }]} />
+	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'Board' }]} />
 	<IssuesToolbar />
 	<div class="fill"><Board /></div>
 </div>

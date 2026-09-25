@@ -8,6 +8,8 @@ export const projects = writable([]);
 export const initiatives = writable([]);
 export const labels = writable([]);
 export const agents = writable([]); // the workspace's configured agents
+// priority -> agent id: who works a task nobody chose an agent for.
+export const priorityAgents = writable({});
 export const issues = writable([]);
 export const appConfig = writable({});
 export const me = writable(null);
@@ -61,15 +63,17 @@ export async function switchWorkspace(slug) {
 }
 
 export async function loadMeta() {
-	const [st, pr, ini, lb, cfg, ag] = await Promise.all([
+	const [st, pr, ini, lb, cfg, ag, pa] = await Promise.all([
 		api.states(),
 		api.projects(),
 		api.initiatives(),
 		api.labels(),
 		api.config(),
-		api.agents().catch(() => [])
+		api.agents().catch(() => []),
+		api.get('/priority-agents').catch(() => [])
 	]);
 	agents.set(ag || []);
+	priorityAgents.set(Object.fromEntries((pa || []).map((p) => [p.priority, p.agentId])));
 	states.set(st || []);
 	projects.set(pr || []);
 	initiatives.set(ini || []);
@@ -131,3 +135,9 @@ export const PRIORITIES = [
 	{ value: 3, label: 'Medium' },
 	{ value: 4, label: 'Low' }
 ];
+
+// The agent that works a task: the one chosen on it, or else the default for
+// its priority. The server resolves it the same way when it queues work.
+export function taskAgentId(issue, defaults) {
+	return issue?.agentId || defaults?.[issue?.priority ?? 0] || '';
+}

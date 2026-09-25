@@ -43,7 +43,7 @@
 </script>
 
 <div class="page">
-	<PageHeader crumbs={[{ label: 'Tasks' }]} />
+	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'List' }]} />
 	<IssuesToolbar />
 	<div class="scroll">
 		{#if !groups.length}

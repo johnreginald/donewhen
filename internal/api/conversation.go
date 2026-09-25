@@ -42,13 +42,17 @@ func (s *Server) handleAskAgent(w http.ResponseWriter, r *http.Request) {
 	s.queueTurn(w, r, is, a, map[string]any{"reason": reason}, http.StatusCreated)
 }
 
-// agentFor resolves the agent a request names, or else the ticket's own.
+// agentFor resolves the agent a request names, or else the ticket's own, or
+// else the workspace's default for the ticket's priority.
 func (s *Server) agentFor(w http.ResponseWriter, r *http.Request, is models.Issue, ref string) (models.Agent, bool) {
-	if ref == "" && is.AgentID != nil {
-		ref = *is.AgentID
+	if ref == "" {
+		var err error
+		if ref, err = s.store.IssueAgentRef(r.Context(), ws(r), is); handleStoreErr(w, err) {
+			return models.Agent{}, false
+		}
 	}
 	if ref == "" {
-		writeErr(w, http.StatusBadRequest, "choose an agent for this ticket first")
+		writeErr(w, http.StatusBadRequest, "choose an agent for this ticket, or set a default agent for its priority on the Agents page")
 		return models.Agent{}, false
 	}
 	a, err := s.store.GetAgent(r.Context(), ws(r), ref)

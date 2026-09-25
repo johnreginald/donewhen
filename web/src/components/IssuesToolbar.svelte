@@ -8,9 +8,9 @@
 	import { Search, List, Rows3, Columns3 } from '@lucide/svelte';
 
 	const views = [
+		{ href: '/board', label: 'Board', icon: Columns3 },
 		{ href: '/tasks', label: 'List', icon: List },
-		{ href: '/list', label: 'By epic', icon: Rows3 },
-		{ href: '/board', label: 'Board', icon: Columns3 }
+		{ href: '/list', label: 'By epic', icon: Rows3 }
 	];
 </script>
 

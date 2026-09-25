@@ -4,7 +4,6 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import {
-		initiatives,
 		projects,
 		activeProject,
 		activeInitiative,
@@ -19,8 +18,8 @@
 	import { recent } from '$lib/recent.js';
 	import { me } from '$lib/store.js';
 	import {
-		FileText, Box, Layers, Plus, Search, Pencil, History, Inbox, Hexagon, ChevronRight, Check,
-		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, Repeat
+		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
+		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug
 	} from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
@@ -30,19 +29,11 @@
 		wsOpen = false;
 		if (slug === $activeWorkspace?.slug) return;
 		await switchWorkspace(slug);
-		if (!onIssues) goto('/tasks');
+		if (!onIssues) goto('/board');
 		onnavigate();
 	}
 
-	// Collapsible initiative groups — so a big epic list stays manageable.
-	let expanded = $state(new Set());
-	function toggleExpand(id) {
-		const n = new Set(expanded);
-		n.has(id) ? n.delete(id) : n.add(id);
-		expanded = n;
-	}
-
-	// Full issue set (filter-independent) for the per-Project totals in the badge.
+	// Full issue set (filter-independent) for the per-epic totals in the badge.
 	let allIssues = $state([]);
 	async function refreshCounts() {
 		allIssues = (await api.issues()) || [];
@@ -61,21 +52,6 @@
 	});
 
 	let { onnavigate = () => {} } = $props();
-	let menuOpen = $state(false);
-	function choose(kind) {
-		menuOpen = false;
-		openComposer(kind);
-	}
-
-	// Project = Raenil initiative; Epic = Raenil project.
-	function editProject(i) {
-		openComposer('initiative', {
-			id: i.id,
-			name: i.name,
-			description: i.descriptionMd,
-			repoUrl: i.repoUrl
-		});
-	}
 	// Edit / delete an Epic (Raenil "project").
 	function editEpic(p) {
 		openComposer('project', {
@@ -87,40 +63,20 @@
 		});
 	}
 
-	// Click a Project to filter every view to it (Epics + tickets show grouped in
-	// the List/Board). '' = All issues.
-	function pick(initiativeId) {
-		activeInitiative.set(initiativeId);
-		activeProject.set('');
-		loadIssues();
-		if (!onIssues) goto('/tasks');
-		onnavigate();
-	}
 	// Click an Epic → filter every view to that epic.
 	function pickEpic(projectId) {
 		activeProject.set(projectId);
 		activeInitiative.set('');
 		loadIssues();
-		if (!onIssues) goto('/tasks');
+		if (!onIssues) goto('/board');
 		onnavigate();
 	}
 
-	const grouped = $derived(groupProjects($initiatives, $projects, allIssues));
-	function groupProjects(inis, projs, iss) {
-		const byIni = new Map(inis.map((i) => [i.id, { ini: i, projects: [], count: 0 }]));
-		const orphan = [];
-		const projToIni = new Map(projs.map((p) => [p.id, p.initiativeId]));
-		for (const p of projs) {
-			if (p.initiativeId && byIni.has(p.initiativeId)) byIni.get(p.initiativeId).projects.push(p);
-			else orphan.push(p);
-		}
-		// total issues per Project (across all its Epics)
-		for (const is of iss) {
-			const iniId = is.projectId ? projToIni.get(is.projectId) : null;
-			if (iniId && byIni.has(iniId)) byIni.get(iniId).count++;
-		}
-		return { groups: [...byIni.values()].filter((g) => g.projects.length), orphan };
-	}
+	// The workspace (top left) already names the project, so the sidebar
+	// lists its epics directly, each with how many tasks it holds.
+	const epics = $derived(
+		$projects.map((p) => ({ ...p, count: allIssues.filter((is) => is.projectId === p.id).length }))
+	);
 
 	const ISSUE_VIEWS = ['/tasks', '/list', '/board'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
@@ -176,15 +132,12 @@
 	<div class="section">
 		<div class="section-head"><span class="section-title">Work</span></div>
 		<a
-			href="/tasks"
+			href="/board"
 			class="nav-item"
 			class:active={onIssues && !$activeInitiative && !$activeProject}
 			onclick={() => (activeInitiative.set(''), activeProject.set(''), loadIssues(), onnavigate())}
 		>
 			<span class="icon"><CircleCheckBig size={16} strokeWidth={2} /></span>Tasks
-		</a>
-		<a href="/routines" class="nav-item" class:active={$page.url.pathname === '/routines'} onclick={onnavigate}>
-			<span class="icon"><Repeat size={16} strokeWidth={2} /></span>Routines
 		</a>
 		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
 			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts
@@ -193,44 +146,17 @@
 
 	<div class="section">
 		<div class="section-head">
-			<span class="section-title">Projects</span>
-			<button class="add-btn" title="Create project or epic" onclick={() => (menuOpen = !menuOpen)}><Plus size={15} strokeWidth={2.2} /></button>
-			{#if menuOpen}
-				<div class="menu-backdrop" role="presentation" onclick={() => (menuOpen = false)}></div>
-				<div class="add-menu">
-					<button onclick={() => choose('initiative')}><Box size={14} strokeWidth={2} />New project</button>
-					<button onclick={() => choose('project')}><Layers size={14} strokeWidth={2} />New epic</button>
-				</div>
-			{/if}
+			<span class="section-title">Epics</span>
+			<button class="add-btn" title="New epic" onclick={() => openComposer('project')}><Plus size={15} strokeWidth={2.2} /></button>
 		</div>
-		{#each grouped.groups as g (g.ini.id)}
-			{@const isOpen = expanded.has(g.ini.id) || g.projects.some((p) => p.id === $activeProject)}
-			<div class="proj-row">
-				<button
-					class="caret"
-					class:open={isOpen}
-					class:empty={g.projects.length === 0}
-					onclick={() => toggleExpand(g.ini.id)}
-					aria-label="Expand epics"
-				>
-					<ChevronRight size={17} strokeWidth={2.5} />
+		{#each epics as p (p.id)}
+			<div class="epic-row">
+				<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
+					<span class="icon epic-ic"><Box size={13} strokeWidth={2} /></span><span class="pname">{p.name}</span>
+					<span class="ini-count">{p.count}</span>
 				</button>
-				<button class="nav-item proj" class:active={$activeInitiative === g.ini.id} onclick={() => pick(g.ini.id)}>
-					<span class="icon"><Hexagon size={14} strokeWidth={2} /></span><span class="pname">{g.ini.name}</span>
-					<span class="ini-count">{g.count}</span>
-				</button>
-				<button class="row-edit" title="Edit project" onclick={() => editProject(g.ini)}><Pencil size={13} strokeWidth={2} /></button>
+				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
 			</div>
-			{#if isOpen}
-				{#each g.projects as p (p.id)}
-					<div class="epic-row">
-						<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
-							<span class="icon epic-ic"><Box size={12} strokeWidth={2} /></span><span class="pname">{p.name}</span>
-						</button>
-						<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
-					</div>
-				{/each}
-			{/if}
 		{/each}
 	</div>
 
@@ -282,6 +208,11 @@
 </nav>
 
 <style>
+	.menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+	}
 	.sidebar {
 		width: 240px;
 		height: 100%;
@@ -458,46 +389,6 @@
 		background: var(--bg-hover);
 		color: var(--text);
 	}
-	.menu-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 30;
-	}
-	.add-menu {
-		position: absolute;
-		top: 24px;
-		right: 4px;
-		z-index: 31;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border-strong);
-		border-radius: 8px;
-		box-shadow: var(--shadow);
-		padding: 4px;
-		min-width: 150px;
-		display: flex;
-		flex-direction: column;
-	}
-	.add-menu button {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		background: none;
-		border: none;
-		color: var(--text);
-		text-align: left;
-		padding: 7px 9px;
-		border-radius: 6px;
-		font-size: 13px;
-	}
-	.add-menu button:hover {
-		background: var(--bg-hover);
-	}
-	.add-menu .mi {
-		color: var(--text-faint);
-		font-size: 11px;
-		width: 12px;
-		text-align: center;
-	}
 	.ini {
 		text-transform: none;
 		font-size: 11px;
@@ -557,13 +448,11 @@
 	.ini-head:hover .ini-count {
 		color: var(--text);
 	}
-	.epic-row,
-	.proj-row {
+	.epic-row {
 		display: flex;
 		align-items: center;
 	}
-	.epic-row .nav-item,
-	.proj-row .nav-item {
+	.epic-row .nav-item {
 		flex: 1;
 		min-width: 0;
 	}
@@ -574,35 +463,9 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.caret {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 30px;
-		background: none;
-		border: none;
-		color: var(--text-dim);
-		cursor: pointer;
-		flex: none;
-	}
-	.caret:hover {
-		color: var(--text);
-	}
-	.caret :global(svg) {
-		transition: transform 0.15s ease;
-	}
-	.caret.open :global(svg) {
-		transform: rotate(90deg);
-	}
-	.caret.empty {
-		visibility: hidden;
-		pointer-events: none;
-	}
 	.epic-sub {
-		padding-left: 34px;
 		font-size: 13px;
-		color: var(--text-faint);
+		color: var(--text-dim);
 	}
 	.epic-sub .epic-ic {
 		color: var(--accent2);
@@ -628,8 +491,7 @@
 		flex: none;
 	}
 	.ini-head:hover .row-edit,
-	.epic-row:hover .row-edit,
-	.proj-row:hover .row-edit {
+	.epic-row:hover .row-edit {
 		opacity: 1;
 	}
 	.row-edit:hover {
@@ -677,9 +539,6 @@
 		justify-content: center;
 		color: var(--text-dim);
 		flex: none;
-	}
-	.proj .icon {
-		color: var(--text-faint);
 	}
 	.nav-item.active .icon {
 		color: var(--text);

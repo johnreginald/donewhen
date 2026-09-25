@@ -120,7 +120,7 @@ func runServe() {
 
 	srv := api.NewServer(cfg, st, svc, bus, mcpHandler)
 
-	// Each minute: fire due routines and agents' heartbeats, and close work
+	// Each minute: fire agents' heartbeats, and close work
 	// whose machine went away — a claimed job or an open run from a host that
 	// stopped reporting would otherwise block its ticket forever.
 	go func() {

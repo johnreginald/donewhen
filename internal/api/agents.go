@@ -310,16 +310,8 @@ func (s *Server) handleRunIssue(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
-	ref := body.Agent
-	if ref == "" && is.AgentID != nil {
-		ref = *is.AgentID
-	}
-	if ref == "" {
-		writeErr(w, http.StatusBadRequest, "choose an agent for this ticket first")
-		return
-	}
-	a, err := s.store.GetAgent(r.Context(), ws(r), ref)
-	if handleStoreErr(w, err) {
+	a, ok := s.agentFor(w, r, is, body.Agent)
+	if !ok {
 		return
 	}
 	if a.Status == "paused" {
@@ -363,4 +355,26 @@ func (s *Server) Reap(ctx context.Context) {
 	for wsID, r := range byWS {
 		s.publishReaped(wsID, r.Jobs, r.Runs)
 	}
+}
+
+func (s *Server) handleListPriorityAgents(w http.ResponseWriter, r *http.Request) {
+	list, err := s.store.ListPriorityAgents(r.Context(), ws(r))
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// handleSetPriorityAgent sets (or, with no agent, clears) the default agent
+// for one priority.
+func (s *Server) handleSetPriorityAgent(w http.ResponseWriter, r *http.Request) {
+	var body store.PriorityAgent
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if handleStoreErr(w, s.store.SetPriorityAgent(r.Context(), ws(r), body.Priority, body.AgentID)) {
+		return
+	}
+	s.handleListPriorityAgents(w, r)
 }

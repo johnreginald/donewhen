@@ -377,25 +377,3 @@ type AgentSession struct {
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
-
-// Routine makes a ticket on a schedule, optionally queueing its agent's run.
-type Routine struct {
-	ID            string          `json:"id"`
-	Name          string          `json:"name"`
-	AgentID       *string         `json:"agentId"`
-	ProjectID     *string         `json:"projectId"`
-	Title         string          `json:"title"`
-	DescriptionMD string          `json:"descriptionMd"`
-	Criteria      json.RawMessage `json:"criteria"`
-	Labels        []string        `json:"labels"`
-	Schedule      string          `json:"schedule"`
-	Timezone      string          `json:"timezone"`
-	Enabled       bool            `json:"enabled"`
-	AutoRun       bool            `json:"autoRun"`
-	NextRunAt     *time.Time      `json:"nextRunAt"`
-	LastRunAt     *time.Time      `json:"lastRunAt"`
-	LastIssueID   *string         `json:"lastIssueId"`
-	LastIssueKey  string          `json:"lastIssueKey,omitempty"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
-}

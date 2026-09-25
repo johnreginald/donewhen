@@ -6,7 +6,7 @@
 	// neither. You decide when an agent runs — nothing here starts on its own.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { agents, states } from '$lib/store.js';
+	import { agents, states, priorityAgents, taskAgentId } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import { Play, LoaderCircle, Check, X } from '@lucide/svelte';
@@ -14,7 +14,7 @@
 	let { issue } = $props();
 	let job = $state(null);
 
-	const agent = $derived($agents.find((a) => a.id === issue.agentId));
+	const agent = $derived($agents.find((a) => a.id === taskAgentId(issue, $priorityAgents)));
 	const busy = $derived(job && (job.status === 'queued' || job.status === 'claimed'));
 
 	const state = $derived($states.find((s) => s.id === issue.stateId));

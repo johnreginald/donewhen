@@ -143,7 +143,7 @@
 						<div class="card"><ActivityFeed items={d.activity} /></div>
 					</div>
 					<div>
-						<div class="sh"><span>Recent tasks</span><a href="/tasks">View all</a></div>
+						<div class="sh"><span>Recent tasks</span><a href="/board">View all</a></div>
 						<div class="card">
 							{#each d.recentTasks as t (t.key)}
 								{@const st = stOf(t.stateId)}

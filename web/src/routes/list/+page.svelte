@@ -69,7 +69,7 @@
 </script>
 
 <div class="page">
-<PageHeader crumbs={[{ label: 'Tasks', href: '/tasks' }, { label: 'By epic' }]} />
+<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'By epic' }]} />
 <IssuesToolbar />
 <div class="list">
 	{#each groups as g (g.id)}

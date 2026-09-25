@@ -6,7 +6,6 @@ require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/mark3labs/mcp-go v0.55.1
-	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.53.0
 	golang.org/x/term v0.44.0
 )

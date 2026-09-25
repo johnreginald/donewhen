@@ -4,17 +4,30 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { agents } from '$lib/store.js';
+	import { agents, priorityAgents, PRIORITIES } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import { HARNESSES, harnessName, harnessOn } from '$lib/harness.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import ModelPicker from '$components/ModelPicker.svelte';
+	import EpicMenu from '$components/EpicMenu.svelte';
 	import { Plus, Bot, X } from '@lucide/svelte';
 
 	let hosts = $state([]);
 	let lastRun = $state({}); // agent id -> latest run
 	let tab = $state('all');
+
+	// Who works a task nobody chose an agent for, by its priority — e.g. the
+	// strongest model for Urgent, a cheap one for Low.
+	const PRIORITY_ORDER = [1, 2, 3, 4, 0];
+	async function setDefault(priority, agentId) {
+		try {
+			const list = await api.put('/priority-agents', { priority, agentId });
+			priorityAgents.set(Object.fromEntries((list || []).map((p) => [p.priority, p.agentId])));
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
 
 	async function load() {
 		hosts = (await api.hosts().catch(() => [])) || [];
@@ -98,6 +111,18 @@
 					</a>
 				{/each}
 			</div>
+
+			<section class="defaults">
+				<h3>Default agent by priority</h3>
+				<p class="hint">A task with no agent chosen goes to the agent for its priority — for Run, Start task and the conversation. Choosing an agent on the task overrides it.</p>
+				<div class="dgrid">
+					{#each PRIORITY_ORDER as pr (pr)}
+						<span class="pl">{PRIORITIES.find((p) => p.value === pr)?.label}</span>
+						<EpicMenu value={$priorityAgents[pr] || ''} options={$agents} icon={Bot} none="No default"
+							onchange={(v) => setDefault(pr, v)} />
+					{/each}
+				</div>
+			</section>
 		{/if}
 	</div>
 </div>
@@ -167,7 +192,36 @@
 		color: var(--text-faint);
 	}
 	.list {
-		padding: 4px 12px 32px;
+		padding: 4px 12px 16px;
+	}
+	.defaults {
+		margin: 8px 20px 32px;
+		padding: 14px 16px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--bg-elev);
+		max-width: 620px;
+	}
+	.defaults h3 {
+		margin: 0 0 4px;
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.defaults .hint {
+		margin: 0 0 12px;
+		font-size: 12.5px;
+		color: var(--text-faint);
+		line-height: 1.5;
+	}
+	.dgrid {
+		display: grid;
+		grid-template-columns: 110px minmax(0, 1fr);
+		align-items: center;
+		gap: 6px 12px;
+	}
+	.pl {
+		font-size: 13px;
+		color: var(--text-dim);
 	}
 	.row {
 		display: grid;

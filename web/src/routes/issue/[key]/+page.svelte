@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { states, projects, labels as allLabels, PRIORITIES } from '$lib/store.js';
+	import { states, projects, labels as allLabels, PRIORITIES, priorityAgents, taskAgentId } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
@@ -22,6 +22,8 @@
 
 	let issue = $state(null);
 	let pane = $state('task'); // which half a narrow window shows
+	// Who works this task when nobody chose an agent: the default for its priority.
+	const defaultAgent = $derived(issue && $agents.find((a) => a.id === $priorityAgents[issue.priority ?? 0]));
 	let docs = $state([]);
 	let children = $state([]);
 	let parent = $state(null);
@@ -65,7 +67,7 @@
 			commits = (await api.commits(issue.id)) || [];
 		} catch (e) {
 			showToast('Load failed: ' + e.message, 'error');
-			goto('/tasks');
+			goto('/board');
 		} finally {
 			loading = false;
 		}
@@ -105,7 +107,7 @@
 		try {
 			await api.deleteIssue(issue.id);
 			showToast(`${issue.key} deleted`);
-			goto('/tasks');
+			goto('/board');
 		} catch (e) {
 			showToast('Delete failed: ' + e.message, 'error');
 		}
@@ -147,7 +149,7 @@
 	<div class="detail">
 		<PageHeader
 			crumbs={[
-				{ label: 'Tasks', href: '/tasks' },
+				{ label: 'Tasks', href: '/board' },
 				...(epic ? [{ label: epic.name, upper: false }] : []),
 				{ label: issue.key, upper: false }
 			]}
@@ -159,7 +161,7 @@
 		<div class="panes" role="tablist">
 			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
 			<button role="tab" aria-selected={pane === 'chat'} class:on={pane === 'chat'} onclick={() => (pane = 'chat')}>
-				{issue.agentId ? 'Conversation' : 'Comments'}
+				{taskAgentId(issue, $priorityAgents) ? 'Conversation' : 'Comments'}
 			</button>
 		</div>
 
@@ -187,7 +189,7 @@
 					<dt>Priority</dt>
 					<dd><PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} /></dd>
 					<dt>Agent</dt>
-					<dd><EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none="No agent" onchange={(v) => patch({ agentId: v })} /></dd>
+					<dd><EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none={defaultAgent ? `Default · ${defaultAgent.name}` : 'No agent'} onchange={(v) => patch({ agentId: v })} /></dd>
 					<dt>Epic</dt>
 					<dd><EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} /></dd>
 					<dt>Labels</dt>

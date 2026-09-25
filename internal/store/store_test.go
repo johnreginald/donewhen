@@ -799,63 +799,13 @@ func TestReapingWorkOfGoneHosts(t *testing.T) {
 	}
 }
 
-func TestRoutinesAndHeartbeats(t *testing.T) {
+func TestHeartbeats(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	ws := newWorkspace(t, s)
-	str := func(v string) *string { return &v }
-	yes := true
 	name, harness := "Eng", "claude"
 	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
-
-	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("x"), Title: str("t"), Schedule: str("every day")}); !errors.Is(err, ErrInvalid) {
-		t.Errorf("a bad schedule was accepted: %v", err)
-	}
-	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("x"), Title: str("t"), Schedule: str("0 9 * * *"),
-		AgentID: &a.ID, SetAgent: true, AutoRun: &yes}); !errors.Is(err, ErrInvalid) {
-		t.Errorf("an auto-run routine with nothing to check was accepted: %v", err)
-	}
-	rt, err := s.CreateRoutine(ctx, ws, RoutineInput{
-		Name: str("Dependency bump"), Title: str("Bump deps {date}"), Schedule: str("0 9 * * 1"), Timezone: str("Asia/Yangon"),
-		AgentID: &a.ID, SetAgent: true, AutoRun: &yes, SetCriteria: true,
-		Criteria: []ProposedCriterion{{Text: "tests pass", Kind: "deterministic", Check: json.RawMessage(`{"cmd":"go test ./..."}`)}},
-	})
-	if err != nil || rt.NextRunAt == nil || !rt.NextRunAt.After(time.Now()) {
-		t.Fatalf("create: %v %+v", err, rt.NextRunAt)
-	}
-	if got := RoutineTitle(rt, time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)); got != "Bump deps 2026-09-28" {
-		t.Errorf("title = %q", got)
-	}
-
-	// Make it due; one claim takes it and moves it on.
-	s.pool.Exec(ctx, `UPDATE routines SET next_run_at = now() - interval '1 minute' WHERE id = $1`, rt.ID)
-	due, err := s.ClaimDueRoutines(ctx, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	mine := 0
-	for _, d := range due {
-		if d.ID == rt.ID {
-			mine++
-		}
-	}
-	if mine != 1 {
-		t.Fatalf("claimed %d times", mine)
-	}
-	again, _ := s.ClaimDueRoutines(ctx, time.Now())
-	for _, d := range again {
-		if d.ID == rt.ID {
-			t.Error("a claimed routine was due again at once")
-		}
-	}
-
-	// One open routine ticket at a time.
 	is, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "Bump deps", StateName: "Ready", AgentID: &a.ID})
-	s.RoutineFired(ctx, ws, rt.ID, is.ID)
-	rt, _ = s.GetRoutine(ctx, ws, rt.ID)
-	if open, _ := s.RoutineStillOpen(ctx, rt); !open {
-		t.Error("its ticket is open but the routine would fire again")
-	}
 
 	// Heartbeat: a human message since the agent last spoke is waiting for it.
 	hb := 5
@@ -935,27 +885,10 @@ func TestCostsAndBudgets(t *testing.T) {
 	}
 }
 
-func TestRepoLabelAndBudgetGuards(t *testing.T) {
+func TestBudgetGuard(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	ws := newWorkspace(t, s)
-	str := func(v string) *string { return &v }
-
-	// One repo: no label needed.
-	s.CreateLabel(ctx, ws, "api", "", "repo")
-	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("a"), Title: str("t"), Schedule: str("0 9 * * *")}); err != nil {
-		t.Errorf("single repo: %v", err)
-	}
-	// Two repos: the routine must name one.
-	s.CreateLabel(ctx, ws, "web", "", "repo")
-	if _, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("b"), Title: str("t"), Schedule: str("0 9 * * *")}); !errors.Is(err, ErrInvalid) {
-		t.Errorf("a routine without a repo label was accepted in a two-repo workspace: %v", err)
-	}
-	rt, err := s.CreateRoutine(ctx, ws, RoutineInput{Name: str("c"), Title: str("t"), Schedule: str("0 9 * * *"),
-		Labels: []string{"web"}, SetLabels: true})
-	if err != nil || len(rt.Labels) != 1 || rt.Labels[0] != "web" {
-		t.Errorf("labelled routine: %v %+v", err, rt.Labels)
-	}
 
 	// An agent at its cap takes no new work.
 	name, harness := "Eng", "claude"
@@ -970,5 +903,51 @@ func TestRepoLabelAndBudgetGuards(t *testing.T) {
 	}
 	if _, err := s.EnqueueJob(ctx, ws, JobInput{Kind: "test_env", AgentID: a.ID}); err != nil {
 		t.Errorf("an environment test was refused for budget: %v", err)
+	}
+}
+
+// A task with no agent goes to the workspace's default for its priority; one
+// chosen on the task wins; clearing the default leaves it with none.
+func TestPriorityAgents(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	name, other, harness := "Opus", "Cheap", "claude"
+	opus, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	cheap, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &other, Harness: &harness})
+
+	if err := s.SetPriorityAgent(ctx, ws, 1, opus.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPriorityAgent(ctx, ws, 4, cheap.Slug); err != nil {
+		t.Fatalf("by slug: %v", err)
+	}
+	if err := s.SetPriorityAgent(ctx, ws, 7, opus.ID); !errors.Is(err, ErrInvalid) {
+		t.Errorf("priority 7 accepted: %v", err)
+	}
+	urgent, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "u", StateName: "Ready", Priority: 1})
+	low, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "l", StateName: "Ready", Priority: 4})
+	none, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "n", StateName: "Ready"})
+	chosen, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "c", StateName: "Ready", Priority: 1, AgentID: &cheap.ID})
+
+	for _, c := range []struct {
+		is   models.Issue
+		want string
+	}{{urgent, opus.ID}, {low, cheap.ID}, {none, ""}, {chosen, cheap.ID}} {
+		if got, err := s.IssueAgentRef(ctx, ws, c.is); err != nil || got != c.want {
+			t.Errorf("%s: agent = %q (%v), want %q", c.is.Title, got, err, c.want)
+		}
+	}
+	if list, _ := s.ListPriorityAgents(ctx, ws); len(list) != 2 {
+		t.Errorf("list = %+v", list)
+	}
+	s.SetPriorityAgent(ctx, ws, 1, "")
+	if got, _ := s.IssueAgentRef(ctx, ws, urgent); got != "" {
+		t.Errorf("cleared default still applies: %q", got)
+	}
+	// Another workspace's agent cannot be a default here.
+	ws2 := newWorkspace(t, s)
+	if err := s.SetPriorityAgent(ctx, ws2, 2, opus.ID); err == nil {
+		t.Error("an agent from another workspace was accepted")
 	}
 }

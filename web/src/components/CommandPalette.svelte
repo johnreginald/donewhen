@@ -23,8 +23,8 @@
 		const ql = q.trim().toLowerCase();
 
 		const nav = [
-			{ label: 'Go to Tasks', to: '/tasks' },
-			{ label: 'Go to Board', to: '/board' },
+			{ label: 'Go to Tasks', to: '/board' },
+			{ label: 'Go to Task list', to: '/tasks' },
 			{ label: 'Go to Tasks by epic', to: '/list' },
 			{ label: 'Go to Inbox', to: '/inbox' },
 			{ label: 'Go to Audit', to: '/log' },

@@ -4,7 +4,7 @@
 	// answered — in time order — and a box to talk back.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { agents } from '$lib/store.js';
+	import { agents, priorityAgents, taskAgentId } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import Markdown from './Markdown.svelte';
@@ -45,7 +45,9 @@
 	});
 
 	const agentById = (id) => $agents.find((a) => a.id === id);
-	const theAgent = $derived(agentById(askAgent || issue.agentId || ''));
+	// The ticket's agent, or the default for its priority when none is chosen.
+	const ticketAgentId = $derived(taskAgentId(issue, $priorityAgents));
+	const theAgent = $derived(agentById(askAgent || ticketAgentId));
 
 	async function load() {
 		const [c, r, it, jobs, wjobs] = await Promise.all([
@@ -213,7 +215,7 @@
 			{/if}
 		{:else if item.kind === 'run'}
 			{#key item.r.id}<RunThread run={item.r} />{/key}
-			{#if item.r.id === lastWork?.id && item.r.agentId === issue.agentId && item.r.status !== 'running' && item.r.deniedTools?.length}
+			{#if item.r.id === lastWork?.id && item.r.agentId === ticketAgentId && item.r.status !== 'running' && item.r.deniedTools?.length}
 				<PermissionCard run={item.r} {issue} />
 			{/if}
 		{:else if item.kind === 'interaction'}
@@ -271,7 +273,7 @@
 		<textarea bind:value={draft} onkeydown={onKey} rows="3"
 			placeholder={theAgent ? `Message ${theAgent.name}… (⌘↵ to ask)` : 'Leave a comment…'}></textarea>
 		<div class="cf">
-			{#if !issue.agentId}
+			{#if !ticketAgentId}
 				<EpicMenu value={askAgent} options={$agents} icon={Bot} none="Pick an agent" onchange={(v) => (askAgent = v)} />
 			{/if}
 			<span class="spacer"></span>
