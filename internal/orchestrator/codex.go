@@ -301,7 +301,7 @@ func (r *CodexRunner) askIn(ctx context.Context, model, prompt, dir string) (str
 	}
 	if answer == "" {
 		if res.AgentError != "" {
-			return "", 0, fmt.Errorf("codex returned nothing: %s", res.AgentError)
+			return "", 0, errors.New(res.AgentError)
 		}
 		return "", 0, fmt.Errorf("codex returned nothing (exit %d)", res.Exit)
 	}
@@ -345,13 +345,16 @@ func codexTokens(logPath string) int {
 // token is never on a command line where `ps` would show it.
 const codexMCPTokenEnv = "RAENIL_MCP_TOKEN"
 
-// codexAuthHint puts the fix in front of a refused sign-in. Codex keeps saying
-// "Logged in using ChatGPT" after its saved credential has gone stale, and the
-// 401 it then gets reads like a wrong API key — which sends people looking for
-// a key they never set.
+// codexAuthHint replaces a refused sign-in with what to do about it. Codex
+// keeps saying "Logged in using ChatGPT" while OpenAI refuses every model
+// call with a 401 that reads like a wrong API key, and the raw error is a
+// JSON line with the key masked by a hundred asterisks. Signing in again is
+// the fix when the saved sign-in went stale; when it is OpenAI refusing the
+// account itself, Codex fails the same way outside Raenil, which is the test.
 func codexAuthHint(msg string) string {
 	if !strings.Contains(msg, "401 Unauthorized") {
 		return msg
 	}
-	return "Codex's sign-in on this Mac was refused (401) — run `codex logout && codex login` there, then try again. " + msg
+	return "OpenAI refused Codex's sign-in on this Mac (401). Sign in again: codex logout && codex login. " +
+		"If it still fails, run codex in a terminal — failing there too means the problem is the OpenAI account, not Raenil."
 }

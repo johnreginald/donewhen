@@ -103,6 +103,11 @@
 	// repo and whether the harness can answer at all. Until the run appears
 	// that time shows here, and a failure in it is said here, not only in a
 	// truncated line in the header.
+	// The card's title already says it could not start; the host's
+	// "not starting KEY:" and "<harness> cannot run <model>:" prefixes only
+	// push the reason further down.
+	const startError = (e) =>
+		(e || 'Failed').replace(/^not starting [A-Z0-9]+-\d+: /, '').replace(/^\w+ cannot run "[^"]*": /, '');
 	const workRun = $derived(
 		work && runs.find((r) => r.kind === 'work' && new Date(r.startedAt) >= new Date(work.claimedAt || work.createdAt))
 	);
@@ -227,7 +232,7 @@
 		{:else if item.kind === 'startfail'}
 			<div class="startfail">
 				<div class="sf-t"><CircleAlert size={14} strokeWidth={2} />{agentById(item.j.agentId)?.name || 'The agent'} could not start{item.j.host ? ` on ${item.j.host}` : ''}</div>
-				<div class="sf-e">{item.j.error}</div>
+				<div class="sf-e">{startError(item.j.error)}</div>
 				<span class="when">{rel(item.at)}</span>
 			</div>
 		{:else if item.kind === 'answers'}
@@ -413,7 +418,6 @@
 		font-size: 13px;
 		color: var(--text-faint);
 	}
-	.thinking,
 	.startfail {
 		border: 1px solid color-mix(in srgb, #d03b3b 40%, var(--border));
 		border-radius: 10px;
@@ -438,6 +442,7 @@
 	.startfail .when {
 		align-self: flex-end;
 	}
+	.thinking,
 	.failed {
 		padding: 0 16px 8px;
 	}
