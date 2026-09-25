@@ -14,7 +14,7 @@
 	import ProposalCard from './ProposalCard.svelte';
 	import EpicMenu from './EpicMenu.svelte';
 	import { tick } from 'svelte';
-	import { Bot, LoaderCircle, CircleHelp, Send, Play } from '@lucide/svelte';
+	import { Bot, LoaderCircle, CircleHelp, CircleAlert, Send, Play } from '@lucide/svelte';
 
 	let { issue } = $props();
 
@@ -22,6 +22,7 @@
 	let runs = $state([]);
 	let interactions = $state([]);
 	let turn = $state(null); // the latest chat job
+	let work = $state(null); // the latest run_ticket job
 	let draft = $state('');
 	let askAgent = $state('');
 	let sending = $state(false);
@@ -47,12 +48,14 @@
 	const theAgent = $derived(agentById(askAgent || issue.agentId || ''));
 
 	async function load() {
-		const [c, r, it, jobs] = await Promise.all([
+		const [c, r, it, jobs, wjobs] = await Promise.all([
 			api.comments(issue.id).catch(() => []),
 			api.issueRuns(issue.id).catch(() => []),
 			api.get(`/issues/${issue.key}/interactions`).catch(() => []),
-			api.jobs({ issue: issue.key, kind: 'chat', limit: 1 }).catch(() => [])
+			api.jobs({ issue: issue.key, kind: 'chat', limit: 1 }).catch(() => []),
+			api.jobs({ issue: issue.key, kind: 'run_ticket', limit: 1 }).catch(() => [])
 		]);
+		work = wjobs?.[0] || null;
 		comments = c || [];
 		runs = r || [];
 		interactions = it || [];
@@ -75,6 +78,7 @@
 				interactions = i >= 0 ? interactions.map((x) => (x.id === ev.interaction.id ? ev.interaction : x)) : [...interactions, ev.interaction];
 			}
 			if (ev.job && ev.job.kind === 'chat') turn = ev.job;
+			if (ev.job && ev.job.kind === 'run_ticket') work = ev.job;
 		})
 	);
 
@@ -86,7 +90,8 @@
 			...interactions.map((x) => ({ kind: 'interaction', at: x.createdAt, x })),
 			...interactions
 				.filter((x) => x.kind === 'questions' && x.status === 'answered')
-				.map((x) => ({ kind: 'answers', at: x.resolvedAt, x }))
+				.map((x) => ({ kind: 'answers', at: x.resolvedAt, x })),
+			...(workFailed ? [{ kind: 'startfail', at: work.finishedAt || work.createdAt, j: work }] : [])
 		].sort((a, b) => new Date(a.at) - new Date(b.at))
 	);
 	// The refused-commands card belongs to the newest work run only: once the
@@ -94,6 +99,15 @@
 	const lastWork = $derived(
 		runs.filter((r) => r.kind === 'work').sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0]
 	);
+	// A run job does its checks before its run exists — about the agent, the
+	// repo and whether the harness can answer at all. Until the run appears
+	// that time shows here, and a failure in it is said here, not only in a
+	// truncated line in the header.
+	const workRun = $derived(
+		work && runs.find((r) => r.kind === 'work' && new Date(r.startedAt) >= new Date(work.claimedAt || work.createdAt))
+	);
+	const workPending = $derived(work && !workRun && (work.status === 'queued' || work.status === 'claimed'));
+	const workFailed = $derived(work && !workRun && work.status === 'failed');
 	const thinking = $derived(turn && (turn.status === 'queued' || turn.status === 'claimed'));
 
 	async function comment() {
@@ -174,7 +188,7 @@
 		</div>
 	{/if}
 
-	{#each timeline as item (item.kind + (item.c?.id || item.r?.id || item.x?.id))}
+	{#each timeline as item (item.kind + (item.c?.id || item.r?.id || item.x?.id || item.j?.id))}
 		{#if item.kind === 'comment'}
 			{@const c = item.c}
 			{#if c.agentId || c.actor === 'ai'}
@@ -194,7 +208,7 @@
 			{/if}
 		{:else if item.kind === 'run'}
 			<div class="runline"><RunBlock run={item.r} /></div>
-			{#if item.r.id === lastWork?.id && item.r.status !== 'running' && item.r.deniedTools?.length}
+			{#if item.r.id === lastWork?.id && item.r.agentId === issue.agentId && item.r.status !== 'running' && item.r.deniedTools?.length}
 				<PermissionCard run={item.r} {issue} />
 			{/if}
 		{:else if item.kind === 'interaction'}
@@ -210,6 +224,12 @@
 				<ProposalCard interaction={x} agentName={agentById(x.agentId)?.name}
 					ondone={(res) => (interactions = interactions.map((y) => (y.id === res.id ? res : y)))} />
 			{/if}
+		{:else if item.kind === 'startfail'}
+			<div class="startfail">
+				<div class="sf-t"><CircleAlert size={14} strokeWidth={2} />{agentById(item.j.agentId)?.name || 'The agent'} could not start{item.j.host ? ` on ${item.j.host}` : ''}</div>
+				<div class="sf-e">{item.j.error}</div>
+				<span class="when">{rel(item.at)}</span>
+			</div>
 		{:else if item.kind === 'answers'}
 			<article class="msg me">
 				<div class="bubble">
@@ -225,6 +245,13 @@
 
 	</div>
 
+	{#if workPending}
+		<div class="thinking">
+			<LoaderCircle size={14} class="spin" />
+			{#if work.status === 'queued'}Waiting for a host to pick up the run…
+			{:else}{agentById(work.agentId)?.name || 'The agent'} is getting ready on {work.host} — checking it can run…{/if}
+		</div>
+	{/if}
 	{#if thinking}
 		<div class="thinking">
 			<LoaderCircle size={14} class="spin" />
@@ -387,6 +414,30 @@
 		color: var(--text-faint);
 	}
 	.thinking,
+	.startfail {
+		border: 1px solid color-mix(in srgb, #d03b3b 40%, var(--border));
+		border-radius: 10px;
+		padding: 10px 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-size: 13px;
+	}
+	.sf-t {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		color: #f87171;
+	}
+	.sf-e {
+		color: var(--text-dim);
+		font-size: 12.5px;
+		line-height: 1.45;
+		word-break: break-word;
+	}
+	.startfail .when {
+		align-self: flex-end;
+	}
 	.failed {
 		padding: 0 16px 8px;
 	}

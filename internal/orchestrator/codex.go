@@ -230,7 +230,7 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 		var ee *exec.ExitError
 		if errors.As(runErr, &ee) {
 			res.Exit = ee.ExitCode()
-			res.AgentError = fmt.Sprintf("codex exited %d: %s", ee.ExitCode(), codexTail(logPath))
+			res.AgentError = codexAuthHint(fmt.Sprintf("codex exited %d: %s", ee.ExitCode(), codexTail(logPath)))
 			return answerOut, res, nil
 		}
 		return answerOut, res, runErr
@@ -344,3 +344,14 @@ func codexTokens(logPath string) int {
 // codexMCPTokenEnv carries Raenil's token to a codex run's MCP server, so the
 // token is never on a command line where `ps` would show it.
 const codexMCPTokenEnv = "RAENIL_MCP_TOKEN"
+
+// codexAuthHint puts the fix in front of a refused sign-in. Codex keeps saying
+// "Logged in using ChatGPT" after its saved credential has gone stale, and the
+// 401 it then gets reads like a wrong API key — which sends people looking for
+// a key they never set.
+func codexAuthHint(msg string) string {
+	if !strings.Contains(msg, "401 Unauthorized") {
+		return msg
+	}
+	return "Codex's sign-in on this Mac was refused (401) — run `codex logout && codex login` there, then try again. " + msg
+}
