@@ -8,6 +8,7 @@
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import Markdown from './Markdown.svelte';
+	import PermissionCard from './PermissionCard.svelte';
 	import RunBlock from './RunBlock.svelte';
 	import QuestionCard from './QuestionCard.svelte';
 	import ProposalCard from './ProposalCard.svelte';
@@ -87,6 +88,11 @@
 				.filter((x) => x.kind === 'questions' && x.status === 'answered')
 				.map((x) => ({ kind: 'answers', at: x.resolvedAt, x }))
 		].sort((a, b) => new Date(a.at) - new Date(b.at))
+	);
+	// The refused-commands card belongs to the newest work run only: once the
+	// ticket runs again, the old refusals are history.
+	const lastWork = $derived(
+		runs.filter((r) => r.kind === 'work').sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0]
 	);
 	const thinking = $derived(turn && (turn.status === 'queued' || turn.status === 'claimed'));
 
@@ -188,6 +194,9 @@
 			{/if}
 		{:else if item.kind === 'run'}
 			<div class="runline"><RunBlock run={item.r} /></div>
+			{#if item.r.id === lastWork?.id && item.r.status !== 'running' && item.r.deniedTools?.length}
+				<PermissionCard run={item.r} {issue} />
+			{/if}
 		{:else if item.kind === 'interaction'}
 			{@const x = item.x}
 			{#if x.kind === 'questions'}
