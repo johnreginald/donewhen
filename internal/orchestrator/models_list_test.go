@@ -40,3 +40,29 @@ func TestOpenCodeProvidersOnlyConnected(t *testing.T) {
 		t.Errorf("models = %v, want %v — a provider without a key must not be offered", p.Models, want)
 	}
 }
+
+func TestClaudeModelsFromTheAPI(t *testing.T) {
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer tok" || r.Header.Get("anthropic-beta") == "" {
+			t.Errorf("headers: %v", r.Header)
+		}
+		w.WriteHeader(status)
+		w.Write([]byte(`{"data":[{"id":"claude-opus-5-5"},{"id":"claude-sonnet-5"}]}`))
+	}))
+	defer srv.Close()
+	defer func(u string) { anthropicModelsURL = u }(anthropicModelsURL)
+	anthropicModelsURL = srv.URL
+
+	want := []string{"default", "sonnet", "opus", "haiku", "claude-opus-5-5", "claude-sonnet-5"}
+	if got := ClaudeModels(context.Background(), "tok"); !slices.Equal(got, want) {
+		t.Errorf("models = %v, want %v", got, want)
+	}
+	if got := ClaudeModels(context.Background(), ""); !slices.Equal(got, claudeAliases) {
+		t.Errorf("without a token: %v", got)
+	}
+	status = http.StatusForbidden
+	if got := ClaudeModels(context.Background(), "tok"); !slices.Equal(got, claudeAliases) {
+		t.Errorf("refused: %v, want the aliases", got)
+	}
+}
