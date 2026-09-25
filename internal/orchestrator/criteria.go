@@ -20,6 +20,11 @@ type JudgeFunc func(ctx context.Context, c JudgmentCheck, d Diff, workDir string
 type Evaluator struct {
 	// WorkDir is the worktree deterministic checks run in.
 	WorkDir string
+	// RepoDir is the repository the worktree came from. Its .env is loaded over
+	// the inherited environment so a check sees the repository's own test
+	// database rather than whichever one the daemon happened to be started
+	// with. Empty leaves the environment untouched.
+	RepoDir string
 	// Dir is where evidence and logs are written.
 	Dir *RunDir
 	// Judge is optional. Without it, judgment criteria are recorded as unevaluated.
@@ -63,6 +68,12 @@ func (e *Evaluator) runCommand(ctx context.Context, c DeterministicCheck, logPat
 	sh := e.shell()
 	cmd := exec.CommandContext(ctx, sh[0], append(sh[1:], c.Cmd)...)
 	cmd.Dir = e.WorkDir
+	// Appended, so the repository's own values win over the daemon's. See
+	// repoEnv: one global TEST_DATABASE_URL across seven routed repositories
+	// is how a passing suite gets reported as a failure.
+	if extra := repoEnv(e.RepoDir); len(extra) > 0 {
+		cmd.Env = append(os.Environ(), extra...)
+	}
 	cmd.Stdout = f
 	cmd.Stderr = f
 	// A worker's shell must never inherit an open stdin: OpenCode hangs forever

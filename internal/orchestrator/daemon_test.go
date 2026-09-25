@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -238,4 +239,84 @@ func TestHasLabel(t *testing.T) {
 	if hasLabel(is, "needs-info") {
 		t.Error("unexpected match")
 	}
+}
+
+// blockingRunner holds the slot until released, so a second ticket is
+// certain to be waiting behind the concurrency limit.
+type blockingRunner struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+// Pointer receivers throughout: the struct holds a sync.Once, and a value
+// receiver copies it — `go vet` calls that out, and it would silently give
+// each call its own Once.
+func (*blockingRunner) Name() string                           { return "blocking" }
+func (*blockingRunner) Ready(context.Context, string) error    { return nil }
+func (*blockingRunner) Health(context.Context) (string, error) { return "ok", nil }
+
+func (r *blockingRunner) Run(ctx context.Context, _ RunRequest) (RunResult, error) {
+	r.once.Do(func() { close(r.started) })
+	select {
+	case <-r.release:
+	case <-ctx.Done():
+	}
+	return RunResult{}, nil
+}
+
+// The daemon never claims more tickets than it can run.
+//
+// It used to acquire the lease and THEN wait for a concurrency slot, so
+// --concurrency N claimed N+1 tickets: acquisition was never the thing being
+// limited. Observed live as three leases taken in the same microsecond under
+// --concurrency 2.
+//
+// The surplus lease is the damaging part, because KeepAlive only starts
+// inside the worker goroutine. A ticket queued behind a busy slot therefore
+// held a lease whose heartbeat stayed frozen at the moment it was taken:
+// `status` reports it as ever more stale, indistinguishable from a crashed
+// worker, and `stale()` judges ANOTHER host's lease on the heartbeat alone —
+// so past the TTL a second machine would reclaim a ticket this one is about
+// to work.
+//
+// Asserted as a count rather than as a heartbeat age on purpose: the beat
+// interval is 30s, so a lease that has only just been taken legitimately has
+// Heartbeat == Started, and a timing assertion here would be measuring the
+// clock rather than the invariant.
+func TestTheDaemonNeverClaimsMoreTicketsThanItCanRun(t *testing.T) {
+	r := &blockingRunner{started: make(chan struct{}), release: make(chan struct{})}
+	f := &fakeRaenil{criteria: passingCriteria(), queue: []models.Issue{
+		{ID: "iss-1", Key: "TST-1", Title: "first"},
+		{ID: "iss-2", Key: "TST-2", Title: "second"},
+		{ID: "iss-3", Key: "TST-3", Title: "third"},
+	}}
+	d := newDaemon(t, f, r)
+	d.Leases.TTL = time.Hour // nothing is reclaimed mid-test
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- d.Run(ctx) }()
+
+	<-r.started // one ticket is running and cannot finish
+
+	// Hold it there and watch: the surplus claim appeared immediately, so a
+	// short window is enough and a longer one only slows the suite.
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		held, err := d.Leases.Held()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(held) > d.Cfg.MaxConcurrent {
+			t.Fatalf("claimed %d tickets with MaxConcurrent=%d: %v",
+				len(held), d.Cfg.MaxConcurrent, held)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	close(r.release)
+	cancel()
+	<-done
 }

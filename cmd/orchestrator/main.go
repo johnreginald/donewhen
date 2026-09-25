@@ -788,8 +788,18 @@ func clientsOptional() (*orchestrator.RaenilClient, *orchestrator.OpenCodeRunner
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	runRoot := fs.String("run-root", ".orchestrator", "where run directories live")
+	repo := fs.String("repo", ".", "repository whose leases to read")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	// The default run root is RELATIVE, so `status` run from anywhere but the
+	// repo used to read an empty leases directory and report "no tickets
+	// held" while work was live. A status command that answers confidently
+	// and wrongly is worse than one that fails, because nobody re-checks it.
+	if !filepath.IsAbs(*runRoot) {
+		if abs, err := filepath.Abs(filepath.Join(*repo, *runRoot)); err == nil {
+			*runRoot = abs
+		}
 	}
 	stop := filepath.Join(*runRoot, "STOP")
 	if _, err := os.Stat(stop); err == nil {

@@ -424,3 +424,68 @@ func TestWorkAgainAfterHandoff(t *testing.T) {
 		t.Errorf("branches = %q, want attempt-1 and attempt-2", out)
 	}
 }
+
+// capturingRunner records the Cwd it was handed, and whether that directory
+// existed AT THE MOMENT IT RAN — which is the only moment that matters. The
+// run removes the worktree on its way out, so asking afterwards always says
+// no.
+type capturingRunner struct {
+	cwd    *string
+	usable *bool
+}
+
+func (capturingRunner) Name() string                           { return "capturing" }
+func (capturingRunner) Ready(context.Context, string) error    { return nil }
+func (capturingRunner) Health(context.Context) (string, error) { return "ok", nil }
+
+func (r capturingRunner) Run(_ context.Context, req RunRequest) (RunResult, error) {
+	*r.cwd = req.Cwd
+	st, err := os.Stat(req.Cwd)
+	*r.usable = err == nil && st.IsDir()
+	return RunResult{}, nil
+}
+
+// The worker's Cwd has to be an absolute path that exists, and until API-114
+// it was neither whenever RunRoot was left at its default.
+//
+// RunRoot defaults to the RELATIVE ".orchestrator", and every test above
+// passes t.TempDir(), which is absolute — so nothing here ever exercised the
+// shipped default. Git hid it too: `git -C <repo> worktree add` resolves a
+// relative path against the REPO, so the worktree really was created, in the
+// right place, every time.
+//
+// What broke was the same string being handed to the worker, which resolves
+// it against its own working directory. opencode does not refuse a directory
+// that does not exist: it creates the session, accepts the prompt with a 204,
+// records the user message, and returns an assistant message with zero parts,
+// zero tokens and no error. The run then polls until it times out, so a
+// silently dead worker is indistinguishable from a slow one.
+func TestTheWorkerIsGivenAnAbsoluteWorktreeThatExists(t *testing.T) {
+	// A relative RunRoot is the shipped default. Chdir so the run directory
+	// it creates lands somewhere disposable rather than in the package.
+	t.Chdir(t.TempDir())
+
+	var cwd string
+	var usable bool
+	f := &fakeRaenil{criteria: passingCriteria()}
+	o := &Orchestrator{
+		Raenil: f.server(t),
+		Runner: capturingRunner{cwd: &cwd, usable: &usable},
+		Cfg:    Config{RunRoot: ".orchestrator", Repo: newRepo(t), BaseRef: "HEAD"},
+	}
+
+	if _, err := o.RunTicket(context.Background(), "TST-1", 1); err != nil {
+		t.Fatalf("RunTicket: %v", err)
+	}
+
+	if cwd == "" {
+		t.Fatal("the runner was never given a working directory")
+	}
+	if !filepath.IsAbs(cwd) {
+		t.Fatalf("worker cwd %q is relative; the worker resolves it against its own "+
+			"directory, not the repo, and lands somewhere that does not exist", cwd)
+	}
+	if !usable {
+		t.Fatalf("worker cwd %q did not exist when the worker ran", cwd)
+	}
+}
