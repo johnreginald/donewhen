@@ -998,8 +998,8 @@ func cmdHost(ctx context.Context, args []string) error {
 	}
 
 	// Running a ticket from the dashboard is `orchestrator work KEY --handoff`
-	// with the agent's settings: attempts, retries, and a kept worktree for
-	// review. The agent's harness decides — a runner: label on the ticket does
+	// then, when every check passes, `orchestrator finish KEY`, with the
+	// agent's settings: attempts, retries, and a kept worktree for review. The agent's harness decides — a runner: label on the ticket does
 	// not override the agent that was asked. A worker on any harness can ask
 	// the user through Raenil; a question stops the attempts until answered.
 	runTicket := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (any, error) {
@@ -1008,9 +1008,23 @@ func cmdHost(ctx context.Context, args []string) error {
 			return nil, err
 		}
 		o.MCP = orchestrator.RaenilMCP(rc.BaseURL, c.Token, job.Agent.ID, c.Workspace, orchestrator.WorkMCPTools...)
-		return o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
+		v, err := o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
 			Triage: orchestrator.TriagePolicy{MaxAttempts: *maxAttempts, EscalateAfter: *maxAttempts},
 		})
+		if err != nil || v.Status != orchestrator.StatusPassed {
+			return v, err
+		}
+		// Every gating check passed, so the ticket goes to In Review on its
+		// own: Finish checks again, commits, links the commit, saves the
+		// record and moves it. No model decides this — the checks already
+		// did — and the person reviews the code in In Review, where it
+		// bounces back if it needs changes.
+		fv, ferr := o.Finish(ctx, job.IssueKey, 90)
+		if ferr != nil {
+			logf("%s passed but could not be finished: %v — it stays for review in In Progress", job.IssueKey, ferr)
+			return v, nil
+		}
+		return fv, nil
 	}
 
 	// Verify and Finish from the dashboard run what `orchestrator verify` and
