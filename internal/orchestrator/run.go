@@ -440,7 +440,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		// own transcript.
 		streamAs = "terminal"
 		req.Terminal, req.Title = true, issue.Key
-		req.Check = o.terminalCheck(wtPath, branch, runDir, criteria)
+		req.Check = o.terminalCheck(issue.ID, wtPath, branch, runDir, criteria)
 		req.OnQuestion = func(msg string) {
 			notifyUser(issue.Key+" is waiting for you", firstLine(msg))
 			_ = o.Raenil.Comment(context.WithoutCancel(ctx), issue.ID, "The agent is waiting for you in the terminal "+
@@ -471,6 +471,14 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		o.logf("worker asked %d question(s) — escalating", len(res.Questions))
 		_ = o.Raenil.Comment(ctx, issue.ID, "The worker asked a question it could not proceed without:\n\n> "+
 			strings.Join(res.Questions, "\n> ")+"\n\nAttempt "+fmt.Sprint(attempt)+" stopped here.")
+	}
+
+	// A checklist edited on the ticket while the agent worked is the one
+	// that decides.
+	if s2, err := o.Raenil.Criteria(ctx, issue.ID); err == nil {
+		if c2, err := ParseCriteria(s2); err == nil {
+			stored, criteria = s2, c2
+		}
 	}
 
 	// The agent may use git checkout; it must hand the worktree back on the
@@ -841,15 +849,18 @@ func onTicketBranch(ctx context.Context, dir, branch string) error {
 // worktree between turns of a terminal run, and words what failed for the
 // agent. Model-judged checks wait for the full evaluation after the session:
 // they are slow, cost money, and never gate.
-func (o *Orchestrator) terminalCheck(wtPath, branch string, runDir *RunDir, criteria []ParsedCriterion) TerminalCheck {
-	var gating []ParsedCriterion
-	for _, c := range criteria {
-		if c.Gating() && (c.Kind == models.CriterionDeterministic || c.Kind == models.CriterionPolicy) {
-			gating = append(gating, c)
-		}
-	}
+func (o *Orchestrator) terminalCheck(issueID, wtPath, branch string, runDir *RunDir, criteria []ParsedCriterion) TerminalCheck {
 	cfg := o.Cfg.withDefaults()
 	return func(ctx context.Context) CheckResult {
+		// Read the checklist fresh every round: a check fixed on the ticket
+		// while the session runs counts from the next turn.
+		criteria := o.freshCriteria(ctx, issueID, criteria)
+		var gating []ParsedCriterion
+		for _, c := range criteria {
+			if c.Gating() && (c.Kind == models.CriterionDeterministic || c.Kind == models.CriterionPolicy) {
+				gating = append(gating, c)
+			}
+		}
 		fail := func(msg string) CheckResult { return CheckResult{Feedback: msg, State: msg} }
 		if err := onTicketBranch(ctx, wtPath, branch); err != nil {
 			return fail("Raenil could not run the checks: " + err.Error() + "\nSwitch the worktree back to " + branch + ".")
@@ -916,4 +927,18 @@ func outputTail(path string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// freshCriteria is the ticket's checklist as it is now, or fallback when it
+// cannot be read or parsed.
+func (o *Orchestrator) freshCriteria(ctx context.Context, issueID string, fallback []ParsedCriterion) []ParsedCriterion {
+	stored, err := o.Raenil.Criteria(ctx, issueID)
+	if err != nil {
+		return fallback
+	}
+	c, err := ParseCriteria(stored)
+	if err != nil {
+		return fallback
+	}
+	return c
 }

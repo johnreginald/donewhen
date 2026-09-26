@@ -77,10 +77,15 @@ const protectedPrompt = "\n\n## Where you may look\n\nWork only inside this work
 // rules win. Measured (opencode 1.18.32): a session created with these reads
 // the repository with no permission prompt and refuses the rest, cat
 // included.
-func openCodePermissions(repo string) []map[string]string {
+func openCodePermissions(repo, worktree string) []map[string]string {
 	var rules []map[string]string
 	if repo != "" {
 		rules = append(rules, map[string]string{"permission": "external_directory", "pattern": filepath.Clean(repo) + "*", "action": "allow"})
+	}
+	// A command run from the worktree's full path is asked about as the
+	// folder the worktrees live in.
+	if worktree != "" {
+		rules = append(rules, map[string]string{"permission": "external_directory", "pattern": filepath.Dir(filepath.Clean(worktree)) + "*", "action": "allow"})
 	}
 	for _, p := range protectedPaths() {
 		for _, perm := range []string{"external_directory", "read", "edit", "list", "glob", "grep"} {

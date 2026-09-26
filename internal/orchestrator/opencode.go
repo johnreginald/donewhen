@@ -274,7 +274,7 @@ func (r *OpenCodeRunner) Run(ctx context.Context, req RunRequest) (RunResult, er
 		var s ocSession
 		body := map[string]any{"title": "orchestrator attempt"}
 		if !req.DisableTools && !req.ReadOnlyTools {
-			body["permission"] = openCodePermissions(req.Repo)
+			body["permission"] = openCodePermissions(req.Repo, req.Cwd)
 		}
 		if err := r.do(ctx, r.client(), http.MethodPost, "/session", dirQ, body, &s); err != nil {
 			return res, fmt.Errorf("create session: %w", err)
@@ -349,7 +349,7 @@ loop:
 			abortCancel()
 			break loop
 		case <-ticker.C:
-			r.servicePending(ctx, sessionID, &res)
+			r.servicePending(ctx, sessionID, dirQ, &res)
 			done, cost, tokens, aerr, err := r.pollCompletion(ctx, sessionID, req.Cwd)
 			if err != nil {
 				continue // a transient read is not a failed attempt
@@ -357,7 +357,7 @@ loop:
 			if done {
 				// Drain once more: a permission can land in the same instant the
 				// attempt finishes.
-				r.servicePending(ctx, sessionID, &res)
+				r.servicePending(ctx, sessionID, dirQ, &res)
 				res.CostUSD, res.Tokens, agentErr = cost, tokens, aerr
 				break loop
 			}
@@ -456,14 +456,18 @@ func (r *OpenCodeRunner) pollCompletion(ctx context.Context, sessionID, cwd stri
 // servicePending answers whatever the agent is blocked on. Questions are always
 // rejected: a daemon cannot answer one, and a rejected question captured here
 // becomes the escalation payload instead of a silent stall.
-func (r *OpenCodeRunner) servicePending(ctx context.Context, sessionID string, res *RunResult) {
+// Pending permissions and questions belong to the session's directory: the
+// server lists and answers them only when asked with it (measured, opencode
+// 1.18.32 — without it the list is always empty and every request waits for
+// a person).
+func (r *OpenCodeRunner) servicePending(ctx context.Context, sessionID string, dirQ url.Values, res *RunResult) {
 	policy := r.Permission
 	if policy == nil {
 		policy = ApproveOncePolicy
 	}
 
 	var perms []PermissionRequest
-	if err := r.do(ctx, r.client(), http.MethodGet, "/permission", nil, nil, &perms); err == nil {
+	if err := r.do(ctx, r.client(), http.MethodGet, "/permission", dirQ, nil, &perms); err == nil {
 		for _, p := range perms {
 			if p.SessionID != "" && p.SessionID != sessionID {
 				continue
@@ -474,7 +478,7 @@ func (r *OpenCodeRunner) servicePending(ctx context.Context, sessionID string, r
 				body["message"] = reason
 			}
 			if err := r.do(ctx, r.client(), http.MethodPost,
-				"/permission/"+p.ID+"/reply", nil, body, nil); err != nil {
+				"/permission/"+p.ID+"/reply", dirQ, body, nil); err != nil {
 				continue
 			}
 			if decision == PermissionReject {
@@ -484,7 +488,7 @@ func (r *OpenCodeRunner) servicePending(ctx context.Context, sessionID string, r
 	}
 
 	var questions []QuestionRequest
-	if err := r.do(ctx, r.client(), http.MethodGet, "/question", nil, nil, &questions); err == nil {
+	if err := r.do(ctx, r.client(), http.MethodGet, "/question", dirQ, nil, &questions); err == nil {
 		for _, q := range questions {
 			if q.SessionID != "" && q.SessionID != sessionID {
 				continue
@@ -492,7 +496,7 @@ func (r *OpenCodeRunner) servicePending(ctx context.Context, sessionID string, r
 			if q.Text != "" {
 				res.Questions = append(res.Questions, q.Text)
 			}
-			_ = r.do(ctx, r.client(), http.MethodPost, "/question/"+q.ID+"/reject", nil, nil, nil)
+			_ = r.do(ctx, r.client(), http.MethodPost, "/question/"+q.ID+"/reject", dirQ, nil, nil)
 		}
 	}
 }

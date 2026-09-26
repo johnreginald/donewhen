@@ -26,7 +26,7 @@ func (r *OpenCodeRunner) runTerminal(ctx context.Context, req RunRequest) (RunRe
 		if sessionID == "" {
 			var s ocSession
 			if err := r.do(ctx, r.client(), http.MethodPost, "/session", dirQ,
-				map[string]any{"title": req.Title, "permission": openCodePermissions(req.Repo)}, &s); err != nil {
+				map[string]any{"title": req.Title, "permission": openCodePermissions(req.Repo, req.Cwd)}, &s); err != nil {
 				return "", nil, fmt.Errorf("create session: %w", err)
 			}
 			sessionID = s.ID
@@ -116,9 +116,9 @@ func (r *OpenCodeRunner) terminalWait(sessionID string, req RunRequest) func(con
 			case <-tick.C:
 			}
 			var perms []PermissionRequest
-			if err := r.do(ctx, r.client(), http.MethodGet, "/permission", nil, nil, &perms); err == nil {
+			if err := r.do(ctx, r.client(), http.MethodGet, "/permission", q, nil, &perms); err == nil {
 				for _, p := range perms {
-					if p.SessionID != sessionID {
+					if p.SessionID != "" && p.SessionID != sessionID {
 						continue
 					}
 					decision, reason := policy(p)
@@ -126,11 +126,11 @@ func (r *OpenCodeRunner) terminalWait(sessionID string, req RunRequest) func(con
 					if reason != "" {
 						body["message"] = reason
 					}
-					_ = r.do(ctx, r.client(), http.MethodPost, "/permission/"+p.ID+"/reply", nil, body, nil)
+					_ = r.do(ctx, r.client(), http.MethodPost, "/permission/"+p.ID+"/reply", q, body, nil)
 				}
 			}
 			var questions []QuestionRequest
-			if err := r.do(ctx, r.client(), http.MethodGet, "/question", nil, nil, &questions); err == nil {
+			if err := r.do(ctx, r.client(), http.MethodGet, "/question", q, nil, &questions); err == nil {
 				for _, qu := range questions {
 					if qu.SessionID == sessionID && !asked[qu.ID] {
 						asked[qu.ID] = true
