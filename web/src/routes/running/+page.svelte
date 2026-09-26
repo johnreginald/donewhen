@@ -1,50 +1,72 @@
 <script>
-	// Running: every ticket an agent is working on or waiting to, what it is
-	// doing right now, and what finished lately. Kept live from job and run
-	// events; nothing here starts work.
+	// Running: what the agents are doing right now, what is waiting, and what
+	// they finished — the page to leave open while work happens. Everything is
+	// kept live from job, run and criterion events; nothing here starts work.
 	import { onMount } from 'svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { api } from '$lib/api.js';
 	import { activeJobs, agents, issues } from '$lib/store.js';
 	import { onLive } from '$lib/ui.js';
-	import { rel, duration } from '$lib/format.js';
-	import { Activity, LoaderCircle, Check, X, Bot } from '@lucide/svelte';
+	import { rel, duration, tokens } from '$lib/format.js';
+	import { hostOnline, harnessName } from '$lib/harness.js';
+	import { Bot, Check, X, LoaderCircle, Clock, Terminal, MessageSquare, ShieldCheck, Flag, ArrowRight, Server, Wrench } from '@lucide/svelte';
 
-	const KIND = { run_ticket: 'Run', chat: 'Conversation', verify: 'Verify', finish: 'Finish' };
-	const DOING = { run_ticket: 'Working', chat: 'Thinking', verify: 'Verifying', finish: 'Finishing' };
+	const KIND = {
+		run_ticket: { label: 'Run', doing: 'Working', icon: Terminal },
+		chat: { label: 'Conversation', doing: 'Thinking', icon: MessageSquare },
+		verify: { label: 'Verify', doing: 'Verifying', icon: ShieldCheck },
+		finish: { label: 'Finish', doing: 'Finishing', icon: Flag }
+	};
 
-	let finished = $state([]);
-	let now = $state(Date.now()); // ticks so "working for" keeps counting
-	onMount(() => {
-		const t = setInterval(() => (now = Date.now()), 1000);
-		return () => clearInterval(t);
-	});
-	let lastLine = $state({}); // issue id -> latest transcript line of its running run
-	let runIssue = {}; // run id -> issue id, for live lines
+	let hosts = $state([]);
+	let runs = $state([]); // recent finished runs, newest first
+	let failedStarts = $state([]); // jobs that failed before a run existed
+	let criteria = $state({}); // issue id -> criteria
+	let feed = $state({}); // issue id -> the running run's last few readable lines
+	let runIssue = {}; // run id -> issue id
+	let filter = $state('all');
+	let now = $state(Date.now());
 
-	const agentName = (id) => $agents.find((a) => a.id === id)?.name || 'Agent';
-	const titleOf = (j) => $issues.find((i) => i.id === j.issueId)?.title || '';
+	const agentOf = (id) => $agents.find((a) => a.id === id);
+	const issueOf = (id) => $issues.find((i) => i.id === id);
+	const since = (iso) => duration(iso, new Date(now).toISOString());
 
 	const working = $derived($activeJobs.filter((j) => j.status === 'claimed'));
-	const queued = $derived($activeJobs.filter((j) => j.status === 'queued'));
+	// Oldest first: the order a host will take them in.
+	const queued = $derived([...$activeJobs.filter((j) => j.status === 'queued')].reverse());
 
-	// What a working run last said or did, one line.
-	const readable = (l) => (l.startsWith('→ ') ? l.slice(2) : l.startsWith('· ') || l.startsWith('← ') ? '' : l);
+	// ── live transcript preview ──────────────────────────────────────────
+	// "→ tool input" is a tool line, plain text is the agent speaking;
+	// results and meta lines stay out of the preview.
+	function item(l) {
+		if (l.startsWith('→ ')) {
+			const b = l.slice(2);
+			const sp = b.indexOf(' ');
+			return { tool: sp > 0 ? b.slice(0, sp) : b, text: sp > 0 ? b.slice(sp + 1) : '' };
+		}
+		if (l.startsWith('· ') || l.startsWith('← ') || l.startsWith('✗ ') || !l.trim()) return null;
+		return { text: l.replace(/\s+/g, ' ') };
+	}
+	function push(issueId, lines) {
+		const items = lines.map(item).filter(Boolean);
+		if (!items.length) return;
+		feed = { ...feed, [issueId]: [...(feed[issueId] || []), ...items].slice(-4) };
+	}
+	async function loadCriteria(issueId, key) {
+		const c = await api.criteria(key || issueId).catch(() => null);
+		if (c) criteria = { ...criteria, [issueId]: c };
+	}
 	async function watch(j) {
-		const runs = (await api.issueRuns(j.issueId).catch(() => [])) || [];
-		const r = runs.find((x) => x.status === 'running');
-		if (!r) return;
+		if (j.kind !== 'chat') loadCriteria(j.issueId, j.issueKey);
+		const rs = (await api.issueRuns(j.issueId).catch(() => [])) || [];
+		const r = rs.find((x) => x.status === 'running');
+		if (!r || runIssue[r.id]) return;
 		runIssue[r.id] = j.issueId;
 		const evs = (await api.get(`/runs/${r.id}/events`).catch(() => [])) || [];
-		for (let i = evs.length - 1; i >= 0; i--) {
-			const t = readable(evs[i].text);
-			if (t) {
-				lastLine = { ...lastLine, [j.issueId]: t };
-				break;
-			}
-		}
+		feed = { ...feed, [j.issueId]: [] };
+		push(j.issueId, evs.map((e) => e.text));
 	}
-	let watched = new Set();
+	const watched = new Set();
 	$effect(() => {
 		for (const j of working) {
 			if (watched.has(j.id)) continue;
@@ -53,84 +75,219 @@
 		}
 	});
 
-	async function loadFinished() {
-		const all = (await api.jobs({ limit: 60 }).catch(() => [])) || [];
-		finished = all
-			.filter((j) => j.issueId && j.kind !== 'test_env' && (j.status === 'succeeded' || j.status === 'failed'))
-			.slice(0, 15);
+	// ── history ──────────────────────────────────────────────────────────
+	async function loadHistory() {
+		const [rs, js, hs] = await Promise.all([
+			api.runs({ limit: 80 }).catch(() => []),
+			api.jobs({ limit: 80 }).catch(() => []),
+			api.hosts().catch(() => [])
+		]);
+		runs = (rs || []).filter((r) => r.status !== 'running' && r.status !== 'queued');
+		// A job that failed before any run of its ticket began: no run
+		// record says why, so the job does.
+		const runsList = rs || [];
+		failedStarts = (js || []).filter(
+			(j) =>
+				j.status === 'failed' && j.issueId && j.kind !== 'test_env' &&
+				!runsList.some((r) => r.issueId === j.issueId && new Date(r.startedAt) >= new Date(j.claimedAt || j.createdAt) &&
+					new Date(r.startedAt) <= new Date(j.finishedAt || Date.now()))
+		);
+		hosts = hs || [];
 	}
-	onMount(loadFinished);
+	onMount(loadHistory);
+	onMount(() => {
+		const t = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(t);
+	});
 	onMount(() =>
 		onLive((ev) => {
-			if (ev?.job && ev.job.issueId && (ev.job.status === 'succeeded' || ev.job.status === 'failed')) loadFinished();
-			if (ev?.type === 'run.started' || ev?.run) {
-				const j = $activeJobs.find((x) => x.issueId === ev.run?.issueId);
-				if (j) watch(j);
+			if (!ev) return;
+			if (ev.type === 'run.events' && runIssue[ev.runId]) push(runIssue[ev.runId], ev.lines || []);
+			if (ev.run) {
+				if (ev.run.status === 'running') {
+					const j = $activeJobs.find((x) => x.issueId === ev.run.issueId);
+					if (j) watch(j);
+				} else loadHistory();
 			}
-			if (ev?.type === 'run.events' && runIssue[ev.runId]) {
-				const lines = (ev.lines || []).map(readable).filter(Boolean);
-				if (lines.length) lastLine = { ...lastLine, [runIssue[ev.runId]]: lines[lines.length - 1] };
-			}
+			if (ev.job && (ev.job.status === 'succeeded' || ev.job.status === 'failed')) loadHistory();
+			if (ev.type === 'host.updated') api.hosts().then((h) => (hosts = h || [])).catch(() => {});
+			if (ev.type?.startsWith('criteri') && ev.issueId && criteria[ev.issueId]) loadCriteria(ev.issueId, issueOf(ev.issueId)?.key);
 		})
 	);
+
+	// A run's outcome, as the person reading the list cares about it.
+	function outcome(r) {
+		if (r.kind === 'chat') return r.status === 'succeeded' ? { label: 'Replied', tone: 'ok' } : { label: 'No reply', tone: 'bad' };
+		if (r.status === 'aborted') return { label: 'Stopped', tone: 'mute' };
+		if (r.verdict === 'passed') return { label: 'Passed', tone: 'ok' };
+		if (r.verdict === 'failed') return { label: 'Checks failed', tone: 'bad' };
+		if (r.verdict === 'blocked') return { label: 'Blocked', tone: 'warn' };
+		return r.status === 'succeeded' ? { label: 'Done', tone: 'ok' } : { label: 'Failed', tone: 'bad' };
+	}
+
+	const finished = $derived.by(() => {
+		const rows = [
+			...runs.map((r) => ({ id: r.id, at: r.finishedAt || r.startedAt, run: r, o: outcome(r) })),
+			...failedStarts.map((j) => ({ id: j.id, at: j.finishedAt || j.createdAt, job: j, o: { label: "Couldn't start", tone: 'bad' } }))
+		].sort((a, b) => new Date(b.at) - new Date(a.at));
+		return rows.filter((x) =>
+			filter === 'failed' ? x.o.tone === 'bad' || x.o.tone === 'warn'
+			: filter === 'passed' ? x.o.label === 'Passed'
+			: filter === 'chat' ? x.run?.kind === 'chat'
+			: true
+		);
+	});
+	// Grouped by day: Today, Yesterday, then the date.
+	const groups = $derived.by(() => {
+		const out = [];
+		const today = new Date(now).toDateString();
+		const yest = new Date(now - 86400000).toDateString();
+		for (const x of finished.slice(0, 60)) {
+			const d = new Date(x.at).toDateString();
+			const label = d === today ? 'Today' : d === yest ? 'Yesterday'
+				: new Date(x.at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+			if (!out.length || out[out.length - 1].label !== label) out.push({ label, rows: [] });
+			out[out.length - 1].rows.push(x);
+		}
+		return out;
+	});
+
+	const isToday = (iso) => iso && new Date(iso).toDateString() === new Date(now).toDateString();
+	const passedToday = $derived(runs.filter((r) => r.kind === 'work' && r.verdict === 'passed' && isToday(r.finishedAt)).length);
+	const failedToday = $derived(
+		runs.filter((r) => outcome(r).tone === 'bad' && isToday(r.finishedAt || r.startedAt)).length +
+			failedStarts.filter((j) => isToday(j.finishedAt || j.createdAt)).length
+	);
+	const onlineHosts = $derived(hosts.filter(hostOnline));
 </script>
 
 <div class="pg">
-	<PageHeader crumbs={[{ label: 'Running' }]} />
+	<PageHeader crumbs={[{ label: 'Running' }]}>
+		<span class="hosts">
+			{#each hosts as h (h.id)}
+				<span class="host" class:on={hostOnline(h)} title={hostOnline(h) ? `${h.name} is online` : `${h.name} last seen ${rel(h.lastSeenAt)}`}>
+					<Server size={13} strokeWidth={2} /><span class="hd"></span>{h.name}
+				</span>
+			{:else}
+				<span class="host">No runner host has reported</span>
+			{/each}
+		</span>
+	</PageHeader>
+
 	<div class="body">
-		<section>
-			<h2><span class="dot live"></span>Working <span class="n">{working.length}</span></h2>
-			{#each working as j (j.id)}
-				<a class="row" href="/issue/{j.issueKey}">
-					<span class="ic spin"><LoaderCircle size={15} strokeWidth={2.2} /></span>
-					<span class="main">
-						<span class="t"><span class="key">{j.issueKey}</span>{titleOf(j)}</span>
-						<span class="line">{lastLine[j.issueId] || `${DOING[j.kind] || 'Working'}…`}</span>
-					</span>
-					<span class="who"><Bot size={13} strokeWidth={2} />{agentName(j.agentId)}</span>
-					<span class="kind">{KIND[j.kind] || j.kind}</span>
-					<span class="when" title={j.host ? `On ${j.host}` : ''}>{duration(j.claimedAt || j.createdAt, new Date(now).toISOString())}</span>
-				</a>
-			{:else}
-				<div class="empty">No agent is working right now.</div>
-			{/each}
-		</section>
+		<div class="stats">
+			<div class="stat live" class:zero={!working.length}><span class="v">{working.length}</span><span class="l">Working</span></div>
+			<div class="stat" class:zero={!queued.length}><span class="v">{queued.length}</span><span class="l">Up next</span></div>
+			<div class="stat ok" class:zero={!passedToday}><span class="v">{passedToday}</span><span class="l">Passed today</span></div>
+			<div class="stat bad" class:zero={!failedToday}><span class="v">{failedToday}</span><span class="l">Failed today</span></div>
+		</div>
 
 		<section>
-			<h2><span class="dot"></span>Queued <span class="n">{queued.length}</span></h2>
-			{#each queued as j (j.id)}
-				<a class="row" href="/issue/{j.issueKey}">
-					<span class="ic"><LoaderCircle size={15} strokeWidth={2.2} /></span>
-					<span class="main">
-						<span class="t"><span class="key">{j.issueKey}</span>{titleOf(j)}</span>
-						<span class="line">Waiting for a host to pick it up</span>
-					</span>
-					<span class="who"><Bot size={13} strokeWidth={2} />{agentName(j.agentId)}</span>
-					<span class="kind">{KIND[j.kind] || j.kind}</span>
-					<span class="when">{rel(j.createdAt)}</span>
-				</a>
+			<h2>Working now</h2>
+			{#if working.length}
+				<div class="cards">
+					{#each working as j (j.id)}
+						{@const a = agentOf(j.agentId)}
+						{@const k = KIND[j.kind] || KIND.run_ticket}
+						{@const crit = criteria[j.issueId] || []}
+						{@const done = crit.filter((c) => c.done).length}
+						<a class="card" href="/issue/{j.issueKey}">
+							<div class="ch">
+								<span class="av"><Bot size={15} strokeWidth={2} /></span>
+								<span class="who">
+									<span class="an">{a?.name || 'Agent'}</span>
+									<span class="am">{harnessName(a?.harness || '')}{a?.model ? ` · ${a.model}` : ''}</span>
+								</span>
+								<span class="kind"><k.icon size={12} strokeWidth={2.2} />{k.label}</span>
+								<span class="timer" title={j.host ? `On ${j.host}` : ''}><Clock size={12} strokeWidth={2.2} />{since(j.claimedAt || j.createdAt)}</span>
+							</div>
+							<div class="tt"><span class="key">{j.issueKey}</span>{issueOf(j.issueId)?.title || ''}</div>
+							{#if crit.length}
+								<div class="prog" title="{done} of {crit.length} done-when items met">
+									<div class="bar"><span style:width="{(done / crit.length) * 100}%"></span></div>
+									<span class="pn">{done}/{crit.length} done-when</span>
+								</div>
+							{/if}
+							<div class="feed">
+								{#each feed[j.issueId] || [] as f, i (i)}
+									{#if f.tool}
+										<div class="fl tool"><Wrench size={11} strokeWidth={2.2} /><span class="fn">{f.tool}</span><span class="fx">{f.text}</span></div>
+									{:else}
+										<div class="fl say">{f.text}</div>
+									{/if}
+								{:else}
+									<div class="fl wait"><LoaderCircle size={12} strokeWidth={2.2} class="spin" />{j.kind === 'run_ticket' ? 'Setting up the worktree and checking the harness…' : `${k.doing}…`}</div>
+								{/each}
+							</div>
+							<div class="cf"><span class="doing"><span class="pulse"></span>{k.doing}</span><span class="open">Open task <ArrowRight size={12} strokeWidth={2.2} /></span></div>
+						</a>
+					{/each}
+				</div>
 			{:else}
-				<div class="empty">Nothing waiting.</div>
-			{/each}
+				<div class="idle">
+					<span class="idle-ic"><Bot size={20} strokeWidth={1.8} /></span>
+					<div>
+						<div class="it">No agent is working right now</div>
+						<div class="is">
+							{#if !onlineHosts.length}No runner host is online — start it on your Mac: <code>orchestrator service restart</code>
+							{:else}Run a task, or press Start task on one, and it shows up here as it works.{/if}
+						</div>
+					</div>
+				</div>
+			{/if}
 		</section>
 
+		{#if queued.length}
+			<section>
+				<h2>Up next</h2>
+				<div class="list">
+					{#each queued as j, i (j.id)}
+						{@const k = KIND[j.kind] || KIND.run_ticket}
+						<a class="qrow" href="/issue/{j.issueKey}">
+							<span class="pos">{i + 1}</span>
+							<span class="qt"><span class="key">{j.issueKey}</span>{issueOf(j.issueId)?.title || ''}</span>
+							<span class="kind"><k.icon size={12} strokeWidth={2.2} />{k.label}</span>
+							<span class="qa"><Bot size={12} strokeWidth={2} />{agentOf(j.agentId)?.name || 'Agent'}</span>
+							<span class="qw">waiting {since(j.createdAt)}</span>
+						</a>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
 		<section>
-			<h2>Finished lately</h2>
-			{#each finished as j (j.id)}
-				<a class="row" href="/issue/{j.issueKey}">
-					<span class="ic {j.status}">
-						{#if j.status === 'succeeded'}<Check size={15} strokeWidth={2.4} />{:else}<X size={15} strokeWidth={2.4} />{/if}
-					</span>
-					<span class="main">
-						<span class="t"><span class="key">{j.issueKey}</span>{titleOf(j)}</span>
-						{#if j.status === 'failed' && j.error}<span class="line err">{j.error}</span>{/if}
-					</span>
-					<span class="who"><Bot size={13} strokeWidth={2} />{agentName(j.agentId)}</span>
-					<span class="kind">{KIND[j.kind] || j.kind}</span>
-					<span class="when">{rel(j.finishedAt || j.createdAt)}</span>
-				</a>
+			<div class="fh">
+				<h2>Finished</h2>
+				<div class="seg" role="tablist">
+					{#each [['all', 'All'], ['passed', 'Passed'], ['failed', 'Failed'], ['chat', 'Conversations']] as [key, label]}
+						<button role="tab" aria-selected={filter === key} class:on={filter === key} onclick={() => (filter = key)}>{label}</button>
+					{/each}
+				</div>
+			</div>
+			{#each groups as g (g.label)}
+				<div class="day">{g.label}</div>
+				<div class="list">
+					{#each g.rows as x (x.id)}
+						{@const src = x.run || x.job}
+						<a class="frow" href="/issue/{src.issueKey}">
+							<span class="oc {x.o.tone}">
+								{#if x.o.tone === 'ok'}<Check size={13} strokeWidth={2.6} />{:else}<X size={13} strokeWidth={2.6} />{/if}
+							</span>
+							<span class="ft">
+								<span class="ftt"><span class="key">{src.issueKey}</span>{x.run?.issueTitle || issueOf(src.issueId)?.title || ''}</span>
+								{#if x.job?.error}<span class="fe">{x.job.error.replace(/^not starting [A-Z0-9]+-\d+: /, '')}</span>{/if}
+							</span>
+							<span class="chip {x.o.tone}">{x.o.label}</span>
+							<span class="fa"><Bot size={12} strokeWidth={2} />{agentOf(src.agentId)?.name || 'Agent'}</span>
+							<span class="fm">
+								{#if x.run}{duration(x.run.startedAt, x.run.finishedAt)}{#if x.run.tokens?.total} · {tokens(x.run.tokens.total)} tok{/if}{/if}
+							</span>
+							<span class="fw">{new Date(x.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+						</a>
+					{/each}
+				</div>
 			{:else}
-				<div class="empty"><Activity size={14} strokeWidth={2} /> Nothing yet.</div>
+				<div class="none">Nothing {filter === 'all' ? '' : 'like that '}yet.</div>
 			{/each}
 		</section>
 	</div>
@@ -146,103 +303,370 @@
 	.body {
 		flex: 1;
 		overflow-y: auto;
-		padding: 16px clamp(16px, 4vw, 40px) 48px;
+		padding: 18px clamp(16px, 3vw, 32px) 56px;
 		display: flex;
 		flex-direction: column;
-		gap: 22px;
-		max-width: 1000px;
+		gap: 26px;
 	}
 	h2 {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin: 0 0 6px;
-		font-size: 12px;
+		margin: 0 0 10px;
+		font-size: 13px;
 		font-weight: 600;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+		color: var(--text);
+	}
+	.hosts {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.host {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: var(--text-faint);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 3px 10px;
+	}
+	.host.on {
 		color: var(--text-dim);
 	}
-	.n {
-		color: var(--text-faint);
-		font-weight: 500;
-	}
-	.dot {
-		width: 7px;
-		height: 7px;
+	.hd {
+		width: 6px;
+		height: 6px;
 		border-radius: 50%;
 		background: var(--text-faint);
 	}
-	.dot.live {
-		background: var(--st-progress);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-progress) 25%, transparent);
+	.host.on .hd {
+		background: #4ade80;
 	}
-	.row {
+	.stats {
 		display: grid;
-		grid-template-columns: 22px minmax(0, 1fr) minmax(0, 160px) 96px 120px;
-		align-items: center;
-		gap: 12px;
-		padding: 9px 10px;
-		border-radius: 8px;
-		color: var(--text);
-		text-decoration: none;
-		border-bottom: 1px solid var(--border);
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 10px;
 	}
-	.row:hover {
-		background: var(--bg-hover);
+	.stat {
+		background: var(--bg-elev);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		padding: 12px 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
 	}
-	.ic {
-		display: inline-flex;
+	.stat .v {
+		font-size: 24px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
+	}
+	.stat .l {
+		font-size: 12px;
 		color: var(--text-faint);
 	}
-	.ic.spin {
+	.stat.live .v {
 		color: var(--st-progress);
 	}
-	.ic.spin :global(svg) {
-		animation: rp-spin 1.2s linear infinite;
-	}
-	.ic.succeeded {
+	.stat.ok .v {
 		color: #4ade80;
 	}
-	.ic.failed {
+	.stat.bad .v {
 		color: #f87171;
+	}
+	.stat.zero .v {
+		color: var(--text-faint);
+	}
+	.cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+		gap: 12px;
+	}
+	.card {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		background: var(--bg-elev);
+		border: 1px solid color-mix(in srgb, var(--st-progress) 40%, var(--border));
+		border-radius: 12px;
+		padding: 14px;
+		color: var(--text);
+		text-decoration: none;
+		transition: border-color 0.15s;
+	}
+	.card:hover {
+		border-color: var(--st-progress);
+	}
+	.ch {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+	}
+	.av {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--st-progress) 18%, var(--bg-elev2));
+		color: var(--st-progress);
+		flex: none;
+	}
+	.who {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		flex: 1;
+		line-height: 1.25;
+	}
+	.an {
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.am {
+		font-size: 11.5px;
+		color: var(--text-faint);
+		font-family: var(--mono);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.kind {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 11.5px;
+		color: var(--text-dim);
+		background: var(--bg-elev2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 1px 7px;
+		white-space: nowrap;
+		justify-self: start;
+	}
+	.timer {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 12px;
+		font-variant-numeric: tabular-nums;
+		color: var(--text-dim);
+		white-space: nowrap;
+	}
+	.tt {
+		font-size: 14px;
+		line-height: 1.4;
+		font-weight: 500;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.key {
+		font-family: var(--mono);
+		font-size: 11.5px;
+		font-weight: 400;
+		color: var(--text-faint);
+		margin-right: 7px;
+	}
+	.prog {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.bar {
+		flex: 1;
+		height: 4px;
+		border-radius: 2px;
+		background: var(--bg-elev2);
+		overflow: hidden;
+	}
+	.bar span {
+		display: block;
+		height: 100%;
+		background: #4ade80;
+		border-radius: 2px;
+		transition: width 0.3s;
+	}
+	.pn {
+		font-size: 11.5px;
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.feed {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 8px 10px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-height: 88px;
+	}
+	.fl {
+		font-size: 12px;
+		line-height: 1.45;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text-faint);
+	}
+	.fl.tool {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-family: var(--mono);
+		font-size: 11.5px;
+	}
+	.fl.tool :global(svg) {
+		flex: none;
+	}
+	.fn {
+		color: var(--text-dim);
+	}
+	.fx {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.fl.wait {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.fl.wait :global(.spin) {
+		animation: rp-spin 1.2s linear infinite;
+	}
+	.fl:last-child:not(.wait) {
+		color: var(--text);
+	}
+	.cf {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: 12px;
+	}
+	.doing {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		color: var(--st-progress);
+		font-weight: 500;
+	}
+	.pulse {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--st-progress);
+		animation: rp-pulse 1.4s ease-in-out infinite;
+	}
+	.open {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--text-faint);
+	}
+	.card:hover .open {
+		color: var(--text);
 	}
 	@keyframes rp-spin {
 		to {
 			transform: rotate(360deg);
 		}
 	}
-	.main {
+	@keyframes rp-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.3;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pulse,
+		.fl.wait :global(.spin) {
+			animation: none;
+		}
+	}
+	.idle {
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 0;
+		align-items: center;
+		gap: 14px;
+		padding: 18px;
+		border: 1px dashed var(--border-strong);
+		border-radius: 12px;
 	}
-	.t {
+	.idle-ic {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: var(--bg-elev2);
+		color: var(--text-faint);
+		flex: none;
+	}
+	.it {
 		font-size: 13.5px;
+		color: var(--text);
+	}
+	.is {
+		font-size: 12.5px;
+		color: var(--text-faint);
+		margin-top: 2px;
+	}
+	.is code {
+		font-family: var(--mono);
+		font-size: 11.5px;
+	}
+	.list {
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		overflow: hidden;
+		background: var(--bg-elev);
+	}
+	.qrow,
+	.frow {
+		display: grid;
+		align-items: center;
+		gap: 12px;
+		padding: 9px 12px;
+		color: var(--text);
+		text-decoration: none;
+		border-top: 1px solid var(--border);
+		font-size: 13px;
+	}
+	.list > :first-child {
+		border-top: none;
+	}
+	.qrow:hover,
+	.frow:hover {
+		background: var(--bg-hover);
+	}
+	.qrow {
+		grid-template-columns: 22px minmax(0, 1fr) auto minmax(0, 160px) 110px;
+	}
+	.pos {
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		background: var(--bg-elev2);
+		font-size: 11px;
+		color: var(--text-dim);
+		font-variant-numeric: tabular-nums;
+	}
+	.qt,
+	.ftt {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.key {
-		font-family: var(--mono);
-		font-size: 12px;
-		color: var(--text-faint);
-		margin-right: 8px;
-	}
-	.line {
-		font-size: 12px;
-		color: var(--text-faint);
-		font-family: var(--mono);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.line.err {
-		color: #fca5a5;
-		font-family: inherit;
-	}
-	.who {
+	.qa,
+	.fa {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
@@ -252,32 +676,136 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
-	.kind,
-	.when {
+	.qw,
+	.fm,
+	.fw {
 		font-size: 12px;
 		color: var(--text-faint);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.when {
-		text-align: right;
 		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		text-align: right;
 	}
-	.empty {
+	.fh {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 10px;
-		font-size: 13px;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 4px;
+	}
+	.fh h2 {
+		margin: 0;
+	}
+	.seg {
+		display: inline-flex;
+		background: var(--bg-elev);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 2px;
+	}
+	.seg button {
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		font-size: 12px;
+		padding: 4px 10px;
+		border-radius: 6px;
+	}
+	.seg button.on {
+		background: var(--bg-hover);
+		color: var(--text);
+	}
+	.day {
+		font-size: 11.5px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+		margin: 14px 2px 6px;
+	}
+	.frow {
+		grid-template-columns: 22px minmax(0, 1fr) 104px minmax(0, 150px) 120px 64px;
+	}
+	.oc {
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+	}
+	.oc.ok {
+		background: color-mix(in srgb, #4ade80 18%, transparent);
+		color: #4ade80;
+	}
+	.oc.bad {
+		background: color-mix(in srgb, #f87171 18%, transparent);
+		color: #f87171;
+	}
+	.oc.warn {
+		background: color-mix(in srgb, #fbbf24 18%, transparent);
+		color: #fbbf24;
+	}
+	.oc.mute {
+		background: var(--bg-elev2);
 		color: var(--text-faint);
 	}
-	@media (max-width: 720px) {
-		.row {
+	.ft {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		gap: 2px;
+	}
+	.fe {
+		font-size: 12px;
+		color: #fca5a5;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.chip {
+		justify-self: start;
+		font-size: 11.5px;
+		border-radius: 999px;
+		padding: 1px 8px;
+		border: 1px solid var(--border);
+		color: var(--text-dim);
+		white-space: nowrap;
+	}
+	.chip.ok {
+		color: #4ade80;
+		border-color: color-mix(in srgb, #4ade80 35%, var(--border));
+	}
+	.chip.bad {
+		color: #f87171;
+		border-color: color-mix(in srgb, #f87171 35%, var(--border));
+	}
+	.chip.warn {
+		color: #fbbf24;
+		border-color: color-mix(in srgb, #fbbf24 35%, var(--border));
+	}
+	.none {
+		font-size: 13px;
+		color: var(--text-faint);
+		padding: 12px 2px;
+	}
+	@media (max-width: 760px) {
+		.stats {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.cards {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.qrow,
+		.frow {
 			grid-template-columns: 22px minmax(0, 1fr) auto;
 		}
-		.kind,
-		.when {
+		.qrow .kind,
+		.qrow .qw,
+		.frow .fa,
+		.frow .fm,
+		.frow .fw {
+			display: none;
+		}
+		.hosts {
 			display: none;
 		}
 	}
