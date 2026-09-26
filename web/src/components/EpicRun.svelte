@@ -45,6 +45,9 @@
 {#if epic}
 	{#if epic.autorun}
 		<span class="running" title="Each Ready ticket starts once nothing blocks it"><span class="pulse"></span>Epic running</span>
+		<button class="btn sm" onclick={run} disabled={busy} title="Start every Ready ticket that nothing blocks right now">
+			<Play size={12} strokeWidth={2.4} />Start ready
+		</button>
 		<button class="btn sm" onclick={stop} disabled={busy}><Square size={12} strokeWidth={2.4} />Stop epic</button>
 	{:else}
 		<button class="btn primary sm" onclick={run} disabled={busy}
