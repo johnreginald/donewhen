@@ -199,6 +199,20 @@ var agentTools = map[string]bool{
 	"list_issues": true, "get_document": true, "list_documents": true,
 }
 
+// ticketFormat is how every ticket is written, so a product owner and the
+// agent that builds it can both read it. It travels with the server, so any
+// client writing tickets here gets it without its own setup.
+const ticketFormat = "Ticket format — readers are the product owner and the agent that builds it: normal plain English in full " +
+	"sentences, technical but no clipped fragments or long paragraphs. Size: one ticket per feature end to end " +
+	"(database + API + tests together); every UI screen is its own ticket. Description sections, in order: " +
+	"'# Title', then '**Epic:** … · **Priority:** … · **Blocked by:** …'; '## What this gives us' (about five sentences " +
+	"a product owner can follow); '## Build' (one bullet per file, **`path`**: what it does; then 'Key shapes:' — a short " +
+	"code block of signatures, types or columns other tickets depend on); '## Rules' (one full-sentence bullet per " +
+	"rule with exact codes, limits and names); '## Tests' (grouped, one plain sentence per test); '## Done when' (the " +
+	"check commands and the file scope); '## Not in this ticket'. A ```mermaid diagram helps for backend flows. " +
+	"Criteria: 3–6 — package tests as the gate, paths_within/no_secrets/tests_not_weakened/no_new_deps policies, and " +
+	"at most one model-judged check marked \"advisory\": true."
+
 func buildServer(d *deps) *server.MCPServer {
 	s := server.NewMCPServer("raenil", version,
 		server.WithToolCapabilities(true),
@@ -213,7 +227,7 @@ func buildServer(d *deps) *server.MCPServer {
 				"List tools return slim rows; fetch one item's full detail with the get_* tool. Issue and "+
 				"document lists are newest first and capped at 50 (a 'more' note says when rows were left out). "+
 				"Use save_issue to create/move issues (pass 'state' as a status name). "+
-				"Backend-labeled issues should include a ```mermaid diagram in the description.",
+				ticketFormat,
 		),
 	)
 	d.register(s)
@@ -479,7 +493,8 @@ func (d *deps) register(s *server.MCPServer) {
 	// ---- save_issue (create or update) ----
 	s.AddTool(mcp.NewTool("save_issue",
 		mcp.WithDescription("Create a new issue (omit id) or update an existing one (pass id/key). "+
-			"Set 'state' to a status name to move it. Backend issues should include a ```mermaid diagram in description."),
+			"Set 'state' to a status name to move it. Write the description in the ticket format in this "+
+			"server's instructions: What this gives us, Build, Rules, Tests, Done when, Not in this ticket."),
 		mcp.WithString("id", mcp.Description("Issue id or key to update; omit to create")),
 		mcp.WithString("title", mcp.Description("Issue title")),
 		mcp.WithString("description", mcp.Description("Markdown description (may contain ```mermaid)")),
