@@ -202,15 +202,19 @@ var agentTools = map[string]bool{
 // ticketFormat is how every ticket is written, so a product owner and the
 // agent that builds it can both read it. It travels with the server, so any
 // client writing tickets here gets it without its own setup.
-const ticketFormat = "Ticket format — readers are the product owner and the agent that builds it: normal plain English in full " +
-	"sentences, technical but no clipped fragments or long paragraphs. Size: one ticket per feature end to end " +
-	"(database + API + tests together); every UI screen is its own ticket. Description sections, in order: " +
-	"'# Title', then '**Epic:** … · **Priority:** … · **Blocked by:** …'; '## What this gives us' (about five sentences " +
-	"a product owner can follow); '## Build' (one bullet per file, **`path`**: what it does; then 'Key shapes:' — a short " +
-	"code block of signatures, types or columns other tickets depend on); '## Rules' (one full-sentence bullet per " +
-	"rule with exact codes, limits and names); '## Tests' (grouped, one plain sentence per test); '## Not in this " +
-	"ticket'. No 'Done when' section: the done-when checklist (criteria) is the one place for it. A ```mermaid " +
-	"diagram helps for backend flows. " +
+const ticketFormat = "Ticket format — a ticket is an execution spec the reader scans, not an essay; readers are the " +
+	"agent that builds it and the product owner. Size: one ticket per feature end to end (database + API + tests " +
+	"together); every UI screen is its own ticket. Sections, in order: '# Title', then '**Epic:** … · **Priority:** … · " +
+	"**Blocked by:** …'; '## Goal' (one or two sentences, then 'This ticket adds:' bullets; no requirements here); " +
+	"'## 1. <Part>', '## 2. <Part>' … one per capability (endpoint, guard, command, screen): one line on what it is " +
+	"for, the interface, a table for fields/validation/permissions/states/input→output, then rule bullets; " +
+	"'## Implementation notes' (files as `path` — what it does, and a short code block of shapes other tickets depend " +
+	"on; only decisions already made); '## Acceptance tests' (grouped per part, one scenario per bullet, " +
+	"'scenario → result'); '## Out of scope' ('thing → **Ticket**'). Writing rules: one testable behaviour per " +
+	"bullet; no semicolon-chained rules or long comma lists; conditions as 'condition → result'; exact codes and " +
+	"names in backticks; plain verbs (add, return, reject, allow); no 'facilitate', 'in order to', 'what this gives " +
+	"us'. Research and reasoning stay out; the ticket holds the decision and the contract. No 'Done when' section: " +
+	"the done-when checklist (criteria) is the one place for it. A ```mermaid diagram helps for backend flows. " +
 	"Criteria: 3–6 — package tests as the gate, paths_within/no_secrets/tests_not_weakened/no_new_deps policies, and " +
 	"at most one model-judged check marked \"advisory\": true."
 
@@ -495,7 +499,7 @@ func (d *deps) register(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("save_issue",
 		mcp.WithDescription("Create a new issue (omit id) or update an existing one (pass id/key). "+
 			"Set 'state' to a status name to move it. Write the description in the ticket format in this "+
-			"server's instructions: What this gives us, Build, Rules, Tests, Not in this ticket."),
+			"server's instructions: Goal, numbered parts, Implementation notes, Acceptance tests, Out of scope."),
 		mcp.WithString("id", mcp.Description("Issue id or key to update; omit to create")),
 		mcp.WithString("title", mcp.Description("Issue title")),
 		mcp.WithString("description", mcp.Description("Markdown description (may contain ```mermaid)")),
