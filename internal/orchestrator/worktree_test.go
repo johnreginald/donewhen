@@ -167,3 +167,23 @@ func TestMergeBlockerBranches(t *testing.T) {
 		t.Error("conflicting blockers were combined")
 	}
 }
+
+// An agent that switches the worktree to another branch is caught before its
+// work is committed there.
+func TestOnTicketBranch(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepo(t)
+	wt, err := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "w"), "ticket/t-1", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := onTicketBranch(ctx, wt.Path, "ticket/t-1"); err != nil {
+		t.Errorf("on its own branch: %v", err)
+	}
+	if _, err := git(ctx, wt.Path, "checkout", "-q", "-b", "elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+	if err := onTicketBranch(ctx, wt.Path, "ticket/t-1"); err == nil {
+		t.Error("a worktree on another branch passed")
+	}
+}

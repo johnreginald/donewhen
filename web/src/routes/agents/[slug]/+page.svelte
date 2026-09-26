@@ -25,6 +25,29 @@
 	let saving = $state(false);
 	let previewInstr = $state(false);
 
+	// Rules every agent in the workspace gets, edited here too.
+	let sharedText = $state('');
+	let sharedSaved = $state('');
+	let savingShared = $state(false);
+	onMount(async () => {
+		const r = await api.get('/allowed-tools').catch(() => null);
+		sharedText = sharedSaved = (r?.allowedTools || []).join('\n');
+	});
+	async function saveShared() {
+		savingShared = true;
+		try {
+			const r = await api.put('/allowed-tools', {
+				allowedTools: sharedText.split('\n').map((x) => x.trim()).filter(Boolean)
+			});
+			sharedText = sharedSaved = (r?.allowedTools || []).join('\n');
+			showToast('Saved for every agent');
+		} catch (e) {
+			showToast(e.message, 'error');
+		} finally {
+			savingShared = false;
+		}
+	}
+
 	// A starting point for an agent's instructions: how this workspace works,
 	// so a new agent does not have to learn it from its first refusal.
 	const DEFAULT_INSTRUCTIONS = `# How we work
@@ -321,6 +344,15 @@
 										{#each conn.status.alwaysAllowed as c (c)}<code>{c.replace(/^Bash\((.*)\)$/, '$1')}</code>{/each}
 									</div>
 								{/if}
+								<div class="lab">Also allow for every agent in this workspace
+									<textarea class="rules mono short" bind:value={sharedText} placeholder={'Bash(curl -sI *)'}></textarea>
+								</div>
+								{#if sharedText !== sharedSaved}
+									<div class="shared-save">
+										<button class="btn ghost sm" onclick={() => (sharedText = sharedSaved)}>Discard</button>
+										<button class="btn primary sm" onclick={saveShared} disabled={savingShared}>{savingShared ? 'Saving…' : 'Save for every agent'}</button>
+									</div>
+								{/if}
 								<div class="lab">Also allow for this agent
 									<textarea class="rules mono" bind:value={form.allowedTools} placeholder={'Bash(docker compose ps*)\nBash(psql -c *)'}></textarea>
 								</div>
@@ -590,6 +622,15 @@
 	select:focus,
 	textarea:focus {
 		border-color: var(--border-strong);
+	}
+	.rules.short {
+		min-height: 64px;
+	}
+	.shared-save {
+		display: flex;
+		justify-content: flex-end;
+		gap: 6px;
+		margin: -4px 0 10px;
 	}
 	.instr-bar {
 		display: flex;

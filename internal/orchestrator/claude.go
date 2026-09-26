@@ -74,11 +74,13 @@ var claudeWorkAllowed = []string{"Read", "Edit", "Write", "Glob", "Grep"}
 // asking, so an agent can look at the history and run the usual checks with no
 // rules written for it. Each one reads, or builds and tests inside the
 // worktree; the only network use is installing from a lockfile. Nothing that
-// commits, pushes, switches branch, deletes, copies files out, fetches URLs or
+// commits, pushes, deletes, copies files out, fetches URLs or
 // runs an arbitrary script is here: the orchestrator commits, and anything
-// else an agent needs is a rule on that agent.
+// else an agent needs is a rule on that agent. git checkout is allowed, and
+// a worker that leaves its worktree on another branch is stopped before any
+// commit (see onTicketBranch).
 var ClaudeDefaultCommands = []string{
-	"Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git show*)", "Bash(git restore *)",
+	"Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git show*)", "Bash(git restore *)", "Bash(git checkout *)",
 	// cd on its own changes nothing, and an agent chains it before almost
 	// every command ("cd api && go test ./..."): Claude checks each part of a
 	// chain, so without it the rest is refused too.

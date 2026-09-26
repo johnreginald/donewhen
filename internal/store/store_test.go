@@ -1034,3 +1034,24 @@ func TestBlockersAndEpicRun(t *testing.T) {
 		t.Errorf("a stopped epic still restarts: %v", epics)
 	}
 }
+
+// The workspace's shared rules are kept trimmed and unique, and refuse a rule
+// that would allow any shell command.
+func TestWorkspaceAllowedTools(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	if got, _ := s.WorkspaceAllowedTools(ctx, ws); len(got) != 0 {
+		t.Errorf("a new workspace has rules: %v", got)
+	}
+	got, err := s.SetWorkspaceAllowedTools(ctx, ws, []string{" Bash(curl *) ", "Bash(curl *)", "", "Bash(cp *)"})
+	if err != nil || len(got) != 2 || got[0] != "Bash(curl *)" {
+		t.Errorf("set = %v, %v", got, err)
+	}
+	if _, err := s.SetWorkspaceAllowedTools(ctx, ws, []string{"Bash(*)"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("Bash(*) accepted: %v", err)
+	}
+	if got, _ := s.WorkspaceAllowedTools(ctx, ws); len(got) != 2 {
+		t.Errorf("a refused update changed the rules: %v", got)
+	}
+}

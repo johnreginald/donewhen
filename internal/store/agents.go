@@ -75,11 +75,15 @@ func validateAgent(in AgentInput) error {
 	if in.Heartbeat != nil && (*in.Heartbeat < 0 || (*in.Heartbeat > 0 && *in.Heartbeat < 5)) {
 		return invalid("a heartbeat is off (0) or at least every 5 minutes")
 	}
-	for _, rule := range in.AllowedTools {
-		// Bare Bash pre-approves every shell command, writes anywhere
-		// included — the live test watched a worker escape its worktree that
-		// way. A rule has to name what it allows.
-		if strings.TrimSpace(rule) == "Bash" || strings.TrimSpace(rule) == "Bash(*)" {
+	return checkRules(in.AllowedTools)
+}
+
+// checkRules refuses a rule that would allow every shell command. Bare Bash
+// pre-approves anything, writes anywhere included — the live test watched a
+// worker escape its worktree that way. A rule has to name what it allows.
+func checkRules(rules []string) error {
+	for _, rule := range rules {
+		if r := strings.TrimSpace(rule); r == "Bash" || r == "Bash(*)" {
 			return invalid("%q would allow any shell command; name the commands, e.g. Bash(go test *)", rule)
 		}
 	}

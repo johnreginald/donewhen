@@ -406,6 +406,12 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 			strings.Join(res.Questions, "\n> ")+"\n\nAttempt "+fmt.Sprint(attempt)+" stopped here.")
 	}
 
+	// The agent may use git checkout; it must hand the worktree back on the
+	// ticket's branch, or its work would be committed somewhere else.
+	if err := onTicketBranch(ctx, wtPath, branch); err != nil {
+		return v, nil, err
+	}
+
 	// 6. See what it actually did.
 	diff, err := StageAndDiff(ctx, wtPath, cfg.BaseRef)
 	if err != nil {
@@ -757,4 +763,17 @@ func (o *Orchestrator) reviewBranches(ctx context.Context, key string) ([]string
 		out = append(out, *bi.GitBranch)
 	}
 	return out, nil
+}
+
+// onTicketBranch checks a worktree is still on the ticket's branch.
+func onTicketBranch(ctx context.Context, dir, branch string) error {
+	cur, err := git(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return err
+	}
+	if cur = strings.TrimSpace(cur); cur != branch {
+		return fmt.Errorf("the agent left the worktree on %q instead of %q; nothing was committed — "+
+			"switch it back with git checkout %s in %s, then Verify", cur, branch, branch, dir)
+	}
+	return nil
 }

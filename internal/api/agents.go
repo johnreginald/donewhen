@@ -253,10 +253,39 @@ func (s *Server) handleClaimJob(w http.ResponseWriter, r *http.Request) {
 	}{Job: j}
 	if j.AgentID != nil {
 		if a, err := s.store.GetAgent(r.Context(), ws(r), *j.AgentID); err == nil {
+			// The host runs with the agent's rules and the workspace's.
+			if shared, err := s.store.WorkspaceAllowedTools(r.Context(), ws(r)); err == nil {
+				a.AllowedTools = append(append([]string{}, shared...), a.AllowedTools...)
+			}
 			resp.Agent = &a
 		}
 	}
 	writeJSON(w, 200, resp)
+}
+
+func (s *Server) handleGetWorkspaceAllowed(w http.ResponseWriter, r *http.Request) {
+	rules, err := s.store.WorkspaceAllowedTools(r.Context(), ws(r))
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"allowedTools": rules})
+}
+
+// handleSetWorkspaceAllowed replaces the commands every agent in the
+// workspace may run without asking.
+func (s *Server) handleSetWorkspaceAllowed(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		AllowedTools []string `json:"allowedTools"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	rules, err := s.store.SetWorkspaceAllowedTools(r.Context(), ws(r), body.AllowedTools)
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"allowedTools": rules})
 }
 
 func (s *Server) handleFinishJob(w http.ResponseWriter, r *http.Request) {

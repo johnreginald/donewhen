@@ -178,7 +178,7 @@ func TestDefaultCommandsStayNarrow(t *testing.T) {
 		if c == "Bash" || c == "Bash(*)" || !strings.HasPrefix(c, "Bash(") {
 			t.Errorf("%q is not a narrow command rule", c)
 		}
-		for _, bad := range []string{"git commit", "git push", "git checkout", "git reset", "git switch", "rm ", "cp ", "mv ",
+		for _, bad := range []string{"git commit", "git push", "git reset", "git switch", "rm ", "cp ", "mv ",
 			"curl", "wget", "npx", "bash -c", "sh -c", "eval", "sudo"} {
 			if strings.Contains(c, bad) {
 				t.Errorf("%q grants %q", c, bad)

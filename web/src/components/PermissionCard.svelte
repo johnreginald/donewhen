@@ -34,6 +34,8 @@
 		rules = [...new Set(shell.map(suggest))].map((r) => ({ rule: r, on: true }));
 	});
 	let busy = $state(false);
+	// Who the rules are for: this agent, or every agent in the workspace.
+	let scope = $state('agent');
 
 	const chosen = $derived(rules.filter((r) => r.on && r.rule.trim()).map((r) => r.rule.trim()));
 
@@ -41,11 +43,16 @@
 		if (!agent || !chosen.length) return;
 		busy = true;
 		try {
-			const allowed = [...new Set([...(agent.allowedTools || []), ...chosen])];
-			const updated = await api.updateAgent(agent.id, { allowedTools: allowed });
-			agents.update((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+			if (scope === 'all') {
+				const cur = (await api.get('/allowed-tools'))?.allowedTools || [];
+				await api.put('/allowed-tools', { allowedTools: [...new Set([...cur, ...chosen])] });
+			} else {
+				const allowed = [...new Set([...(agent.allowedTools || []), ...chosen])];
+				const updated = await api.updateAgent(agent.id, { allowedTools: allowed });
+				agents.update((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+			}
 			await api.post(`/issues/${issue.key}/run`, {});
-			showToast(`Allowed for ${agent.name} · running again`);
+			showToast(`Allowed for ${scope === 'all' ? 'every agent' : agent.name} · running again`);
 			ondone?.();
 		} catch (e) {
 			showToast(e.message, 'error');
@@ -62,7 +69,11 @@
 			<span>{agent.name} was refused {shell.length + other.length === 1 ? 'a command' : 'some commands'}</span>
 		</div>
 		{#if rules.length}
-			<p class="hint">Allow these for {agent.name} from now on, and run the ticket again:</p>
+			<div class="scope" role="radiogroup" aria-label="Allow for">
+				<span class="sl">Allow from now on for</span>
+				<button role="radio" aria-checked={scope === 'agent'} class:on={scope === 'agent'} onclick={() => (scope = 'agent')}>{agent.name}</button>
+				<button role="radio" aria-checked={scope === 'all'} class:on={scope === 'all'} onclick={() => (scope = 'all')}>Every agent</button>
+			</div>
 			<ul class="rules">
 				{#each rules as r, i (i)}
 					<li>
@@ -82,7 +93,7 @@
 		{/if}
 		{#if rules.length}
 			<div class="pf">
-				<span class="faint">Rules can be changed on the agent's Harness page.</span>
+				<span class="faint">{scope === 'all' ? 'Shared rules are on each agent’s Harness page.' : 'Rules can be changed on the agent’s Harness page.'}</span>
 				<button class="btn primary sm" onclick={allowAndRun} disabled={busy || !chosen.length}>
 					<Play size={13} strokeWidth={2.4} />{busy ? 'Allowing…' : 'Allow and run again'}
 				</button>
@@ -115,6 +126,29 @@
 		margin: 0;
 		color: var(--text-dim);
 		font-size: 12.5px;
+	}
+	.scope {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+		font-size: 12.5px;
+	}
+	.sl {
+		color: var(--text-dim);
+	}
+	.scope button {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 2px 10px;
+		font-size: 12px;
+		color: var(--text-dim);
+	}
+	.scope button.on {
+		border-color: var(--accent2);
+		color: var(--text);
+		background: color-mix(in srgb, var(--accent2) 14%, var(--bg));
 	}
 	.rules {
 		list-style: none;
