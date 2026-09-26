@@ -56,10 +56,22 @@ function escapeHtml(s) {
 		.replace(/>/g, '&gt;');
 }
 
+// Mermaid is not safe to run twice at once: two renders overlapping — a
+// page re-rendering on a live update while a diagram is still drawing —
+// corrupt each other and draw "Syntax error in text" for a valid diagram.
+// Every render takes its turn.
+let queue = Promise.resolve();
+
 // renderMermaid finds .mermaid-block nodes inside root and renders SVG, with a
 // toggle to show the source.
-export async function renderMermaid(root) {
-	if (!root) return;
+export function renderMermaid(root) {
+	const turn = queue.then(() => renderMermaidNow(root));
+	queue = turn.catch(() => {});
+	return turn;
+}
+
+async function renderMermaidNow(root) {
+	if (!root || !root.isConnected) return;
 	const blocks = root.querySelectorAll('.mermaid-block[data-mermaid]');
 	if (!blocks.length) return;
 	const mermaid = await getMermaid();
@@ -91,6 +103,9 @@ export async function renderMermaid(root) {
 			block.replaceWith(container);
 		} catch (e) {
 			block.innerHTML = `<code>mermaid error: ${escapeHtml(String(e))}</code>`;
+		} finally {
+			// A failed render leaves its error drawing at the end of the page.
+			document.getElementById('d' + id)?.remove();
 		}
 	}
 }
