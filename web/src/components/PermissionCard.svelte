@@ -2,6 +2,7 @@
 	// After a work run that was refused commands: offer to allow them for this
 	// agent and run the ticket again, in one click. Nothing is asked mid-run —
 	// the refusal already happened, and this turns it into a rule.
+	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
 	import { agents } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
@@ -16,23 +17,51 @@
 	const shell = $derived((run.deniedTools || []).filter((d) => d.startsWith('Bash ')).map((d) => d.slice(5).trim()));
 	const other = $derived((run.deniedTools || []).filter((d) => !d.startsWith('Bash ')));
 
-	// Suggest a rule wide enough for the command's variants: its first two
-	// words ("cargo test", "docker compose"), or the one word it has.
-	// A path is never part of the rule: it would only match that one checkout.
-	function suggest(cmd) {
-		const parts = cmd.split(/&&|\|\||;|\|/).map((p) => p.trim()).filter(Boolean);
-		// "cd <worktree> && make lint": the command that matters follows the cd.
-		const first = parts.find((p) => !/^cd\s/.test(p)) || parts[0] || cmd;
-		const words = first.split(/\s+/).filter(Boolean);
-		// A subcommand ("compose", "run") is a plain word; a file or a flag is not.
-		const second = /^[a-z][a-z-]*$/.test(words[1] || '') ? words[1] : '';
-		return second ? `Bash(${words[0]} ${second} *)` : `Bash(${words[0] || first} *)`;
+	// Rules already in force: built-in defaults (as the host reports them),
+	// the workspace's, and the agent's own. A suggestion one of them already
+	// covers is left out — the refusal came from another part of the chain.
+	let defaults = $state([]);
+	let shared = $state([]);
+	onMount(async () => {
+		const [hosts, ws] = await Promise.all([api.hosts().catch(() => []), api.get('/allowed-tools').catch(() => null)]);
+		for (const h of hosts || []) for (const hs of h.harnesses || []) if (hs.harness === 'claude') defaults = hs.alwaysAllowed || defaults;
+		shared = ws?.allowedTools || [];
+	});
+	const inForce = $derived([...defaults, ...shared, ...(agent?.allowedTools || [])]);
+	const covered = (cmd) =>
+		inForce.some((r) => {
+			const m = /^Bash\((.*)\)$/.exec(r.trim());
+			if (!m) return false;
+			const pat = m[1].replace(/\s*\*$/, '').trim();
+			return pat === '' ? false : cmd === pat || cmd.startsWith(pat);
+		});
+
+	// Shell syntax — if/for/while and their parts — is not a command a rule
+	// can allow; Claude refuses a chain that uses it.
+	const SYNTAX = /^(if|then|else|elif|fi|for|do|done|while|until|case|esac|\[|\[\[|!|\{|\})$/;
+
+	// One rule per part of a chain that is not already allowed, wide enough
+	// for the command's variants: its first two words when the second is a
+	// subcommand ("docker compose"), else the first. Never a path.
+	function suggestions(cmd) {
+		const out = [];
+		for (let part of cmd.split(/&&|\|\||;|\||\n/)) {
+			part = part.trim().replace(/^\(+|\)+$/g, '').replace(/\s*[0-9]?>\S*.*$/, '').trim();
+			const words = part.split(/\s+/).filter(Boolean);
+			if (!words.length || SYNTAX.test(words[0]) || words[0].includes('=') || covered(part)) continue;
+			const second = /^[a-z][a-z-]*$/.test(words[1] || '') ? words[1] : '';
+			out.push(second ? `Bash(${words[0]} ${second} *)` : `Bash(${words[0]} *)`);
+		}
+		return out;
 	}
+	const usesSyntax = $derived(shell.some((c) => /(^|[;&|]\s*)(if|for|while)\s/.test(c)));
 
 	let rules = $state([]);
 	$effect(() => {
-		rules = [...new Set(shell.map(suggest))].map((r) => ({ rule: r, on: true }));
+		rules = [...new Set(shell.flatMap(suggestions))].map((r) => ({ rule: r, on: true }));
 	});
+	// A run that passed anyway needs no second go.
+	const passed = $derived(run.verdict === 'passed');
 	let busy = $state(false);
 	// Who the rules are for: this agent, or every agent in the workspace.
 	let scope = $state('agent');
@@ -51,8 +80,8 @@
 				const updated = await api.updateAgent(agent.id, { allowedTools: allowed });
 				agents.update((list) => list.map((a) => (a.id === updated.id ? updated : a)));
 			}
-			await api.post(`/issues/${issue.key}/run`, {});
-			showToast(`Allowed for ${scope === 'all' ? 'every agent' : agent.name} · running again`);
+			if (!passed) await api.post(`/issues/${issue.key}/run`, {});
+			showToast(`Allowed for ${scope === 'all' ? 'every agent' : agent.name}${passed ? '' : ' · running again'}`);
 			ondone?.();
 		} catch (e) {
 			showToast(e.message, 'error');
@@ -62,7 +91,8 @@
 	}
 </script>
 
-{#if agent && agent.harness === 'claude' && (shell.length || other.length)}
+<!-- Nothing left to decide on a run that passed: no card. -->
+{#if agent && agent.harness === 'claude' && (rules.length || other.length || (shell.length && !passed))}
 	<div class="pc">
 		<div class="ph">
 			<ShieldAlert size={15} strokeWidth={2} />
@@ -87,6 +117,18 @@
 				<ul>{#each shell as c}<li class="mono">{c}</li>{/each}</ul>
 			</details>
 		{/if}
+		{#if !rules.length && shell.length}
+			<p class="hint">
+				Every command in it is allowed now{usesSyntax ? ', but it was written as a shell script (if / for), which a rule cannot allow — the agent can run the same commands one at a time' : ''}.
+			</p>
+			<details class="raw">
+				<summary>What it tried</summary>
+				<ul>{#each shell as c}<li class="mono">{c}</li>{/each}</ul>
+			</details>
+		{/if}
+		{#if usesSyntax && rules.length}
+			<p class="hint">Part of it was a shell script (if / for), which no rule can allow.</p>
+		{/if}
 		{#if other.length}
 			<p class="hint">Refused and not something a rule can allow — writes outside the ticket's worktree:</p>
 			<ul class="raw-list">{#each other as d}<li class="mono">{d}</li>{/each}</ul>
@@ -95,7 +137,7 @@
 			<div class="pf">
 				<span class="faint">{scope === 'all' ? 'Shared rules are on each agent’s Harness page.' : 'Rules can be changed on the agent’s Harness page.'}</span>
 				<button class="btn primary sm" onclick={allowAndRun} disabled={busy || !chosen.length}>
-					<Play size={13} strokeWidth={2.4} />{busy ? 'Allowing…' : 'Allow and run again'}
+					<Play size={13} strokeWidth={2.4} />{busy ? 'Allowing…' : passed ? 'Allow' : 'Allow and run again'}
 				</button>
 			</div>
 		{/if}
