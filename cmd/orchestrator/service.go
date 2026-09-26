@@ -56,7 +56,16 @@ func cmdService(ctx context.Context, args []string) error {
 		if err := os.WriteFile(plist, b, 0o644); err != nil {
 			return err
 		}
-		if out, err := exec.CommandContext(ctx, "launchctl", "bootstrap", target, plist).CombinedOutput(); err != nil {
+		// bootout returns before the old job is gone; bootstrap fails until
+		// it is, so try again for a while.
+		var out []byte
+		for i := 0; i < 40; i++ {
+			if out, err = exec.CommandContext(ctx, "launchctl", "bootstrap", target, plist).CombinedOutput(); err == nil {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		if err != nil {
 			return fmt.Errorf("launchctl bootstrap: %v: %s", err, bytes.TrimSpace(out))
 		}
 		fmt.Printf("Installed. The runner host now starts at login and restarts if it stops.\nLog: %s\n", logFile)
