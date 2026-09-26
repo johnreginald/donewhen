@@ -100,7 +100,7 @@
 	// How many tickets an agent is working on or about to.
 	const runningCount = $derived(new Set($activeJobs.map((j) => j.issueId)).size);
 
-	const ISSUE_VIEWS = ['/tasks', '/list', '/board'];
+	const ISSUE_VIEWS = ['/tasks', '/list', '/board', '/links'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
 	const recentTasks = $derived($recent[$activeWorkspace?.slug] || []);
 

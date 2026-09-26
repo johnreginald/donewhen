@@ -19,7 +19,7 @@
 	const tabs = [
 		{ label: 'Home', href: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
 		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
-		{ label: 'Tasks', href: '/board', icon: CircleCheckBig, match: (p) => ['/tasks', '/list', '/board'].includes(p) },
+		{ label: 'Tasks', href: '/board', icon: CircleCheckBig, match: (p) => ['/tasks', '/list', '/board', '/links'].includes(p) },
 		{ label: 'Running', href: '/running', icon: Activity, match: (p) => p === '/running' },
 		{ label: 'Audit', href: '/log', icon: History, match: (p) => p === '/log' || p.startsWith('/audit') },
 	];

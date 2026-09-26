@@ -1,17 +1,18 @@
 <script>
 	// The controls above every issue view — search, scope, labels and
-	// the List / By epic / Board switch — laid out like Paperclip's Tasks bar.
+	// the Board / List / By epic / Links switch — laid out like Paperclip's Tasks bar.
 	import { page } from '$app/stores';
 	import { issueQuery, activeProject } from '$lib/store.js';
 	import EpicRun from './EpicRun.svelte';
 	import ProjectSwitcher from './ProjectSwitcher.svelte';
 	import LabelFilter from './LabelFilter.svelte';
-	import { Search, List, Rows3, Columns3 } from '@lucide/svelte';
+	import { Search, List, Rows3, Columns3, GitFork } from '@lucide/svelte';
 
 	const views = [
 		{ href: '/board', label: 'Board', icon: Columns3 },
 		{ href: '/tasks', label: 'List', icon: List },
-		{ href: '/list', label: 'By epic', icon: Rows3 }
+		{ href: '/list', label: 'By epic', icon: Rows3 },
+		{ href: '/links', label: 'Links', icon: GitFork }
 	];
 </script>
 

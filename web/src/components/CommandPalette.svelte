@@ -26,6 +26,7 @@
 			{ label: 'Go to Tasks', to: '/board' },
 			{ label: 'Go to Task list', to: '/tasks' },
 			{ label: 'Go to Tasks by epic', to: '/list' },
+			{ label: 'Go to Task links', to: '/links' },
 			{ label: 'Go to Inbox', to: '/inbox' },
 			{ label: 'Go to Audit', to: '/log' },
 			{ label: 'Go to Artifacts', to: '/artifacts' },
