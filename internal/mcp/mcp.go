@@ -208,8 +208,9 @@ const ticketFormat = "Ticket format — readers are the product owner and the ag
 	"'# Title', then '**Epic:** … · **Priority:** … · **Blocked by:** …'; '## What this gives us' (about five sentences " +
 	"a product owner can follow); '## Build' (one bullet per file, **`path`**: what it does; then 'Key shapes:' — a short " +
 	"code block of signatures, types or columns other tickets depend on); '## Rules' (one full-sentence bullet per " +
-	"rule with exact codes, limits and names); '## Tests' (grouped, one plain sentence per test); '## Done when' (the " +
-	"check commands and the file scope); '## Not in this ticket'. A ```mermaid diagram helps for backend flows. " +
+	"rule with exact codes, limits and names); '## Tests' (grouped, one plain sentence per test); '## Not in this " +
+	"ticket'. No 'Done when' section: the done-when checklist (criteria) is the one place for it. A ```mermaid " +
+	"diagram helps for backend flows. " +
 	"Criteria: 3–6 — package tests as the gate, paths_within/no_secrets/tests_not_weakened/no_new_deps policies, and " +
 	"at most one model-judged check marked \"advisory\": true."
 
@@ -494,7 +495,7 @@ func (d *deps) register(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool("save_issue",
 		mcp.WithDescription("Create a new issue (omit id) or update an existing one (pass id/key). "+
 			"Set 'state' to a status name to move it. Write the description in the ticket format in this "+
-			"server's instructions: What this gives us, Build, Rules, Tests, Done when, Not in this ticket."),
+			"server's instructions: What this gives us, Build, Rules, Tests, Not in this ticket."),
 		mcp.WithString("id", mcp.Description("Issue id or key to update; omit to create")),
 		mcp.WithString("title", mcp.Description("Issue title")),
 		mcp.WithString("description", mcp.Description("Markdown description (may contain ```mermaid)")),
