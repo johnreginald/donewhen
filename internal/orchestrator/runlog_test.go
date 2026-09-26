@@ -18,7 +18,7 @@ func TestRedact(t *testing.T) {
 	in := strings.Join([]string{
 		"key sk-ant-oat01-abcdefghijklmnop",
 		"openai sk-proj-ABCDEFGHIJKLMNOPQRSTUV",
-		"raenil raenil_0123456789abcdef",
+		"raenil raenil_0123456789abcdef0123456789abcdef0123456789a",
 		"github ghp_ABCDEFGHIJKLMNOPQRSTUVWX",
 		"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload",
 		"env hunter2-plain-value",

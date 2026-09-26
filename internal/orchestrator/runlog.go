@@ -24,7 +24,9 @@ const maxRunLogTail = 32 * 1024
 var redactPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`sk-ant-[A-Za-z0-9_\-]{8,}`),
 	regexp.MustCompile(`\bsk-[A-Za-z0-9_\-]{20,}`),
-	regexp.MustCompile(`\braenil_[A-Za-z0-9_\-]{8,}`),
+	// A Raenil token is raenil_ and 43 characters; tool names such as
+	// raenil_get_issue are far shorter and must stay readable.
+	regexp.MustCompile(`\braenil_[A-Za-z0-9_\-]{32,}`),
 	regexp.MustCompile(`\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}`),
 	regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,}`),
 	regexp.MustCompile(`\bxox[abpr]-[A-Za-z0-9\-]{10,}`),

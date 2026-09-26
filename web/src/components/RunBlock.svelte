@@ -9,6 +9,13 @@
 
 	let { run } = $props();
 	let open = $state(false);
+	// A run still going counts up live.
+	let now = $state(Date.now());
+	$effect(() => {
+		if (run.finishedAt) return;
+		const t = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(t);
+	});
 	let full = $state(null); // the run with its log, fetched on first open
 
 	const LABEL = { running: 'Working', queued: 'Queued', succeeded: 'Worked', failed: 'Failed', aborted: 'Stopped' };
@@ -45,7 +52,7 @@
 			{run.runner}{#if run.model} · {run.model}{/if}
 			{#if run.attempt > 1} · attempt {run.attempt}{/if}
 			{#if run.tokens?.total} · {tokens(run.tokens.total)} tok{/if}
-			· {duration(run.startedAt, run.finishedAt)}
+			· {duration(run.startedAt, run.finishedAt || new Date(now).toISOString())}
 		</span>
 		{#if run.verdict}
 			<span class="verdict {run.verdict}">{run.verdict}</span>

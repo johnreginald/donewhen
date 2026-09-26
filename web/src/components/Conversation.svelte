@@ -116,6 +116,9 @@
 	const workPending = $derived(work && !workRun && (work.status === 'queued' || work.status === 'claimed'));
 	const workFailed = $derived(work && !workRun && work.status === 'failed');
 	const thinking = $derived(turn && (turn.status === 'queued' || turn.status === 'claimed'));
+	// Once a run exists it speaks for itself in the thread; the line below
+	// only covers the gap before it starts.
+	const runLive = $derived(runs.some((r) => r.status === 'running'));
 
 	async function comment() {
 		if (!draft.trim()) return;
@@ -252,20 +255,20 @@
 
 	</div>
 
-	{#if workPending}
+	{#if workPending && !runLive}
 		<div class="thinking">
 			<LoaderCircle size={14} class="spin" />
 			{#if work.status === 'queued'}Waiting for a host to pick up the run…
 			{:else}{agentById(work.agentId)?.name || 'The agent'} is getting ready on {work.host} — checking it can run…{/if}
 		</div>
 	{/if}
-	{#if thinking}
+	{#if thinking && !runLive}
 		<div class="thinking">
 			<LoaderCircle size={14} class="spin" />
 			{#if turn.status === 'queued'}Waiting for a host to pick up {agentById(turn.agentId)?.name || 'the agent'}…
-			{:else}{agentById(turn.agentId)?.name || 'The agent'} is thinking on {turn.host}…{/if}
+			{:else}Starting {agentById(turn.agentId)?.name || 'the agent'} on {turn.host}…{/if}
 		</div>
-	{:else if turn?.status === 'failed'}
+	{:else if !thinking && turn?.status === 'failed'}
 		<div class="failed">{agentById(turn.agentId)?.name || 'The agent'} could not reply: {turn.error}</div>
 	{/if}
 

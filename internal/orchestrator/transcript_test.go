@@ -104,3 +104,13 @@ func TestWorkRunMayReadTheTracker(t *testing.T) {
 		t.Errorf("a work run may propose tickets: %s", allowed)
 	}
 }
+
+// Raenil's own tool names read as themselves; its tokens do not.
+func TestRedactKeepsRaenilToolNames(t *testing.T) {
+	if got := redact("→ raenil_get_issue {\"id\":\"MYINF-15\"}"); !strings.Contains(got, "raenil_get_issue") {
+		t.Errorf("tool name redacted: %q", got)
+	}
+	if got := redact("token raenil_EXAMPLEENTaM0LddGo5TCCsuV6_33qiYz1LMW3-Volo"); strings.Contains(got, "EXAMPLEE") {
+		t.Errorf("token survived: %q", got)
+	}
+}

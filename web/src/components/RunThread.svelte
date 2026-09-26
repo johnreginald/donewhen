@@ -113,6 +113,13 @@
 			<div class="res err solo">{it.text}</div>
 		{/if}
 	{/each}
+	{#if run.status === 'running'}
+		{@const lastTool = [...items].reverse().find((x) => x.kind === 'tools')?.calls.at(-1)}
+		<div class="live">
+			<span class="dots"><i></i><i></i><i></i></span>
+			<span>{agentName} is {items.at(-1)?.kind === 'tools' && lastTool ? `running ${lastTool.name}` : 'thinking'}</span>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -123,6 +130,49 @@
 	}
 	.head {
 		margin: -4px -8px;
+	}
+	.live {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-left: 27px;
+		font-size: 12.5px;
+		color: var(--text-faint);
+	}
+	.dots {
+		display: inline-flex;
+		gap: 3px;
+	}
+	.dots i {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background: var(--st-progress);
+		animation: rt-bounce 1.2s ease-in-out infinite;
+	}
+	.dots i:nth-child(2) {
+		animation-delay: 0.15s;
+	}
+	.dots i:nth-child(3) {
+		animation-delay: 0.3s;
+	}
+	@keyframes rt-bounce {
+		0%,
+		80%,
+		100% {
+			opacity: 0.25;
+			transform: translateY(0);
+		}
+		40% {
+			opacity: 1;
+			transform: translateY(-2px);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.dots i {
+			animation: none;
+			opacity: 0.7;
+		}
 	}
 	.say header {
 		display: flex;
