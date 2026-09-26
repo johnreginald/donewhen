@@ -157,6 +157,12 @@ type AttemptSpec struct {
 	// PriorVerdict and PriorEvidence turn the prompt into a repair brief.
 	PriorVerdict  *Verdict
 	PriorEvidence []Evidence
+	// FromBranch continues a failed attempt: the new worktree starts from its
+	// branch, so the work it did is there to fix rather than redo. FromBase is
+	// where the ticket's work began, so the checks and the review still see
+	// the whole change. Empty, or a branch that is gone, starts fresh.
+	FromBranch string
+	FromBase   string
 }
 
 // RunTicket runs a single attempt. It returns the verdict even when the attempt
@@ -290,10 +296,32 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		wtPath = abs
 	}
 	_ = os.RemoveAll(wtPath)
-	wt, err := AddWorktree(ctx, cfg.Repo, wtPath, branch, cfg.BaseRef)
+	start, continuing := cfg.BaseRef, false
+	if spec.FromBranch != "" {
+		if _, err := git(ctx, cfg.Repo, "rev-parse", "--verify", "--quiet", spec.FromBranch+"^{commit}"); err == nil {
+			start, continuing = spec.FromBranch, true
+		}
+	}
+	wt, err := AddWorktree(ctx, cfg.Repo, wtPath, branch, start)
 	if err != nil {
 		releaseClaim("could not create a worktree")
 		return v, nil, fmt.Errorf("create worktree: %w", err)
+	}
+	if continuing {
+		// The ticket's work began where the first attempt did, not at the
+		// last attempt's commit: keep that as the base the checks diff from.
+		base := spec.FromBase
+		if base == "" {
+			if head, err := git(ctx, cfg.Repo, "rev-parse", cfg.BaseRef); err == nil {
+				if mb, err := git(ctx, cfg.Repo, "merge-base", spec.FromBranch, strings.TrimSpace(head)); err == nil {
+					base = strings.TrimSpace(mb)
+				}
+			}
+		}
+		if base != "" {
+			_ = setWorktreeBase(ctx, wtPath, base)
+		}
+		o.logf("continuing from %s", spec.FromBranch)
 	}
 	// Build on the tickets this one waits on that are still in review: their
 	// work is not on the main line yet.
@@ -328,6 +356,10 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	prompt := BuildPrompt(issue, criteria)
 	if spec.PriorVerdict != nil {
 		prompt = BuildRepairPrompt(issue, criteria, *spec.PriorVerdict, spec.PriorEvidence)
+		if continuing {
+			prompt += "\n\n## Your previous attempt is in this worktree\n\nIt was committed on " + spec.FromBranch +
+				" and this worktree starts from it. Fix what failed; do not start over.\n"
+		}
 	}
 	if in := strings.TrimSpace(o.Instructions); in != "" {
 		prompt = "## Your instructions\n\n" + in + "\n\n" + prompt
@@ -417,11 +449,17 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	}
 
 	// 6. See what it actually did.
-	diff, err := StageAndDiff(ctx, wtPath, cfg.BaseRef)
+	// Diff from where the ticket's work began: after blockers were merged
+	// in, or where a continued attempt's work started.
+	diffBase := cfg.BaseRef
+	if b := WorktreeBase(ctx, wtPath); b != "" {
+		diffBase = b
+	}
+	diff, err := StageAndDiff(ctx, wtPath, diffBase)
 	if err != nil {
 		return v, nil, fmt.Errorf("read diff: %w", err)
 	}
-	if patch, derr := gitRaw(ctx, wtPath, "diff", "--cached", cfg.BaseRef); derr == nil {
+	if patch, derr := gitRaw(ctx, wtPath, "diff", "--cached", diffBase); derr == nil {
 		_ = os.WriteFile(runDir.File("diff.patch"), []byte(patch), 0o644)
 		patchText = redact(patch)
 	}
@@ -464,6 +502,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	v.CostUSD += res.CostUSD // Summarise already counted what evaluation spent
 	v.DurationS = int64(res.Duration.Seconds())
 	v.SessionID, v.Questions, v.DeniedTools = res.SessionID, res.Questions, res.DeniedTools
+	v.Branch, v.Base = branch, WorktreeBase(ctx, wtPath)
 	if o.AgentID != "" {
 		if blockers, err := o.Raenil.Blockers(ctx, issue.Key); err == nil {
 			for _, b := range blockers {

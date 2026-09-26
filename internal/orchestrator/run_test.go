@@ -492,3 +492,48 @@ func TestTheWorkerIsGivenAnAbsoluteWorktreeThatExists(t *testing.T) {
 		t.Fatalf("worker cwd %q did not exist when the worker ran", cwd)
 	}
 }
+
+// stepRunner does half the job on its first go and checks, on its second,
+// that the first go's work is still there.
+type stepRunner struct {
+	calls   *int
+	sawHalf *bool
+}
+
+func (stepRunner) Name() string { return "step" }
+func (r stepRunner) Run(_ context.Context, req RunRequest) (RunResult, error) {
+	*r.calls++
+	if *r.calls == 1 {
+		_ = os.WriteFile(filepath.Join(req.Cwd, "src", "half.ts"), []byte("export const half = 1\n"), 0o644)
+		return RunResult{}, nil
+	}
+	_, err := os.Stat(filepath.Join(req.Cwd, "src", "half.ts"))
+	*r.sawHalf = err == nil
+	_ = os.WriteFile(filepath.Join(req.Cwd, "src", "add.ts"),
+		[]byte("export const add = (a:number,b:number) => a + b\n"), 0o644)
+	return RunResult{}, nil
+}
+
+// A retry carries on from the failed attempt's work instead of starting
+// over, and the checks still see the whole change.
+func TestRetryContinuesFromThePreviousAttempt(t *testing.T) {
+	crit := append(passingCriteria(), models.Criterion{ID: "cr-3", Body: "half exists", Kind: models.CriterionDeterministic,
+		CheckSpec: json.RawMessage(`{"cmd":"test -f src/half.ts"}`)})
+	f := &fakeRaenil{criteria: crit}
+	calls, saw := 0, false
+	o := newOrch(t, f, stepRunner{calls: &calls, sawHalf: &saw})
+	o.Cfg.Handoff = true
+	v, err := o.Work(context.Background(), "TST-1", WorkConfig{Triage: TriagePolicy{MaxAttempts: 2, EscalateAfter: 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || !saw {
+		t.Fatalf("calls=%d, second attempt saw the first's work: %v", calls, saw)
+	}
+	if v.Status != StatusPassed {
+		t.Fatalf("status = %s, failed %v", v.Status, v.Failed)
+	}
+	if v.DiffStat.Files != 2 {
+		t.Errorf("the checks saw %d changed files, want both attempts' (2)", v.DiffStat.Files)
+	}
+}

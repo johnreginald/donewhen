@@ -126,6 +126,8 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 				Model:         d.Model,
 				PriorVerdict:  &v,
 				PriorEvidence: ev,
+				FromBranch:    v.Branch,
+				FromBase:      v.Base,
 			}
 			if d.ContinueSession {
 				spec.SessionID = v.SessionID

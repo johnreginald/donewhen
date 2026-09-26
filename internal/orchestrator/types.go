@@ -113,6 +113,10 @@ type Verdict struct {
 	// SessionID lets the next attempt continue this one instead of starting
 	// cold, so a repair keeps the failed attempt in context.
 	SessionID string `json:"session_id,omitempty"`
+	// Branch and Base are where this attempt's work was committed and where
+	// the ticket's work began, so a retry can carry on from it.
+	Branch string `json:"branch,omitempty"`
+	Base   string `json:"base,omitempty"`
 	// Questions is anything the worker asked. A daemon cannot answer, so these
 	// are why a ticket bounces to a human rather than retrying forever.
 	Questions []string `json:"questions,omitempty"`
