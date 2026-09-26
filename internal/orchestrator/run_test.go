@@ -213,8 +213,10 @@ func TestRunTicketPassingFlow(t *testing.T) {
 	if len(f.commits) != 1 {
 		t.Errorf("a passing attempt should link its commit, got %v", f.commits)
 	}
-	if len(f.documents) != 1 || !strings.Contains(f.documents[0], "## Evidence") {
-		t.Errorf("expected an evidence artifact to be saved, got %v", f.documents)
+	// The evidence stays with the run and its criteria; no artifact is
+	// written to the ticket's documents for it.
+	if len(f.documents) != 0 {
+		t.Errorf("a passing run wrote a document: %v", f.documents)
 	}
 	if !strings.HasPrefix(f.branch, "ticket/tst-1") {
 		t.Errorf("branch = %q", f.branch)

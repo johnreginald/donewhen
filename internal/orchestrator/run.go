@@ -549,8 +549,6 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 			_ = o.Raenil.LinkCommit(ctx, issue.ID, sha, issue.Title)
 			o.logf("committed %s on %s", sha[:min(8, len(sha))], branch)
 		}
-		_ = o.Raenil.SaveDocument(ctx, issue.ID,
-			fmt.Sprintf("%s — attempt %d", issue.Key, attempt), artifactMD(v, evidence, diff), "implementation")
 		if err := o.Raenil.SetState(ctx, issue.ID, cfg.StateInReview); err != nil {
 			o.logf("warning: could not move to %s: %v", cfg.StateInReview, err)
 		}
@@ -640,38 +638,6 @@ func buildPrompt(issue models.Issue, criteria []ParsedCriterion, showGuards bool
 	b.WriteString("- Do not commit. The orchestrator commits if the checks pass.\n")
 	b.WriteString("- If something is genuinely ambiguous, say so rather than guessing; " +
 		"the ticket will go back to a human.\n")
-	return b.String()
-}
-
-// artifactMD is the engineering record attached to the issue.
-func artifactMD(v Verdict, ev []Evidence, d Diff) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Attempt %d — **%s** via %s (%s)\n\n", v.Attempt, v.Status, v.Runner, v.Model)
-	fmt.Fprintf(&b, "Cost $%.4f, %ds, %d files changed (+%d/-%d)\n\n",
-		v.CostUSD, v.DurationS, v.DiffStat.Files, v.DiffStat.Insertions, v.DiffStat.Deletions)
-
-	b.WriteString("## Evidence\n\n| criterion | kind | result | detail |\n|---|---|---|---|\n")
-	for _, e := range ev {
-		result := "fail"
-		if e.Pass {
-			result = "pass"
-		}
-		detail := e.Detail
-		if e.Err != "" {
-			detail = e.Err
-		}
-		if e.Cmd != "" {
-			detail = fmt.Sprintf("`%s` exit %d. %s", e.Cmd, e.Exit, detail)
-		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", e.CriterionText, e.Kind, result, strings.TrimSpace(detail))
-	}
-
-	if len(d.Files) > 0 {
-		b.WriteString("\n## Files\n\n")
-		for _, f := range d.Files {
-			fmt.Fprintf(&b, "- `%s` %s (+%d/-%d)\n", f.Path, f.Status, f.Insertions, f.Deletions)
-		}
-	}
 	return b.String()
 }
 

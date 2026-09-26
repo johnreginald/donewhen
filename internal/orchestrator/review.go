@@ -131,7 +131,7 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 	o = scoped
 	cfg := o.Cfg.withDefaults()
 
-	v, evidence, err := o.Verify(ctx, ref, attempt)
+	v, _, err := o.Verify(ctx, ref, attempt)
 	if err != nil {
 		return v, err
 	}
@@ -149,7 +149,6 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 		return v, err
 	}
 
-	diff, _ := StageAndDiff(ctx, wtPath, cfg.BaseRef)
 	sha, cerr := Commit(ctx, wtPath, fmt.Sprintf("%s: review fixes", issue.Key))
 	switch {
 	case cerr != nil:
@@ -161,8 +160,6 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 		o.logf("review commit %s", sha[:min(8, len(sha))])
 	}
 
-	_ = o.Raenil.SaveDocument(ctx, issue.ID,
-		fmt.Sprintf("%s — reviewed", issue.Key), artifactMD(v, evidence, diff), "implementation")
 	if err := o.Raenil.SetState(ctx, issue.ID, cfg.StateInReview); err != nil {
 		return v, fmt.Errorf("could not move to %s: %w", cfg.StateInReview, err)
 	}
