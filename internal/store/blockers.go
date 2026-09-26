@@ -15,7 +15,10 @@ type Blocker struct {
 	Title    string `json:"title"`
 	State    string `json:"state"`
 	Category string `json:"category"`
-	Done     bool   `json:"done"` // Done or Canceled: no longer in the way
+	// Done: no longer in the way — Done, Canceled, or In Review. A
+	// dependent of an In Review blocker starts from the blocker's branch, so
+	// it builds on that work before it is merged.
+	Done bool `json:"done"`
 }
 
 // BlockLink is one "blocked by" edge in a workspace, for views that show
@@ -27,7 +30,7 @@ type BlockLink struct {
 }
 
 const blockerSelect = `
-	SELECT b.id, b.key, b.title, st.name, st.category, st.category IN ('completed', 'canceled')
+	SELECT b.id, b.key, b.title, st.name, st.category, (st.category IN ('completed', 'canceled') OR st.name = 'In Review')
 	FROM issue_blockers ib
 	JOIN issues b ON b.id = ib.%s
 	JOIN workflow_states st ON st.id = b.state_id
@@ -61,7 +64,8 @@ func (s *Store) ListBlocking(ctx context.Context, wsID, issueID string) ([]Block
 	return s.listLinked(ctx, wsID, issueID, "issue_id", "blocker_id")
 }
 
-// OpenBlockers are the blockers not yet Done or Canceled.
+// OpenBlockers are the blockers still in the way: not Done, Canceled or In
+// Review.
 func (s *Store) OpenBlockers(ctx context.Context, wsID, issueID string) ([]Blocker, error) {
 	all, err := s.ListBlockers(ctx, wsID, issueID)
 	if err != nil {
@@ -82,13 +86,13 @@ func BlockedMessage(open []Blocker) string {
 	for i, b := range open {
 		parts[i] = fmt.Sprintf("%s (%s)", b.Key, b.State)
 	}
-	return "Blocked by " + strings.Join(parts, ", ") + " — it can run once they are Done"
+	return "Blocked by " + strings.Join(parts, ", ") + " — it can run once they are In Review or Done"
 }
 
 // ListBlockLinks lists every "blocked by" edge in a workspace.
 func (s *Store) ListBlockLinks(ctx context.Context, wsID string) ([]BlockLink, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ib.issue_id, ib.blocker_id, st.category IN ('completed', 'canceled')
+		SELECT ib.issue_id, ib.blocker_id, (st.category IN ('completed', 'canceled') OR st.name = 'In Review')
 		FROM issue_blockers ib
 		JOIN issues b ON b.id = ib.blocker_id
 		JOIN workflow_states st ON st.id = b.state_id
@@ -184,7 +188,7 @@ func (s *Store) ReadyToRun(ctx context.Context, wsID, projectID string) (ready [
 		SELECT i.id,
 		       EXISTS (SELECT 1 FROM issue_blockers ib JOIN issues b ON b.id = ib.blocker_id
 		               JOIN workflow_states bs ON bs.id = b.state_id
-		               WHERE ib.issue_id = i.id AND bs.category NOT IN ('completed', 'canceled'))
+		               WHERE ib.issue_id = i.id AND bs.category NOT IN ('completed', 'canceled') AND bs.name <> 'In Review')
 		FROM issues i JOIN workflow_states st ON st.id = i.state_id
 		WHERE i.workspace_id = $1 AND i.project_id = $2 AND st.name = 'Ready'
 		  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.issue_id = i.id AND j.status IN ('queued', 'claimed'))

@@ -201,6 +201,11 @@ func (o *Orchestrator) ReviewDiff(ctx context.Context, ref string) (string, erro
 			base = strings.TrimSpace(mb)
 		}
 	}
+	// Built on other tickets' branches: those are theirs to review, so the
+	// diff starts after them.
+	if b := WorktreeBase(ctx, wt); b != "" {
+		base = b
+	}
 	return gitRaw(ctx, wt, "diff", "--cached", base)
 }
 

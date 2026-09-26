@@ -81,6 +81,27 @@ func (c *RaenilClient) Issue(ctx context.Context, ref string) (models.Issue, err
 	return is, c.do(ctx, http.MethodGet, "/api/issues/"+ref, nil, &is)
 }
 
+// Blockers reads the tickets that must be done before an issue — each with
+// its state, and whether it is out of the way.
+func (c *RaenilClient) Blockers(ctx context.Context, ref string) ([]IssueBlocker, error) {
+	var out struct {
+		BlockedBy []IssueBlocker `json:"blockedBy"`
+	}
+	err := c.do(ctx, http.MethodGet, "/api/issues/"+ref+"/blockers", nil, &out)
+	// A tracker from before blockers existed has no such route: nothing blocks.
+	if err != nil && strings.Contains(err.Error(), "404 Not Found") {
+		return nil, nil
+	}
+	return out.BlockedBy, err
+}
+
+// IssueBlocker is one ticket another waits on.
+type IssueBlocker struct {
+	Key   string `json:"key"`
+	State string `json:"state"`
+	Done  bool   `json:"done"`
+}
+
 // Criteria reads an issue's done-when checklist.
 func (c *RaenilClient) Criteria(ctx context.Context, issueID string) ([]models.Criterion, error) {
 	var cs []models.Criterion

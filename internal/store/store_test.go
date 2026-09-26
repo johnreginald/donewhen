@@ -1008,6 +1008,16 @@ func TestBlockersAndEpicRun(t *testing.T) {
 		t.Errorf("blocked = %v, want %s", blocked, next.Key)
 	}
 
+	// In Review is far enough: the dependent builds on the blocker's branch.
+	review := "In Review"
+	s.UpdateIssue(ctx, ws, base.ID, IssuePatch{StateName: &review})
+	if open, _ := s.OpenBlockers(ctx, ws, next.ID); len(open) != 0 {
+		t.Errorf("an In Review blocker still blocks: %+v", open)
+	}
+	if _, blocked, _ := s.ReadyToRun(ctx, ws, epic.ID); len(blocked) != 0 {
+		t.Errorf("still blocked with the blocker In Review: %v", blocked)
+	}
+
 	// The blocker is Done: the next ticket is free, and a running epic
 	// names itself as the one to restart.
 	s.SetEpicAutorun(ctx, ws, epic.ID, true)

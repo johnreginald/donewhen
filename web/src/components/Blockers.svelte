@@ -70,7 +70,7 @@
 
 <div class="bl">
 	{#each list as b (b.id)}
-		<span class="chip" class:done={b.done} title="{b.key} · {b.title} — {b.state}">
+		<span class="chip" class:done={b.done && b.state !== 'In Review'} class:review={b.state === 'In Review'} title="{b.key} · {b.title} — {b.state}{b.state === 'In Review' ? ' (work builds on its branch)' : ''}">
 			<button class="go" onclick={() => goto('/issue/' + b.key)}>
 				<StateIcon category={stateOf(b)?.category || b.category} color={stateOf(b)?.color} />
 				<span class="k">{b.key}</span>
@@ -114,6 +114,9 @@
 		border: 1px solid color-mix(in srgb, #fbbf24 40%, var(--border));
 		border-radius: 6px;
 		background: var(--bg-elev);
+	}
+	.chip.review {
+		border-color: color-mix(in srgb, #4ade80 40%, var(--border));
 	}
 	.chip.done {
 		border-color: var(--border);

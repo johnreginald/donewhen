@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -194,4 +195,60 @@ func pathFromDiffHeader(line string) string {
 		return ""
 	}
 	return strings.TrimPrefix(fields[3], "b/")
+}
+
+// MergeBlockerBranches builds a worktree on the work of the tickets it waits
+// on that are still in review: each branch is merged in before the agent
+// starts, so it finds that code in place. The merged state is recorded as the
+// worktree's own base, so the review and the checks see only this ticket's
+// changes, not its blockers'. A conflict stops the run: the ticket cannot
+// start until its blockers are merged, or merged together, by hand.
+func MergeBlockerBranches(ctx context.Context, dir string, branches []string) error {
+	if len(branches) == 0 {
+		return nil
+	}
+	for _, b := range branches {
+		if _, err := git(ctx, dir, "-c", "user.email=orchestrator@raenil.local", "-c", "user.name=Raenil Orchestrator",
+			"merge", "--no-ff", "--no-edit", "-m", "Build on "+b, b); err != nil {
+			_, _ = git(ctx, dir, "merge", "--abort")
+			return fmt.Errorf("could not build on %s: it conflicts with the other work this ticket waits on — merge its blockers first: %w", b, err)
+		}
+	}
+	sha, err := git(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return err
+	}
+	return setWorktreeBase(ctx, dir, strings.TrimSpace(sha))
+}
+
+// setWorktreeBase remembers, inside the worktree's own git directory, the
+// commit this ticket's work starts from.
+func setWorktreeBase(ctx context.Context, dir, sha string) error {
+	p, err := git(ctx, dir, "rev-parse", "--git-path", "raenil-base")
+	if err != nil {
+		return err
+	}
+	path := strings.TrimSpace(p)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	return os.WriteFile(path, []byte(sha+"\n"), 0o644)
+}
+
+// WorktreeBase is the commit a worktree's ticket started from when it was
+// built on other tickets' branches; empty when it started from the main line.
+func WorktreeBase(ctx context.Context, dir string) string {
+	p, err := git(ctx, dir, "rev-parse", "--git-path", "raenil-base")
+	if err != nil {
+		return ""
+	}
+	path := strings.TrimSpace(p)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }

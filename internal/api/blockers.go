@@ -75,7 +75,7 @@ type EpicRun struct {
 
 // handleRunEpic sets an epic running: every Ready ticket in it that nothing
 // blocks starts now, and each of the rest starts as soon as its blockers are
-// Done, until the epic is stopped.
+// In Review or Done, until the epic is stopped.
 func (s *Server) handleRunEpic(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if handleStoreErr(w, s.store.SetEpicAutorun(r.Context(), ws(r), id, true)) {
@@ -141,7 +141,7 @@ func (s *Server) runEpic(ctx context.Context, wsID, epicID, actor string) (EpicR
 }
 
 // WatchEpics starts the next tickets of a running epic when one it waits on
-// is Done. It listens to every workspace's events, like the notifier.
+// reaches In Review or Done. It listens to every workspace's events, like the notifier.
 func (s *Server) WatchEpics(ctx context.Context) {
 	ch, unsub := s.bus.Subscribe("")
 	defer unsub()
@@ -154,7 +154,7 @@ func (s *Server) WatchEpics(ctx context.Context) {
 				return
 			}
 			if e.Type != events.IssueStateChanged || e.Issue == nil || e.To == nil ||
-				(e.To.Category != "completed" && e.To.Category != "canceled") {
+				(e.To.Category != "completed" && e.To.Category != "canceled" && e.To.Name != "In Review") {
 				continue
 			}
 			epics, err := s.store.AutorunDependents(ctx, e.WorkspaceID, e.Issue.ID)
@@ -167,7 +167,7 @@ func (s *Server) WatchEpics(ctx context.Context) {
 				if err != nil {
 					log.Printf("epic %s: %v", epic, err)
 				} else if len(res.Queued) > 0 {
-					log.Printf("epic %s: %s Done, started %s", epic, e.Issue.Key, strings.Join(res.Queued, ", "))
+					log.Printf("epic %s: %s cleared, started %s", epic, e.Issue.Key, strings.Join(res.Queued, ", "))
 				}
 			}
 		}

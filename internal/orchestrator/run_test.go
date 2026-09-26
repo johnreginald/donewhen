@@ -62,6 +62,9 @@ func (f *fakeRaenil) server(t *testing.T) *RaenilClient {
 			DescriptionMD: "`add` subtracts instead of adding.",
 		})
 	})
+	mux.HandleFunc("GET /api/issues/{id}/blockers", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"blockedBy": []any{}, "blocking": []any{}})
+	})
 	mux.HandleFunc("GET /api/issues/{id}/criteria", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		defer f.mu.Unlock()

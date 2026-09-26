@@ -72,7 +72,7 @@
 			</span>
 		{/if}
 		{#if waitingOn.length && !busy}
-			<span class="st blocked" title="It runs once they are Done"><Lock size={13} strokeWidth={2.4} />Waiting on {waitingOn.join(', ')}</span>
+			<span class="st blocked" title="It runs once they are In Review or Done"><Lock size={13} strokeWidth={2.4} />Waiting on {waitingOn.join(', ')}</span>
 		{/if}
 		<button class="btn primary sm" onclick={run} disabled={busy || agent.status === 'paused' || waitingOn.length > 0}>
 			<Play size={13} strokeWidth={2.4} />Run with {agent.name}

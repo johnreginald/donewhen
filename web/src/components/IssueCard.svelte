@@ -18,7 +18,7 @@
 	const job = $derived($activeJobs.find((j) => j.issueId === issue.id));
 	const agent = $derived($agents.find((a) => a.id === (job?.agentId || taskAgentId(issue, $priorityAgents))));
 	const DOING = { run_ticket: 'Working', chat: 'Thinking', verify: 'Verifying', finish: 'Finishing' };
-	// Tickets still in its way: it does not run until they are Done.
+	// Tickets still in its way: it does not run until they are In Review or Done.
 	const waitingOn = $derived(
 		$blockLinks.filter((l) => l.issueId === issue.id && !l.done).map((l) => $issues.find((i) => i.id === l.blockerId)?.key || '')
 	);
@@ -64,7 +64,7 @@
 		{/if}
 		<span class="spacer"></span>
 		{#if waitingOn.length}
-			<span class="lock" title="Blocked by {waitingOn.filter(Boolean).join(', ')} — runs once they are Done"><Lock size={11} strokeWidth={2.4} />{waitingOn.length}</span>
+			<span class="lock" title="Blocked by {waitingOn.filter(Boolean).join(', ')} — runs once they are In Review or Done"><Lock size={11} strokeWidth={2.4} />{waitingOn.length}</span>
 		{/if}
 		<span class="assignee" class:on={issue.assigneeId}></span>
 	</div>

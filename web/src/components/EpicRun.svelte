@@ -1,7 +1,7 @@
 <script>
 	// Run a whole epic: every Ready ticket in it that nothing blocks starts
 	// now, and each of the rest starts on its own as soon as its blockers are
-	// Done — until the epic is stopped.
+	// In Review or Done — until the epic is stopped.
 	import { api } from '$lib/api.js';
 	import { projects, loadMeta } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
@@ -48,7 +48,7 @@
 		<button class="btn sm" onclick={stop} disabled={busy}><Square size={12} strokeWidth={2.4} />Stop epic</button>
 	{:else}
 		<button class="btn primary sm" onclick={run} disabled={busy}
-			title="Start every Ready ticket in this epic that nothing blocks; the rest start as their blockers are Done">
+			title="Start every Ready ticket in this epic that nothing blocks; the rest start as their blockers reach In Review or Done">
 			<Play size={13} strokeWidth={2.4} />Run epic
 		</button>
 	{/if}

@@ -295,6 +295,20 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		releaseClaim("could not create a worktree")
 		return v, nil, fmt.Errorf("create worktree: %w", err)
 	}
+	// Build on the tickets this one waits on that are still in review: their
+	// work is not on the main line yet.
+	if branches, err := o.reviewBranches(ctx, issue.Key); err != nil {
+		_ = wt.Remove(context.WithoutCancel(ctx))
+		releaseClaim("could not read its blockers")
+		return v, nil, fmt.Errorf("not starting %s: %w", issue.Key, err)
+	} else if len(branches) > 0 {
+		o.logf("building on %s", strings.Join(branches, ", "))
+		if err := MergeBlockerBranches(ctx, wtPath, branches); err != nil {
+			_ = wt.Remove(context.WithoutCancel(ctx))
+			releaseClaim("its blockers' work does not combine")
+			return v, nil, fmt.Errorf("not starting %s: %w", issue.Key, err)
+		}
+	}
 	keepBranch := false
 	defer func() {
 		// Handoff keeps the checkout itself, not just the branch: a reviewer
@@ -715,4 +729,32 @@ func decisionsMade(its []models.Interaction) string {
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// reviewBranches are the branches of the tickets an issue waits on that are
+// In Review: done enough to build on, not yet merged. A blocker still open is
+// the server's to refuse; a Done one is on the main line already.
+func (o *Orchestrator) reviewBranches(ctx context.Context, key string) ([]string, error) {
+	blockers, err := o.Raenil.Blockers(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, b := range blockers {
+		if !b.Done {
+			return nil, fmt.Errorf("blocked by %s (%s)", b.Key, b.State)
+		}
+		if b.State != "In Review" {
+			continue
+		}
+		bi, err := o.Raenil.Issue(ctx, b.Key)
+		if err != nil {
+			return nil, err
+		}
+		if bi.GitBranch == nil || *bi.GitBranch == "" {
+			return nil, fmt.Errorf("%s is In Review but has no branch recorded to build on", b.Key)
+		}
+		out = append(out, *bi.GitBranch)
+	}
+	return out, nil
 }

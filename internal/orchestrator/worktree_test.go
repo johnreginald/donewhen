@@ -114,3 +114,56 @@ func TestDeletedTestIsBlockedEndToEnd(t *testing.T) {
 	}
 	t.Logf("gate correctly refused: %s", res.Detail)
 }
+
+// A ticket built on a blocker still in review starts with the blocker's code
+// in place, and its diff holds only its own change.
+func TestMergeBlockerBranches(t *testing.T) {
+	ctx := context.Background()
+	repo := newRepo(t)
+
+	// The blocker's work, on its own branch, not merged.
+	blocker, err := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "blk"), "ticket/blk-1", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(blocker.Path, "api"), "go.mod", "module x\n")
+	if _, err := Commit(ctx, blocker.Path, "blocker work"); err != nil {
+		t.Fatal(err)
+	}
+
+	dep, err := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "dep"), "ticket/dep-1", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if WorktreeBase(ctx, dep.Path) != "" {
+		t.Fatal("a fresh worktree already has a base")
+	}
+	if err := MergeBlockerBranches(ctx, dep.Path, []string{"ticket/blk-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dep.Path, "api", "go.mod")); err != nil {
+		t.Fatalf("the blocker's work is not in place: %v", err)
+	}
+	base := WorktreeBase(ctx, dep.Path)
+	if base == "" {
+		t.Fatal("no base recorded after building on a blocker")
+	}
+
+	write(t, filepath.Join(dep.Path, "api"), "main.go", "package main\n")
+	d, err := StageAndDiff(ctx, dep.Path, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Files) != 1 || d.Files[0].Path != "api/main.go" {
+		t.Errorf("diff = %v, want only api/main.go", d.Files)
+	}
+
+	// Two blockers whose work collides: the ticket does not start.
+	other, _ := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "oth"), "ticket/oth-1", "HEAD")
+	write(t, filepath.Join(other.Path, "api"), "go.mod", "module y\n")
+	Commit(ctx, other.Path, "other work")
+	clash, _ := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "clash"), "ticket/clash-1", "HEAD")
+	if err := MergeBlockerBranches(ctx, clash.Path, []string{"ticket/blk-1", "ticket/oth-1"}); err == nil {
+		t.Error("conflicting blockers were combined")
+	}
+}
