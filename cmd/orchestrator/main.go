@@ -256,6 +256,8 @@ func runnerPool(ctx context.Context, oc *orchestrator.OpenCodeRunner) orchestrat
 // extra commands a worker may run without asking, as Claude Code permission
 // rules separated by ";" — e.g. "Bash(go test *);Bash(go build *)". Bare Bash is
 // never granted: it would approve writes anywhere on the machine.
+// CLAUDE_PERMISSION_MODE overrides the work runs' permission mode (default
+// "auto"; "acceptEdits" is the strict allowlist).
 func claudeRunner() *orchestrator.ClaudeRunner {
 	var allowed []string
 	for _, rule := range strings.Split(os.Getenv("CLAUDE_ALLOWED_TOOLS"), ";") {
@@ -263,7 +265,7 @@ func claudeRunner() *orchestrator.ClaudeRunner {
 			allowed = append(allowed, rule)
 		}
 	}
-	r := &orchestrator.ClaudeRunner{AllowedTools: allowed}
+	r := &orchestrator.ClaudeRunner{AllowedTools: allowed, PermissionMode: strings.TrimSpace(os.Getenv("CLAUDE_PERMISSION_MODE"))}
 	// A Raenil connection, when made, runs Claude isolated from the user's own
 	// ~/.claude on its own subscription token.
 	conns := orchestrator.DefaultConnections()

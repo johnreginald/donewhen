@@ -375,6 +375,8 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		prompt += "\n\n## When you need a decision\n\nIf you cannot finish without a decision only the user can make, " +
 			"call the Raenil tool ask_user on " + issue.Key + " with a few concrete options, then end your turn. " +
 			"Do not guess, and do not stop for anything you can decide yourself.\n\n" +
+			"Asking is rare: the ticket is the spec, and the user is not watching. When the ticket leaves a " +
+			"choice open, pick what fits the existing code best, say so in your final summary, and carry on.\n\n" +
 			"If the work needs code, tables or files another ticket delivers and that ticket is not in place, " +
 			"call the Raenil tool add_blocker on " + issue.Key + " naming that ticket and what you need from it, then " +
 			"end your turn. Do not build a stand-in for the other ticket's work; this ticket starts again on its " +

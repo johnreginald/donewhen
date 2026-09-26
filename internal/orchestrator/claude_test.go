@@ -73,7 +73,7 @@ func TestClaudeArgs(t *testing.T) {
 		{"--setting-sources", "project"},
 		{"--strict-mcp-config"},
 		{"--mcp-config", "mcp.json"},
-		{"--permission-mode", "acceptEdits"},
+		{"--permission-mode", "auto"},
 		{"--model", "sonnet"},
 		{"--resume", "s1"},
 		{"--max-budget-usd", "2.00"},
@@ -90,14 +90,19 @@ func TestClaudeArgs(t *testing.T) {
 		t.Errorf("bare Bash is pre-approved, which lets a worker write anywhere: %v", work[i+1])
 	}
 
+	strict := &ClaudeRunner{PermissionMode: "acceptEdits"}
+	if w := strict.args(RunRequest{}, "m"); !has(w, "--permission-mode", "acceptEdits") {
+		t.Errorf("configured permission mode not passed: %v", w)
+	}
+
 	// A model meant for another runner is not handed to Claude.
 	if other := r.args(RunRequest{Model: "opencode-go/glm-5.3-flash"}, "m"); slices.Contains(other, "--model") {
 		t.Errorf("foreign model passed on: %v", other)
 	}
-	if judge := r.args(RunRequest{DisableTools: true}, "m"); !has(judge, "--tools", "") || slices.Contains(judge, "acceptEdits") {
+	if judge := r.args(RunRequest{DisableTools: true}, "m"); !has(judge, "--tools", "") || slices.Contains(judge, "--permission-mode") {
 		t.Errorf("judge must run with no tools: %v", judge)
 	}
-	if review := r.args(RunRequest{ReadOnlyTools: true}, "m"); !has(review, "--tools", "Read,Glob,Grep") || slices.Contains(review, "acceptEdits") {
+	if review := r.args(RunRequest{ReadOnlyTools: true}, "m"); !has(review, "--tools", "Read,Glob,Grep") || slices.Contains(review, "--permission-mode") {
 		t.Errorf("reviewer must be read-only: %v", review)
 	}
 }

@@ -29,6 +29,9 @@ import (
 //   - Under acceptEdits, writes outside the working directory are refused and
 //     reported in permission_denials; file commands inside it are allowed.
 //   - Read-only shell commands run even when Bash is not allowlisted.
+//   - --permission-mode auto works in print mode (claude 2.1.283, on the Mac
+//     login and on a setup-token): ordinary commands such as go vet, curl and
+//     writes run; rm -rf of a home folder and a force push are refused.
 type ClaudeRunner struct {
 	// Bin is the executable. Empty means "claude" on PATH.
 	Bin string
@@ -56,6 +59,11 @@ type ClaudeRunner struct {
 	// its sessions there and a conversation resumes them; empty makes a
 	// throwaway one per run.
 	ConfigDir string
+	// PermissionMode is Claude Code's --permission-mode for work runs. Empty
+	// is "auto": a classifier approves ordinary commands and refuses
+	// destructive ones, so a ticket is not stopped for a command nobody
+	// listed. "acceptEdits" restores the strict allowlist.
+	PermissionMode string
 
 	ready readyCache
 }
@@ -63,7 +71,9 @@ type ClaudeRunner struct {
 // claudeWorkTools are what an editing run has.
 var claudeWorkTools = []string{"Read", "Edit", "Write", "Glob", "Grep", "Bash"}
 
-// claudeWorkAllowed are the tools a work run may use without asking. Bash is
+// claudeWorkAllowed are the tools a work run may use without asking. Under
+// auto mode they only skip the classifier; under acceptEdits they are the
+// whole allowance. Bash is
 // deliberately absent: allowlisting it bare approves every command, and the
 // live test watched a worker write outside its worktree that way. Without it,
 // acceptEdits still lets file and read-only commands run inside the worktree;
@@ -176,6 +186,16 @@ func (r *ClaudeRunner) Run(ctx context.Context, req RunRequest) (RunResult, erro
 	return res, err
 }
 
+// DefaultClaudePermissionMode is what a work run gets when none is set.
+const DefaultClaudePermissionMode = "auto"
+
+func (r *ClaudeRunner) permissionMode() string {
+	if r.PermissionMode != "" {
+		return r.PermissionMode
+	}
+	return DefaultClaudePermissionMode
+}
+
 // args builds the command line. The prompt is not in it: it goes on stdin.
 func (r *ClaudeRunner) args(req RunRequest, mcpConfig string) []string {
 	args := []string{
@@ -195,7 +215,7 @@ func (r *ClaudeRunner) args(req RunRequest, mcpConfig string) []string {
 			"--allowedTools", strings.Join(allowed, ","))
 	default:
 		allowed := append(append(append(append([]string{}, claudeWorkAllowed...), ClaudeDefaultCommands...), r.AllowedTools...), mcpTools(req)...)
-		args = append(args, "--permission-mode", "acceptEdits",
+		args = append(args, "--permission-mode", r.permissionMode(),
 			"--tools", strings.Join(claudeWorkTools, ","),
 			"--allowedTools", strings.Join(allowed, ","))
 	}
