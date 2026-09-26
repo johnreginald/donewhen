@@ -41,6 +41,10 @@ type Host struct {
 	// can ask questions and propose tickets. Empty leaves it without tools.
 	MCPURL string
 
+	// Drain is how long a stopping host keeps working on the job it has
+	// before giving up on it (default 15m). Restarting the host to update it
+	// should not cost the turn or run in progress.
+	Drain     time.Duration
 	Poll      time.Duration // how often to ask for work (default 3s)
 	Heartbeat time.Duration // how often to report health (default 30s)
 	Logf      func(format string, args ...any)
@@ -49,6 +53,9 @@ type Host struct {
 	status []models.HarnessStatus
 	busy   bool // a job is running
 	jobs   sync.WaitGroup
+	// jobCtx is what jobs run under: it outlives the host's own context by
+	// Drain, so stopping lets the current job finish.
+	jobCtx context.Context
 }
 
 func (h *Host) logf(format string, args ...any) {
@@ -70,20 +77,56 @@ func (h *Host) Run(ctx context.Context) error {
 	if h.Heartbeat <= 0 {
 		h.Heartbeat = 30 * time.Second
 	}
+	if h.Drain <= 0 {
+		h.Drain = 15 * time.Minute
+	}
+	jobCtx, cancelJobs := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelJobs()
+	h.jobCtx = jobCtx
 	h.beat(ctx, true)
 	beat := time.NewTicker(h.Heartbeat)
 	defer beat.Stop()
 	poll := time.NewTicker(h.Poll)
 	defer poll.Stop()
-	defer h.jobs.Wait()
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return h.drain(jobCtx, cancelJobs, beat)
 		case <-beat.C:
 			h.beat(ctx, false)
 		case <-poll.C:
 			h.pollOnce(ctx)
+		}
+	}
+}
+
+// drain stops taking work and waits for the job in hand, still heartbeating
+// so Raenil does not reap it, until it finishes or Drain runs out.
+func (h *Host) drain(jobCtx context.Context, cancelJobs context.CancelFunc, beat *time.Ticker) error {
+	h.mu.Lock()
+	busy := h.busy
+	h.mu.Unlock()
+	if busy {
+		h.logf("stopping: finishing the current job first (up to %s)", h.Drain)
+	}
+	done := make(chan struct{})
+	go func() {
+		h.jobs.Wait()
+		close(done)
+	}()
+	limit := time.NewTimer(h.Drain)
+	defer limit.Stop()
+	for {
+		select {
+		case <-done:
+			return context.Canceled
+		case <-beat.C:
+			h.beat(jobCtx, false)
+		case <-limit.C:
+			h.logf("stopping: the current job ran past %s; ending it", h.Drain)
+			cancelJobs()
+			<-done
+			return context.Canceled
 		}
 	}
 }
@@ -137,7 +180,12 @@ func (h *Host) pollOnce(ctx context.Context) {
 		return
 	}
 	for _, c := range h.Clients {
-		job, ok, err := c.ClaimJob(ctx, h.Name, harnesses)
+		// A claim is not cut off by the host stopping: the server may already
+		// have handed the job over, and a job handed over is run (and
+		// drained), never dropped.
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		job, ok, err := c.ClaimJob(cctx, h.Name, harnesses)
+		cancel()
 		if err != nil {
 			h.logf("claim from %s: %v", c.Workspace, err)
 			continue
@@ -156,7 +204,11 @@ func (h *Host) pollOnce(ctx context.Context) {
 				h.busy = false
 				h.mu.Unlock()
 			}()
-			h.handle(ctx, c, job)
+			jctx := h.jobCtx
+			if jctx == nil {
+				jctx = ctx
+			}
+			h.handle(jctx, c, job)
 		}()
 		return
 	}

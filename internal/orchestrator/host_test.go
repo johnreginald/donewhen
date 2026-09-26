@@ -237,3 +237,95 @@ func TestHostKeepsBeatingDuringAJob(t *testing.T) {
 		}
 	}
 }
+
+// drainRunner answers after a pause, unless its context ends first.
+type drainRunner struct {
+	wait    time.Duration
+	started chan struct{}
+}
+
+func (drainRunner) Name() string                                       { return "claude" }
+func (drainRunner) Run(context.Context, RunRequest) (RunResult, error) { return RunResult{}, nil }
+func (s drainRunner) Ask(ctx context.Context, _, _ string) (string, float64, error) {
+	close(s.started)
+	select {
+	case <-time.After(s.wait):
+		return "hello", 0, nil
+	case <-ctx.Done():
+		return "", 0, ctx.Err()
+	}
+}
+func (s drainRunner) AskIn(ctx context.Context, m, p, _ string) (string, float64, error) {
+	return s.Ask(ctx, m, p)
+}
+
+// Stopping a host to update it lets the job in hand finish, up to Drain; a
+// job that runs past it is ended.
+func TestHostFinishesItsJobWhenStopped(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		drain time.Duration
+		want  string
+	}{
+		{"finishes", time.Minute, "succeeded"},
+		{"past the drain", 30 * time.Millisecond, "failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			claimed := make(chan struct{})
+			started := make(chan struct{})
+			var finished map[string]any
+			agent := models.Agent{ID: "ag-1", Name: "Engineer", Harness: "claude", Model: "haiku"}
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /api/hosts/heartbeat", func(w http.ResponseWriter, r *http.Request) {})
+			once := sync.Once{}
+			mux.HandleFunc("POST /api/jobs/claim", func(w http.ResponseWriter, r *http.Request) {
+				served := false
+				once.Do(func() {
+					served = true
+					json.NewEncoder(w).Encode(ClaimedJob{Job: models.Job{ID: "job-00001", Kind: "test_env"}, Agent: &agent})
+					close(claimed)
+				})
+				if !served {
+					w.WriteHeader(http.StatusNoContent)
+				}
+			})
+			mux.HandleFunc("POST /api/jobs/{id}/finish", func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				json.NewDecoder(r.Body).Decode(&finished)
+				mu.Unlock()
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			h := &Host{
+				Name:    "mac",
+				Clients: []*RaenilClient{{BaseURL: srv.URL, Token: "t", Workspace: "ws"}},
+				Runners: RunnerSet{"claude": drainRunner{wait: 400 * time.Millisecond, started: started}},
+				Probe: func(_ context.Context, harness string, r Runner) models.HarnessStatus {
+					return models.HarnessStatus{Harness: harness, Installed: r != nil, Ready: r != nil}
+				},
+				Poll: 10 * time.Millisecond, Heartbeat: time.Hour, Drain: tc.drain,
+			}
+			ctx, stop := context.WithCancel(context.Background())
+			ran := make(chan error, 1)
+			go func() { ran <- h.Run(ctx) }()
+			select {
+			case <-started:
+			case <-time.After(2 * time.Second):
+				t.Fatal("the job never started")
+			}
+			stop() // the host is told to stop mid-job
+			select {
+			case <-ran:
+			case <-time.After(3 * time.Second):
+				t.Fatal("the host did not stop")
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if finished == nil || finished["status"] != tc.want {
+				t.Errorf("job ended %v, want %s", finished["status"], tc.want)
+			}
+		})
+	}
+}

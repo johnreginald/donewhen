@@ -19,6 +19,8 @@ func TestServicePlist(t *testing.T) {
 		"<string>dev.raenil.orchestrator-host</string>",
 		"<string>/Users/me/.local/bin/orchestrator</string>\n\t\t<string>host</string>\n\t\t<string>--poll</string>",
 		"<key>KeepAlive</key>\n\t<true/>", "<key>RunAtLoad</key>\n\t<true/>",
+		// launchd waits for a stopping host to finish its job (Drain is 15m).
+		"<key>ExitTimeOut</key>\n\t<integer>960</integer>",
 		"<string>/Users/me/.local/bin:/usr/bin</string>",
 	} {
 		if !strings.Contains(s, want) {

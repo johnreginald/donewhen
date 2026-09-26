@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // The runner host as a macOS login service: launchd starts it at login,
@@ -67,9 +69,24 @@ func cmdService(ctx context.Context, args []string) error {
 		fmt.Println("Uninstalled. The runner host no longer runs in the background.")
 		return nil
 	case "restart":
-		out, err := exec.CommandContext(ctx, "launchctl", "kickstart", "-k", target+"/"+serviceLabel).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("launchctl kickstart: %v: %s (installed? run: orchestrator service install)", err, bytes.TrimSpace(out))
+		// Ask the host to stop rather than killing it: it finishes the job in
+		// hand first, and launchd (KeepAlive) starts the new binary after.
+		old := servicePID(ctx, target)
+		if old > 0 {
+			if out, err := exec.CommandContext(ctx, "launchctl", "kill", "SIGTERM", target+"/"+serviceLabel).CombinedOutput(); err != nil {
+				return fmt.Errorf("launchctl kill: %v: %s", err, bytes.TrimSpace(out))
+			}
+			fmt.Println("Stopping — the host finishes any job it is working on first…")
+			deadline := time.Now().Add(17 * time.Minute)
+			for servicePID(ctx, target) == old && time.Now().Before(deadline) {
+				time.Sleep(time.Second)
+			}
+		}
+		// Start it now rather than waiting out launchd's throttle.
+		if servicePID(ctx, target) <= 0 || servicePID(ctx, target) == old {
+			if out, err := exec.CommandContext(ctx, "launchctl", "kickstart", "-k", target+"/"+serviceLabel).CombinedOutput(); err != nil {
+				return fmt.Errorf("launchctl kickstart: %v: %s (installed? run: orchestrator service install)", err, bytes.TrimSpace(out))
+			}
 		}
 		fmt.Println("Restarted.")
 		return nil
@@ -140,6 +157,8 @@ func servicePlist(bin, home, logFile, path string, hostArgs []string) ([]byte, e
 	<true/>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
+	<key>ExitTimeOut</key>
+	<integer>960</integer>
 	<key>StandardOutPath</key>
 	<string>` + esc(logFile) + `</string>
 	<key>StandardErrorPath</key>
@@ -147,4 +166,19 @@ func servicePlist(bin, home, logFile, path string, hostArgs []string) ([]byte, e
 </dict>
 </plist>
 `), nil
+}
+
+// servicePID is the running host's process id, or 0 when it is not running.
+func servicePID(ctx context.Context, target string) int {
+	out, err := exec.CommandContext(ctx, "launchctl", "print", target+"/"+serviceLabel).CombinedOutput()
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if l := strings.TrimSpace(line); strings.HasPrefix(l, "pid = ") {
+			n, _ := strconv.Atoi(strings.TrimPrefix(l, "pid = "))
+			return n
+		}
+	}
+	return 0
 }
