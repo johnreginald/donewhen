@@ -122,6 +122,10 @@ func terminalRun(ctx context.Context, req RunRequest,
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		res.Aborted, res.Exit = true, 124
 		return res, nil
+	case errors.Is(err, errTerminalStuck):
+		res.Stuck = true
+		logf("%v", err)
+		return res, nil
 	case errors.Is(err, errSessionEnded):
 		// Someone closed it or the agent exited: what is in the worktree is
 		// what gets checked.

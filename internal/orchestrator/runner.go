@@ -127,6 +127,9 @@ type RunResult struct {
 	Exit int
 	// Aborted is true when the attempt hit its timeout and was killed.
 	Aborted bool
+	// Stuck is true when a terminal session kept ending turns with the same
+	// checks failing on the same code.
+	Stuck bool
 	// AgentError is what the agent itself reported — a provider refusal, an
 	// entitlement problem, a context overflow. Distinct from a Go error, which
 	// means the orchestrator could not talk to the agent at all.

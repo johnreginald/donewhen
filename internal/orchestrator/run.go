@@ -2,6 +2,8 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -542,6 +544,9 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if res.Aborted {
 		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", "worker timed out"
 	}
+	if res.Stuck && v.Status != StatusPassed {
+		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", errTerminalStuck.Error()
+	}
 
 	// 8. Record the outcome.
 	//
@@ -842,9 +847,10 @@ func (o *Orchestrator) terminalCheck(wtPath, branch string, runDir *RunDir, crit
 		}
 	}
 	cfg := o.Cfg.withDefaults()
-	return func(ctx context.Context) (bool, string) {
+	return func(ctx context.Context) CheckResult {
+		fail := func(msg string) CheckResult { return CheckResult{Feedback: msg, State: msg} }
 		if err := onTicketBranch(ctx, wtPath, branch); err != nil {
-			return false, "Raenil could not run the checks: " + err.Error() + "\nSwitch the worktree back to " + branch + "."
+			return fail("Raenil could not run the checks: " + err.Error() + "\nSwitch the worktree back to " + branch + ".")
 		}
 		base := cfg.BaseRef
 		if b := WorktreeBase(ctx, wtPath); b != "" {
@@ -852,18 +858,20 @@ func (o *Orchestrator) terminalCheck(wtPath, branch string, runDir *RunDir, crit
 		}
 		diff, err := StageAndDiff(ctx, wtPath, base)
 		if err != nil {
-			return false, "Raenil could not read your changes: " + err.Error()
+			return fail("Raenil could not read your changes: " + err.Error())
 		}
 		ev := &Evaluator{WorkDir: wtPath, RepoDir: cfg.Repo, Dir: runDir}
 		evidence, err := ev.Evaluate(ctx, gating, diff)
 		if err != nil {
-			return false, "Raenil could not run the checks: " + err.Error()
+			return fail("Raenil could not run the checks: " + err.Error())
 		}
 		var b strings.Builder
+		state := sha256.New()
 		for _, e := range evidence {
 			if e.Pass {
 				continue
 			}
+			fmt.Fprintf(state, "%d;", e.CriterionIndex)
 			fmt.Fprintf(&b, "\n- %s\n", e.CriterionText)
 			switch {
 			case e.Cmd != "":
@@ -879,9 +887,16 @@ func (o *Orchestrator) terminalCheck(wtPath, branch string, runDir *RunDir, crit
 			}
 		}
 		if b.Len() == 0 {
-			return true, ""
+			return CheckResult{Pass: true}
 		}
-		return false, "Raenil ran the ticket's checks. These fail:\n" + b.String() + "\nFix them, then finish your turn."
+		// What fails, on what code: unchanged turn after turn is no progress.
+		if patch, err := gitRaw(ctx, wtPath, "diff", "--cached", base); err == nil {
+			state.Write([]byte(patch))
+		}
+		return CheckResult{
+			Feedback: "Raenil ran the ticket's checks. These fail:\n" + b.String() + "\nFix them, then finish your turn.",
+			State:    hex.EncodeToString(state.Sum(nil)),
+		}
 	}
 }
 

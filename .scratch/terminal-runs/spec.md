@@ -36,10 +36,11 @@ The user is involved only when an agent asks something, and at code review.
 | Last message is a question | Wait for the user. Mac notification + ticket comment "waiting for you in the terminal". |
 | Anything else | Run the ticket's deterministic checks on the worktree. |
 | Checks pass | Close the session. The attempt continues as a normal run: full checks, commit, In Review. |
-| Checks fail, rounds left | Type the failures into the session. |
-| Checks fail, no rounds left | Close the session. The attempt fails as a normal run does. |
+| Checks fail | Type the failures into the session and keep going, like a goal. |
+| Same checks fail on the same code 3 turns in a row | Stuck: close the session. The attempt ends blocked; the next attempt continues from its branch in a fresh session, and after the last one the ticket goes to Blocked. |
 
-- Rounds per attempt: 3.
+- No round limit: the checks decide when it is done.
+- On finish the tmux session, the cmux workspace and a Terminal window the runner opened all close.
 - Waiting for the user does not count against the attempt timeout. Terminal attempts are bounded at 12 hours.
 - The prompt tells a terminal worker to ask questions in the terminal, not through `ask_user`.
 
@@ -61,7 +62,7 @@ The user is involved only when an agent asks something, and at code review.
 - Turn ends with a question → no check runs, notification sent.
 - Turn ends, checks fail → feedback pasted, next turn awaited.
 - Turn ends, checks pass → session closed, `Run` returns.
-- Rounds exhausted → session closed, `Run` returns failure.
+- Failures keep changing → keeps going. Same failure on the same code 3 turns in a row → stuck, session closed.
 - Live: one real ticket per harness runs to In Review in a visible terminal.
 
 ## Out of scope

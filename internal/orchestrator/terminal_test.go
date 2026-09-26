@@ -2,6 +2,8 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -85,7 +87,7 @@ func TestTerminalTurnsQuestionWaits(t *testing.T) {
 	s, sent := fakeTurns("Which table should I use?", "Done.")
 	checks, asked := 0, 0
 	turn, err := runTerminalTurns(context.Background(), s,
-		func(context.Context) (bool, string) { checks++; return true, "" },
+		func(context.Context) CheckResult { checks++; return CheckResult{Pass: true} },
 		func(string) { asked++ })
 	if err != nil || turn.Message != "Done." {
 		t.Fatalf("turn=%+v err=%v", turn, err)
@@ -98,9 +100,9 @@ func TestTerminalTurnsQuestionWaits(t *testing.T) {
 func TestTerminalTurnsFailureTypedBack(t *testing.T) {
 	s, sent := fakeTurns("first try", "second try")
 	calls := 0
-	turn, err := runTerminalTurns(context.Background(), s, func(context.Context) (bool, string) {
+	turn, err := runTerminalTurns(context.Background(), s, func(context.Context) CheckResult {
 		calls++
-		return calls > 1, "tests fail"
+		return CheckResult{Pass: calls > 1, Feedback: "tests fail", State: "a"}
 	}, nil)
 	if err != nil || turn.Message != "second try" {
 		t.Fatalf("turn=%+v err=%v", turn, err)
@@ -110,18 +112,30 @@ func TestTerminalTurnsFailureTypedBack(t *testing.T) {
 	}
 }
 
-func TestTerminalTurnsRoundsRunOut(t *testing.T) {
-	msgs := make([]string, TerminalRounds+2)
+// It keeps going while the failures change, like a goal, and stops only when
+// the same checks fail on the same code turn after turn.
+func TestTerminalTurnsKeepsGoingUntilStuck(t *testing.T) {
+	msgs := make([]string, 20)
 	for i := range msgs {
-		msgs[i] = "still broken"
+		msgs[i] = "working"
 	}
 	s, sent := fakeTurns(msgs...)
-	_, err := runTerminalTurns(context.Background(), s, func(context.Context) (bool, string) { return false, "fail" }, nil)
-	if err != nil {
-		t.Fatal(err)
+	n := 0
+	_, err := runTerminalTurns(context.Background(), s, func(context.Context) CheckResult {
+		n++
+		state := fmt.Sprint(n) // progress: a different failure every turn
+		if n > 6 {
+			state = "same" // then no progress
+		}
+		return CheckResult{Feedback: "fail", State: state}
+	}, nil)
+	if !errors.Is(err, errTerminalStuck) {
+		t.Fatalf("err = %v, want stuck", err)
 	}
-	if len(*sent) != TerminalRounds {
-		t.Errorf("failures typed back %d times, want %d", len(*sent), TerminalRounds)
+	// Six turns of progress, then two more "same" failures typed back before
+	// the third in a row counts as stuck.
+	if want := 6 + TerminalStallTurns - 1; len(*sent) != want {
+		t.Errorf("failures typed back %d times, want %d", len(*sent), want)
 	}
 }
 

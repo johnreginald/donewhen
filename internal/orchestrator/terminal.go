@@ -24,9 +24,14 @@ import (
 // message. The turn loop (runTerminalTurns) decides from it what happens next:
 // wait for the user, type the check failures back in, or close.
 
-// TerminalRounds is how many times failing checks are typed back into one
-// terminal session before the attempt ends as a failure.
-const TerminalRounds = 3
+// TerminalStallTurns is how many turns in a row may end with the same checks
+// failing on the same code before a terminal session counts as stuck. Until
+// then it keeps going: the checks, not a round count, decide when it is done.
+const TerminalStallTurns = 3
+
+// errTerminalStuck means the agent kept ending turns without changing what
+// fails.
+var errTerminalStuck = errors.New("stuck: the same checks failed on the same code for several turns in a row")
 
 // TerminalTimeout bounds a terminal attempt. Waiting for the user counts, so
 // it is long: the session is there to be answered.
@@ -64,6 +69,7 @@ type terminalSession struct {
 	seen    int    // turn lines already consumed
 	main    string // the worker's thread, once known
 	cmuxRef string // the cmux workspace attached, when there is one
+	termWin string // the Terminal window attached, when there is one
 }
 
 // screenAnswer is keys to send when a start-up screen shows Match.
@@ -152,9 +158,14 @@ func (t *terminalSession) open(ctx context.Context) {
 		t.logf("terminal: cmux would not open a workspace (%s) — using Terminal", strings.TrimSpace(string(out)))
 	}
 	script := fmt.Sprintf(`tell application "Terminal" to do script %q`, attach)
-	if out, err := exec.CommandContext(ctx, "osascript", "-e", script).CombinedOutput(); err != nil {
+	out, err := exec.CommandContext(ctx, "osascript", "-e", script).CombinedOutput()
+	if err != nil {
 		t.logf("terminal: could not open a window (%v: %s) — attach with: %s", err, strings.TrimSpace(string(out)), attach)
 		return
+	}
+	// do script answers "tab 1 of window id N": remembered to close it after.
+	if m := regexp.MustCompile(`window id (\d+)`).FindStringSubmatch(string(out)); m != nil {
+		t.termWin = m[1]
 	}
 	t.logf("terminal: opened in Terminal — or attach with: %s", attach)
 }
@@ -317,6 +328,12 @@ func (t *terminalSession) Send(ctx context.Context, text string) error {
 // Close ends the session and its window.
 func (t *terminalSession) Close(ctx context.Context) {
 	_ = exec.CommandContext(ctx, "tmux", "kill-session", "-t", t.Name).Run()
+	if t.termWin != "" {
+		// The attach has exited with the session, so closing asks nothing.
+		time.Sleep(500 * time.Millisecond)
+		script := fmt.Sprintf(`tell application "Terminal" to close (every window whose id is %s)`, t.termWin)
+		_ = exec.CommandContext(ctx, "osascript", "-e", script).Run()
+	}
 	if t.cmuxRef != "" {
 		if bin := cmuxBin(); bin != "" {
 			cmd := exec.CommandContext(ctx, bin, "workspace", "close", "--workspace", t.cmuxRef)
@@ -354,17 +371,27 @@ func asksUser(message string) bool {
 	return strings.HasSuffix(last, "?")
 }
 
-// TerminalCheck runs the ticket's checks on the worktree as it stands. It
-// returns whether they pass and, when not, what to tell the agent.
-type TerminalCheck func(ctx context.Context) (pass bool, feedback string)
+// TerminalCheck runs the ticket's checks on the worktree as it stands.
+type TerminalCheck func(ctx context.Context) CheckResult
 
-// runTerminalTurns drives a started session: each finished turn is either a
-// question for the user (wait), or work to check (pass → done; fail → type
-// the failures back in, up to TerminalRounds times). It returns the last
-// turn seen.
+// CheckResult is one run of a terminal session's checks.
+type CheckResult struct {
+	Pass bool
+	// Feedback is what to tell the agent when they fail.
+	Feedback string
+	// State identifies what failed on what code. The same state turn after
+	// turn means no progress.
+	State string
+}
+
+// runTerminalTurns drives a started session until the work is done, like a
+// goal: each finished turn is either a question for the user (wait), or work
+// to check (pass → done; fail → type the failures back in and go on). It
+// stops early only when the agent is stuck (errTerminalStuck). It returns the
+// last turn seen.
 func runTerminalTurns(ctx context.Context, t *terminalSession, check TerminalCheck, onQuestion func(string)) (Turn, error) {
 	var last Turn
-	rounds := 0
+	rounds, stalled, prev := 0, 0, ""
 	for {
 		turn, err := t.WaitTurn(ctx)
 		if err != nil {
@@ -384,18 +411,24 @@ func runTerminalTurns(ctx context.Context, t *terminalSession, check TerminalChe
 		if check == nil {
 			return last, nil
 		}
-		pass, feedback := check(ctx)
-		if pass {
+		r := check(ctx)
+		if r.Pass {
 			t.logf("terminal: checks pass")
 			return last, nil
 		}
 		rounds++
-		if rounds > TerminalRounds {
-			t.logf("terminal: checks still fail after %d rounds", TerminalRounds)
-			return last, nil
+		if r.State != "" && r.State == prev {
+			stalled++
+		} else {
+			stalled = 1
 		}
-		t.logf("terminal: checks fail — round %d of %d, typing the failures in", rounds, TerminalRounds)
-		if err := t.Send(ctx, feedback); err != nil {
+		prev = r.State
+		if stalled >= TerminalStallTurns {
+			t.logf("terminal: the same checks failed on the same code %d turns in a row — stuck", stalled)
+			return last, errTerminalStuck
+		}
+		t.logf("terminal: checks fail — round %d, typing the failures in", rounds)
+		if err := t.Send(ctx, r.Feedback); err != nil {
 			return last, fmt.Errorf("send check failures: %w", err)
 		}
 	}

@@ -51,17 +51,17 @@ func TestTerminalLive(t *testing.T) {
 	}
 
 	checks := 0
-	check := func(ctx context.Context) (bool, string) {
+	check := func(ctx context.Context) CheckResult {
 		checks++
 		b, err := os.ReadFile(filepath.Join(wt, "hello.txt"))
 		switch {
 		case err != nil:
-			return false, "Raenil ran the checks. hello.txt does not exist. Create it, then finish your turn."
+			return CheckResult{Feedback: "Raenil ran the checks. hello.txt does not exist. Create it, then finish your turn.", State: "missing"}
 		case strings.TrimSpace(string(b)) != "hello world":
-			return false, "Raenil ran the checks. hello.txt must contain exactly `hello world`, not `" +
-				strings.TrimSpace(string(b)) + "`. Fix it, then finish your turn."
+			return CheckResult{Feedback: "Raenil ran the checks. hello.txt must contain exactly `hello world`, not `" +
+				strings.TrimSpace(string(b)) + "`. Fix it, then finish your turn.", State: string(b)}
 		}
-		return true, ""
+		return CheckResult{Pass: true}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
