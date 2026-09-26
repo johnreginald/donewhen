@@ -18,10 +18,15 @@
 
 	// Suggest a rule wide enough for the command's variants: its first two
 	// words ("cargo test", "docker compose"), or the one word it has.
+	// A path is never part of the rule: it would only match that one checkout.
 	function suggest(cmd) {
-		const first = cmd.split(/&&|\|\||;|\|/)[0].trim();
+		const parts = cmd.split(/&&|\|\||;|\|/).map((p) => p.trim()).filter(Boolean);
+		// "cd <worktree> && make lint": the command that matters follows the cd.
+		const first = parts.find((p) => !/^cd\s/.test(p)) || parts[0] || cmd;
 		const words = first.split(/\s+/).filter(Boolean);
-		return words.length > 1 ? `Bash(${words.slice(0, 2).join(' ')} *)` : `Bash(${words[0] || first}*)`;
+		// A subcommand ("compose", "run") is a plain word; a file or a flag is not.
+		const second = /^[a-z][a-z-]*$/.test(words[1] || '') ? words[1] : '';
+		return second ? `Bash(${words[0]} ${second} *)` : `Bash(${words[0] || first} *)`;
 	}
 
 	let rules = $state([]);

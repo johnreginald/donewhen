@@ -73,15 +73,19 @@ var claudeWorkAllowed = []string{"Read", "Edit", "Write", "Glob", "Grep"}
 // ClaudeDefaultCommands are the shell commands every work run may use without
 // asking, so an agent can look at the history and run the usual checks with no
 // rules written for it. Each one reads, or builds and tests inside the
-// worktree. Nothing that commits, pushes, deletes, fetches from the network or
+// worktree; the only network use is installing from a lockfile. Nothing that
+// commits, pushes, switches branch, deletes, copies files out, fetches URLs or
 // runs an arbitrary script is here: the orchestrator commits, and anything
 // else an agent needs is a rule on that agent.
 var ClaudeDefaultCommands = []string{
-	"Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git show*)",
-	"Bash(ls*)", "Bash(pwd)",
-	"Bash(go build *)", "Bash(go test *)", "Bash(go vet *)", "Bash(gofmt -l *)",
-	"Bash(npm test*)", "Bash(npm run build*)", "Bash(npm run check*)", "Bash(npm run lint*)", "Bash(npm run test*)",
-	"Bash(pnpm test*)", "Bash(pnpm build*)", "Bash(pnpm check*)", "Bash(pnpm lint*)",
+	"Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git show*)", "Bash(git restore *)",
+	// cd on its own changes nothing, and an agent chains it before almost
+	// every command ("cd api && go test ./..."): Claude checks each part of a
+	// chain, so without it the rest is refused too.
+	"Bash(ls*)", "Bash(pwd)", "Bash(cd *)", "Bash(which *)", "Bash(shasum *)",
+	"Bash(go build *)", "Bash(go test *)", "Bash(go vet *)", "Bash(go run *)", "Bash(gofmt -l *)",
+	"Bash(npm ci*)", "Bash(npm test*)", "Bash(npm run build*)", "Bash(npm run check*)", "Bash(npm run lint*)", "Bash(npm run test*)",
+	"Bash(pnpm install --frozen-lockfile*)", "Bash(pnpm test*)", "Bash(pnpm build*)", "Bash(pnpm check*)", "Bash(pnpm lint*)",
 	"Bash(make test*)", "Bash(make build*)", "Bash(make check*)", "Bash(make lint*)",
 }
 
