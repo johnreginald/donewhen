@@ -224,3 +224,27 @@ func TestFailedJudgmentStillCosts(t *testing.T) {
 		t.Error("the failure should be recorded")
 	}
 }
+
+// A failing advisory check flags the ticket for its reviewer but does not
+// fail the run; a gating one still does.
+func TestAdvisoryCheckFlagsButDoesNotFail(t *testing.T) {
+	crit, err := ParseCriteria([]models.Criterion{
+		{Body: "tests pass", Kind: models.CriterionDeterministic, CheckSpec: json.RawMessage(`{"cmd":"true"}`)},
+		{Body: "Jev agrees", Kind: models.CriterionDeterministic, CheckSpec: json.RawMessage(`{"cmd":"false","advisory":true}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if crit[1].Gating() || !crit[1].Advisory() || !crit[0].Gating() {
+		t.Fatalf("gating = %v/%v", crit[0].Gating(), crit[1].Gating())
+	}
+	ev := []Evidence{{CriterionIndex: 0, Pass: true}, {CriterionIndex: 1, Pass: false, Detail: "exit 1"}}
+	v := Summarise("T-1", 1, crit, ev, Diff{})
+	if v.Status != StatusPassed || len(v.AdvisoryFlagged) != 1 || v.AdvisoryFlagged[0] != 1 {
+		t.Errorf("status %s flagged %v, want passed with the advisory check flagged", v.Status, v.AdvisoryFlagged)
+	}
+	ev[0].Pass = false
+	if v := Summarise("T-1", 1, crit, ev, Diff{}); v.Status != StatusFailed {
+		t.Error("a failing gating check no longer fails the run")
+	}
+}

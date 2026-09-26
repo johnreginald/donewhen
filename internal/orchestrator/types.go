@@ -20,6 +20,10 @@ type DeterministicCheck struct {
 	ExpectExit *int `json:"expect_exit,omitempty"`
 	// Timeout is a Go duration string. Empty means DefaultCheckTimeout.
 	Timeout string `json:"timeout,omitempty"`
+	// Advisory: the check runs and its result is shown, but a failure flags
+	// the ticket for the reviewer instead of failing the run — for checks
+	// that ask a model rather than prove a fact (a TypeSafe judgment).
+	Advisory bool `json:"advisory,omitempty"`
 }
 
 // PolicyCheck names a rule evaluated against the diff a run produced.
@@ -145,9 +149,18 @@ type ParsedCriterion struct {
 }
 
 // Gating reports whether this criterion can block a ticket. Judgment criteria
-// are advisory by construction, and manual criteria are a human's business.
+// are advisory by construction, a deterministic check can be marked advisory,
+// and manual criteria are a human's business.
 func (c ParsedCriterion) Gating() bool {
-	return c.Kind == models.CriterionDeterministic || c.Kind == models.CriterionPolicy
+	if c.Kind == models.CriterionDeterministic {
+		return c.Deterministic == nil || !c.Deterministic.Advisory
+	}
+	return c.Kind == models.CriterionPolicy
+}
+
+// Advisory reports whether the criterion is checked but cannot fail a run.
+func (c ParsedCriterion) Advisory() bool {
+	return c.Kind == models.CriterionJudgment || (c.Deterministic != nil && c.Deterministic.Advisory)
 }
 
 // ParseCriteria decodes a stored checklist into executable form. It fails loudly

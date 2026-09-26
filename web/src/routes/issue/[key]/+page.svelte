@@ -237,6 +237,9 @@
 								{#if c.done}✓{/if}
 							</button>
 							<span class="crit-text" class:done={c.done}>{c.body}</span>
+							{#if c.checkSpec?.advisory || c.kind === 'judgment'}
+								<span class="crit-adv" title="Checked by a model and shown to you; it does not fail a run">advisory</span>
+							{/if}
 							<button class="crit-del" onclick={() => delCrit(c)} title="Remove">✕</button>
 						</div>
 					{/each}
@@ -523,6 +526,15 @@
 	.crit-box.on {
 		background: var(--st-done);
 		border-color: var(--st-done);
+	}
+	.crit-adv {
+		flex: none;
+		font-size: 10.5px;
+		color: var(--text-faint);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 0 7px;
+		margin-left: 6px;
 	}
 	.crit-text {
 		flex: 1;

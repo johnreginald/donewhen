@@ -614,6 +614,10 @@ func buildPrompt(issue models.Issue, criteria []ParsedCriterion, showGuards bool
 			if c.Deterministic.ExpectExit != nil && *c.Deterministic.ExpectExit != 0 {
 				fmt.Fprintf(&b, "   Must exit %d.\n", *c.Deterministic.ExpectExit)
 			}
+			if c.Deterministic.Advisory {
+				b.WriteString("   Advisory: a model's opinion, shown to the reviewer. It does not fail the run — " +
+					"meet the requirement it describes, but do not change correct code just to please it.\n")
+			}
 		case models.CriterionPolicy:
 			fmt.Fprintf(&b, "%d. %s\n   Enforced as policy `%s`", c.Index+1, c.Text, c.Policy.Policy)
 			if len(c.Policy.Args) > 0 {

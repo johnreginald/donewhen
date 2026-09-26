@@ -179,8 +179,8 @@ func (e *Evaluator) Evaluate(ctx context.Context, criteria []ParsedCriterion, di
 }
 
 // Summarise folds evidence into a Verdict. Only gating criteria — deterministic
-// and policy — can fail a ticket. Judgment criteria are reported separately, and
-// manual criteria are left to a human.
+// and policy — can fail a ticket. Judgment and advisory criteria are reported
+// separately, and manual criteria are left to a human.
 func Summarise(ticket string, attempt int, criteria []ParsedCriterion, ev []Evidence, diff Diff) Verdict {
 	v := Verdict{
 		Ticket:   ticket,
@@ -205,6 +205,14 @@ func Summarise(ticket string, attempt int, criteria []ParsedCriterion, ev []Evid
 			// An unevaluated judgment silently vanishing from the verdict is how
 			// a reviewer comes to believe something was checked when it was not.
 			if ok && !e.Pass && (e.Detail != "" || e.Err != "") {
+				v.AdvisoryFlagged = append(v.AdvisoryFlagged, c.Index)
+			}
+		case c.Advisory():
+			// An advisory check that did not pass — or did not run — is a
+			// flag for the reviewer, never a failed run.
+			if ok && e.Pass {
+				v.Passed = append(v.Passed, c.Index)
+			} else {
 				v.AdvisoryFlagged = append(v.AdvisoryFlagged, c.Index)
 			}
 		case !c.Gating():
