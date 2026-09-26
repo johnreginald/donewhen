@@ -73,6 +73,12 @@ func (o *Orchestrator) Work(ctx context.Context, ref string, wc WorkConfig) (Ver
 	// Earlier runs of this ticket keep their branches; this run's attempts
 	// are numbered after them so their branches never collide.
 	prior := o.priorSlots(ctx, ref)
+	// A ticket run again — stopped, blocked, or bounced back from review —
+	// picks up where its last attempt left off, as a retry within a run does,
+	// instead of redoing the work. RunAttempt ignores a branch that is gone.
+	if prior > 0 {
+		spec.FromBranch = fmt.Sprintf("ticket/%s-attempt-%d", strings.ToLower(ref), prior)
+	}
 	for attempt := 1; attempt <= wc.Triage.MaxAttempts; attempt++ {
 		spec.Attempt, spec.Slot = attempt, prior+attempt
 
