@@ -123,6 +123,9 @@ func (r *CodexRunner) env() []string {
 
 // Run implements Runner.
 func (r *CodexRunner) Run(ctx context.Context, req RunRequest) (RunResult, error) {
+	if req.Terminal && !req.DisableTools && !req.ReadOnlyTools {
+		return r.runTerminal(ctx, req)
+	}
 	timeout := req.Timeout
 	if timeout <= 0 {
 		timeout = DefaultRunTimeout

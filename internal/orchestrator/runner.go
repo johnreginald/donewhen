@@ -48,6 +48,27 @@ type RunRequest struct {
 	// MCP gives the run Raenil's tools — asking the user, proposing tickets —
 	// through whichever means its CLI takes. Nil gives it none.
 	MCP *MCPServer
+	// Terminal works the run in a live terminal session the user can watch
+	// and answer, for runners that can; others run headless as always.
+	Terminal bool
+	// Title names the terminal window: the ticket key.
+	Title string
+	// Check runs the ticket's checks between turns of a terminal run.
+	Check TerminalCheck
+	// OnQuestion is told when a terminal run's agent stops to ask the user.
+	OnQuestion func(message string)
+}
+
+// terminalRunner is an optional Runner interface for backends that can work
+// in a live terminal.
+type terminalRunner interface {
+	CanRunInTerminal() bool
+}
+
+// runsInTerminal reports whether r can honour RunRequest.Terminal.
+func runsInTerminal(r Runner) bool {
+	t, ok := r.(terminalRunner)
+	return ok && t.CanRunInTerminal()
 }
 
 // readyChecker is an optional Runner interface for backends that can say

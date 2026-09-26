@@ -93,6 +93,9 @@ type Orchestrator struct {
 	// MCP gives a work run Raenil's tools — ask_user, so a worker that needs a
 	// decision asks for it instead of guessing.
 	MCP *MCPServer
+	// Terminal works tickets in a live terminal session the user can watch
+	// and answer, when the runner can.
+	Terminal bool
 	// HostName names this machine on run records; empty means its hostname.
 	// A runner host sets its own name, so its runs can be matched to it.
 	HostName string
@@ -371,7 +374,15 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 			prompt += "\n\n## Decisions already made\n\n" + d
 		}
 	}
-	if o.MCP != nil {
+	terminal := o.Terminal && runsInTerminal(runner)
+	if terminal {
+		prompt += "\n\n## You are in a terminal the user can see\n\nIf you cannot finish without a decision only the " +
+			"user can make, ask it here as your last line, ending with a question mark, and stop; the user is notified and " +
+			"answers here. Asking is rare: the ticket is the spec. When the ticket leaves a choice open, pick what fits the " +
+			"existing code best, say so in your summary, and carry on. When you finish a turn, Raenil runs the ticket's " +
+			"checks and types any failures back in here.\n"
+	}
+	if o.MCP != nil && !terminal {
 		prompt += "\n\n## When you need a decision\n\nIf you cannot finish without a decision only the user can make, " +
 			"call the Raenil tool ask_user on " + issue.Key + " with a few concrete options, then end your turn. " +
 			"Do not guess, and do not stop for anything you can decide yourself.\n\n" +
@@ -410,8 +421,8 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 
 	runStart := time.Now()
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
-	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), runner.Name())
-	res, runErr = runner.Run(ctx, RunRequest{
+	streamAs := runner.Name()
+	req := RunRequest{
 		Prompt:    prompt,
 		Cwd:       wtPath,
 		Model:     model,
@@ -419,7 +430,21 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		LogPath:   runDir.File("worker.log"),
 		SessionID: spec.SessionID,
 		MCP:       o.MCP,
-	})
+	}
+	if terminal {
+		// The terminal log is plain lines the host writes, not the harness's
+		// own transcript.
+		streamAs = "terminal"
+		req.Terminal, req.Title = true, issue.Key
+		req.Check = o.terminalCheck(wtPath, branch, runDir, criteria)
+		req.OnQuestion = func(msg string) {
+			notifyUser(issue.Key+" is waiting for you", firstLine(msg))
+			_ = o.Raenil.Comment(context.WithoutCancel(ctx), issue.ID, "The agent is waiting for you in the terminal "+
+				"(`tmux attach -t "+sessionName(issue.Key)+"`):\n\n> "+strings.ReplaceAll(strings.TrimSpace(msg), "\n", "\n> "))
+		}
+	}
+	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), streamAs)
+	res, runErr = runner.Run(ctx, req)
 	stopStream()
 	if runErr != nil {
 		o.logf("runner error: %v", runErr)
@@ -803,4 +828,75 @@ func onTicketBranch(ctx context.Context, dir, branch string) error {
 			"switch it back with git checkout %s in %s, then Verify", cur, branch, branch, dir)
 	}
 	return nil
+}
+
+// terminalCheck runs a ticket's gating deterministic and policy checks on the
+// worktree between turns of a terminal run, and words what failed for the
+// agent. Model-judged checks wait for the full evaluation after the session:
+// they are slow, cost money, and never gate.
+func (o *Orchestrator) terminalCheck(wtPath, branch string, runDir *RunDir, criteria []ParsedCriterion) TerminalCheck {
+	var gating []ParsedCriterion
+	for _, c := range criteria {
+		if c.Gating() && (c.Kind == models.CriterionDeterministic || c.Kind == models.CriterionPolicy) {
+			gating = append(gating, c)
+		}
+	}
+	cfg := o.Cfg.withDefaults()
+	return func(ctx context.Context) (bool, string) {
+		if err := onTicketBranch(ctx, wtPath, branch); err != nil {
+			return false, "Raenil could not run the checks: " + err.Error() + "\nSwitch the worktree back to " + branch + "."
+		}
+		base := cfg.BaseRef
+		if b := WorktreeBase(ctx, wtPath); b != "" {
+			base = b
+		}
+		diff, err := StageAndDiff(ctx, wtPath, base)
+		if err != nil {
+			return false, "Raenil could not read your changes: " + err.Error()
+		}
+		ev := &Evaluator{WorkDir: wtPath, RepoDir: cfg.Repo, Dir: runDir}
+		evidence, err := ev.Evaluate(ctx, gating, diff)
+		if err != nil {
+			return false, "Raenil could not run the checks: " + err.Error()
+		}
+		var b strings.Builder
+		for _, e := range evidence {
+			if e.Pass {
+				continue
+			}
+			fmt.Fprintf(&b, "\n- %s\n", e.CriterionText)
+			switch {
+			case e.Cmd != "":
+				fmt.Fprintf(&b, "  `%s` exited %d\n", e.Cmd, e.Exit)
+				if tail := outputTail(filepath.Join(runDir.Path(), e.OutputPath), 40); tail != "" {
+					fmt.Fprintf(&b, "```\n%s\n```\n", tail)
+				}
+			case e.Detail != "":
+				fmt.Fprintf(&b, "  %s\n", e.Detail)
+			}
+			if e.Err != "" {
+				fmt.Fprintf(&b, "  %s\n", e.Err)
+			}
+		}
+		if b.Len() == 0 {
+			return true, ""
+		}
+		return false, "Raenil ran the ticket's checks. These fail:\n" + b.String() + "\nFix them, then finish your turn."
+	}
+}
+
+// outputTail is the last n lines of a check's output file.
+func outputTail(path string, n int) string {
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }

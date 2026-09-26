@@ -181,6 +181,9 @@ func (r *ClaudeRunner) Ready(ctx context.Context, model string) error {
 
 // Run implements Runner.
 func (r *ClaudeRunner) Run(ctx context.Context, req RunRequest) (RunResult, error) {
+	if req.Terminal && !req.DisableTools && !req.ReadOnlyTools {
+		return r.runTerminal(ctx, req)
+	}
 	answer, res, err := r.run(ctx, req)
 	res.Answer = answer
 	return res, err

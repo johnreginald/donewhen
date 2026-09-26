@@ -987,6 +987,7 @@ func cmdHost(ctx context.Context, args []string) error {
 			AgentID:      a.ID,
 			HostName:     *name,
 			Instructions: a.InstructionsMD,
+			Terminal:     a.RunInTerminal,
 			Repos:        repos,
 			Cfg: orchestrator.Config{
 				RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
