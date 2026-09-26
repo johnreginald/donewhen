@@ -17,8 +17,7 @@
 	import Blockers from '$components/Blockers.svelte';
 	import ReviewBlock from '$components/ReviewBlock.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
-	import { touchRecent } from '$lib/recent.js';
-	import { activeWorkspace, agents } from '$lib/store.js';
+	import { agents } from '$lib/store.js';
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal, Bot } from '@lucide/svelte';
 
 	let issue = $state(null);
@@ -59,7 +58,6 @@
 		try {
 			issue = await api.issue(key);
 			titleDraft = issue.title;
-			touchRecent($activeWorkspace?.slug, issue);
 			descDraft = issue.descriptionMd || '';
 			docs = (await api.documents({ issue: issue.id })) || [];
 			children = issue.childCount > 0 ? (await api.issues({ parent: issue.key })) || [] : [];

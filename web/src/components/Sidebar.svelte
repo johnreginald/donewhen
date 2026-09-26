@@ -16,7 +16,6 @@
 		activeJobs
 	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { recent } from '$lib/recent.js';
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
@@ -102,7 +101,6 @@
 
 	const ISSUE_VIEWS = ['/tasks', '/list', '/board', '/links'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
-	const recentTasks = $derived($recent[$activeWorkspace?.slug] || []);
 
 	let userOpen = $state(false);
 	async function logout() {
@@ -202,22 +200,6 @@
 	</div>
 
 
-	{#if recentTasks.length}
-		<div class="section">
-			<div class="section-head"><span class="section-title">Recent tasks</span></div>
-			{#each recentTasks as t (t.key)}
-				<a
-					href="/issue/{t.key}"
-					class="nav-item recent"
-					class:active={$page.url.pathname === '/issue/' + t.key}
-					onclick={onnavigate}
-					title="{t.key} · {t.title}"
-				>
-					<span class="pname">{t.title}</span>
-				</a>
-			{/each}
-		</div>
-	{/if}
 
 	<div class="foot">
 		<button class="user" onclick={() => (userOpen = !userOpen)}>
@@ -607,15 +589,6 @@
 		border: 1px solid var(--border-strong);
 		border-radius: 4px;
 		padding: 0 4px;
-	}
-	.nav-item.recent {
-		font-size: 13px;
-		color: var(--text-dim);
-	}
-	.nav-item.recent .pname {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 	.foot {
 		margin-top: auto;
