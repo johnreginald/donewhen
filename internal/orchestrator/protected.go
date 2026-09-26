@@ -70,3 +70,29 @@ const protectedPrompt = "\n\n## Where you may look\n\nWork only inside this work
 	"Do not read, list or search your home folder, ~/Desktop, ~/Documents, iCloud Drive, other projects, or the " +
 	"runner's own settings (~/.config/raenil, ~/.raenil). Everything the ticket needs is in the repository; if " +
 	"something is missing, say so instead of looking elsewhere.\n"
+
+// openCodePermissions are the session rules a work run is created with: the
+// repository may be read without asking, and the protected paths may not be
+// read at all, by the file tools or by a shell command naming them. Later
+// rules win. Measured (opencode 1.18.32): a session created with these reads
+// the repository with no permission prompt and refuses the rest, cat
+// included.
+func openCodePermissions(repo string) []map[string]string {
+	var rules []map[string]string
+	if repo != "" {
+		rules = append(rules, map[string]string{"permission": "external_directory", "pattern": filepath.Clean(repo) + "*", "action": "allow"})
+	}
+	for _, p := range protectedPaths() {
+		for _, perm := range []string{"external_directory", "read", "edit", "list", "glob", "grep"} {
+			rules = append(rules, map[string]string{"permission": perm, "pattern": p + "*", "action": "deny"})
+		}
+		rules = append(rules, map[string]string{"permission": "bash", "pattern": "*" + p + "*", "action": "deny"})
+	}
+	// A shell command can name them from home, too.
+	for _, d := range protectedHomeDirs {
+		for _, prefix := range []string{"~/", "$HOME/"} {
+			rules = append(rules, map[string]string{"permission": "bash", "pattern": "*" + prefix + d + "*", "action": "deny"})
+		}
+	}
+	return rules
+}

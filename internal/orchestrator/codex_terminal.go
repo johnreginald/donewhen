@@ -12,8 +12,8 @@ import (
 func (r *CodexRunner) CanRunInTerminal() bool { return true }
 
 // runTerminal works a ticket in the Codex TUI inside a tmux session, with the
-// same login, sandbox, model and MCP servers as a headless run, and approvals
-// asked of the user when Codex wants to step outside the sandbox.
+// same login, sandbox, model and MCP servers as a headless run. It never
+// stops to ask for approval: the sandbox keeps writes in the worktree.
 //
 // Measured (codex-cli 0.157.0): notify runs a program with the turn's JSON as
 // its last argument, carrying thread-id and last-assistant-message; Codex
@@ -36,7 +36,10 @@ func (r *CodexRunner) runTerminal(ctx context.Context, req RunRequest) (RunResul
 		args := []string{
 			"-C", req.Cwd,
 			"--sandbox", r.sandbox(),
-			"--ask-for-approval", "on-request",
+			// Never stop to ask: writes stay in the worktree by the sandbox,
+			// and the network is on for installs and tests, as a headless run.
+			"--ask-for-approval", "never",
+			"-c", "sandbox_workspace_write.network_access=true",
 			"-c", "notify=" + tomlStrings("sh", notify),
 			"-c", fmt.Sprintf("projects={%s={trust_level=\"trusted\"}}", tomlString(req.Cwd)),
 		}

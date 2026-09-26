@@ -48,6 +48,9 @@ type RunRequest struct {
 	// MCP gives the run Raenil's tools — asking the user, proposing tickets —
 	// through whichever means its CLI takes. Nil gives it none.
 	MCP *MCPServer
+	// Repo is the repository the worktree belongs to. A worker may read it
+	// — untracked reference material lives there — without being asked.
+	Repo string
 	// Terminal works the run in a live terminal session the user can watch
 	// and answer, for runners that can; others run headless as always.
 	Terminal bool

@@ -273,6 +273,9 @@ func (r *OpenCodeRunner) Run(ctx context.Context, req RunRequest) (RunResult, er
 	if sessionID == "" {
 		var s ocSession
 		body := map[string]any{"title": "orchestrator attempt"}
+		if !req.DisableTools && !req.ReadOnlyTools {
+			body["permission"] = openCodePermissions(req.Repo)
+		}
 		if err := r.do(ctx, r.client(), http.MethodPost, "/session", dirQ, body, &s); err != nil {
 			return res, fmt.Errorf("create session: %w", err)
 		}

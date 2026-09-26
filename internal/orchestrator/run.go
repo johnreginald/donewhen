@@ -433,6 +433,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		LogPath:   runDir.File("worker.log"),
 		SessionID: spec.SessionID,
 		MCP:       o.MCP,
+		Repo:      cfg.Repo,
 	}
 	if terminal {
 		// The terminal log is plain lines the host writes, not the harness's

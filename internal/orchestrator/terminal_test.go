@@ -199,3 +199,26 @@ func TestProtectedPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenCodePermissions(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	rules := openCodePermissions("/src/repo")
+	has := func(perm, pattern, action string) bool {
+		for _, r := range rules {
+			if r["permission"] == perm && r["pattern"] == pattern && r["action"] == action {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("external_directory", "/src/repo*", "allow") {
+		t.Errorf("the repository is not readable without asking: %v", rules)
+	}
+	if !has("read", home+"/Documents*", "deny") || !has("bash", "*~/.config/raenil*", "deny") {
+		t.Errorf("protected paths are not denied: %v", rules)
+	}
+	// The allow comes first, so a later deny wins inside it.
+	if rules[0]["action"] != "allow" {
+		t.Errorf("allow must come before the denies: %v", rules[0])
+	}
+}

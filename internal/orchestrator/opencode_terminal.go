@@ -26,7 +26,7 @@ func (r *OpenCodeRunner) runTerminal(ctx context.Context, req RunRequest) (RunRe
 		if sessionID == "" {
 			var s ocSession
 			if err := r.do(ctx, r.client(), http.MethodPost, "/session", dirQ,
-				map[string]any{"title": req.Title}, &s); err != nil {
+				map[string]any{"title": req.Title, "permission": openCodePermissions(req.Repo)}, &s); err != nil {
 				return "", nil, fmt.Errorf("create session: %w", err)
 			}
 			sessionID = s.ID

@@ -167,6 +167,7 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 		"-C", req.Cwd,
 		"--skip-git-repo-check",
 		"--sandbox", sandbox,
+		"-c", "sandbox_workspace_write.network_access=true",
 		"--output-last-message", lastPath,
 		"--json",
 		"--color", "never",
