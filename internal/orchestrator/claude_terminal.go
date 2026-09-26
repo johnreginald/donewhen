@@ -43,10 +43,13 @@ func (r *ClaudeRunner) runTerminal(ctx context.Context, req RunRequest) (RunResu
 		}
 
 		// The Stop hook appends each finished turn to the turns file.
-		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{"Stop": []any{map[string]any{
-			"hooks": []any{map[string]any{"type": "command",
-				"command": "cat >> " + shellQuote(sess.TurnsPath()) + "; echo >> " + shellQuote(sess.TurnsPath())}},
-		}}}})
+		settings, _ := json.Marshal(map[string]any{
+			"hooks": map[string]any{"Stop": []any{map[string]any{
+				"hooks": []any{map[string]any{"type": "command",
+					"command": "cat >> " + shellQuote(sess.TurnsPath()) + "; echo >> " + shellQuote(sess.TurnsPath())}},
+			}}},
+			"permissions": map[string]any{"deny": claudeProtectedDeny()},
+		})
 		settingsPath := filepath.Join(runDir, "claude-settings.json")
 		if err := os.WriteFile(settingsPath, settings, 0o600); err != nil {
 			cleanup()
@@ -182,6 +185,9 @@ func (r *ClaudeRunner) interactiveArgs(req RunRequest, mcpConfig, settingsPath s
 			continue
 		case "--max-turns", "--max-budget-usd":
 			i++ // print mode only
+			continue
+		case "--settings":
+			i++ // the terminal's settings file carries these rules
 			continue
 		}
 		out = append(out, head[i])

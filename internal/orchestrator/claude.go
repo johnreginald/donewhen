@@ -215,12 +215,14 @@ func (r *ClaudeRunner) args(req RunRequest, mcpConfig string) []string {
 	case req.ReadOnlyTools:
 		allowed := append(append([]string{}, claudeReadTools...), mcpTools(req)...)
 		args = append(args, "--tools", strings.Join(claudeReadTools, ","),
-			"--allowedTools", strings.Join(allowed, ","))
+			"--allowedTools", strings.Join(allowed, ","),
+			"--settings", claudeProtectionSettings())
 	default:
 		allowed := append(append(append(append([]string{}, claudeWorkAllowed...), ClaudeDefaultCommands...), r.AllowedTools...), mcpTools(req)...)
 		args = append(args, "--permission-mode", r.permissionMode(),
 			"--tools", strings.Join(claudeWorkTools, ","),
-			"--allowedTools", strings.Join(allowed, ","))
+			"--allowedTools", strings.Join(allowed, ","),
+			"--settings", claudeProtectionSettings())
 	}
 	if provider, model := splitModel(req.Model); provider == "claude" && model != "" && model != "default" {
 		args = append(args, "--model", model)
@@ -437,7 +439,11 @@ func parseClaudeTranscript(path string) (claudeTranscript, error) {
 			}
 			t.denied = t.denied[:0]
 			for _, d := range ev.PermissionDenials {
-				t.denied = append(t.denied, d.ToolName+" "+trunc(claudeToolInput(d.ToolInput), 160))
+				in := claudeToolInput(d.ToolInput)
+				if touchesProtected(in) {
+					continue // the protection working, not an allowance to ask for
+				}
+				t.denied = append(t.denied, d.ToolName+" "+trunc(in, 160))
 			}
 		}
 	}

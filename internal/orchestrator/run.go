@@ -376,6 +376,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 			prompt += "\n\n## Decisions already made\n\n" + d
 		}
 	}
+	prompt += protectedPrompt
 	terminal := o.Terminal && runsInTerminal(runner)
 	if terminal {
 		prompt += "\n\n## You are in a terminal the user can see\n\nIf you cannot finish without a decision only the " +

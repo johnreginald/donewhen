@@ -172,3 +172,30 @@ func TestPrepareClaudeConfigKeepsKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestProtectedPaths(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	rules := strings.Join(claudeProtectedDeny(), " ")
+	for _, want := range []string{"Read(/" + home + "/Desktop/**)", "Read(/" + home + "/.config/raenil/**)"} {
+		if !strings.Contains(rules, want) {
+			t.Errorf("deny rules lack %s: %s", want, rules)
+		}
+	}
+	r := &ClaudeRunner{}
+	if w := r.args(RunRequest{}, "m"); !slices.Contains(w, "--settings") {
+		t.Errorf("work args carry no protection settings: %v", w)
+	}
+	if i := r.interactiveArgs(RunRequest{}, "m", "s.json"); strings.Count(strings.Join(i, " "), "--settings") != 1 {
+		t.Errorf("interactive args must carry exactly one --settings (the file): %v", i)
+	}
+	for in, want := range map[string]bool{
+		"cat " + home + "/.config/raenil/orchestrator.env": true,
+		"ls ~/Desktop":         true,
+		"go test ./...":        false,
+		home + "/Project/x.go": false,
+	} {
+		if got := touchesProtected(in); got != want {
+			t.Errorf("touchesProtected(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
