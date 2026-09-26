@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -949,5 +950,77 @@ func TestPriorityAgents(t *testing.T) {
 	ws2 := newWorkspace(t, s)
 	if err := s.SetPriorityAgent(ctx, ws2, 2, opus.ID); err == nil {
 		t.Error("an agent from another workspace was accepted")
+	}
+}
+
+// A ticket's blockers are links: open ones hold it back, a cycle is refused,
+// and a running epic offers only the Ready tickets nothing open blocks.
+func TestBlockersAndEpicRun(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	epic, err := s.SaveProject(ctx, ws, models.Project{Name: "E1", Status: "planned"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mk := func(title, state string) models.Issue {
+		is, err := s.CreateIssue(ctx, ws, IssueInput{Title: title, StateName: state, ProjectID: &epic.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return is
+	}
+	base := mk("base", "Ready")
+	next := mk("next", "Ready")
+	free := mk("free", "Ready")
+	mk("aligning", "Aligning")
+
+	if _, err := s.SetBlockers(ctx, ws, next.ID, []string{base.Key}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetBlockers(ctx, ws, base.ID, []string{next.Key}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a cycle was accepted: %v", err)
+	}
+	if _, err := s.SetBlockers(ctx, ws, base.ID, []string{base.Key}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("a ticket blocked itself: %v", err)
+	}
+	if open, _ := s.OpenBlockers(ctx, ws, next.ID); len(open) != 1 || open[0].Key != base.Key {
+		t.Errorf("open blockers = %+v", open)
+	}
+	if blocking, _ := s.ListBlocking(ctx, ws, base.ID); len(blocking) != 1 || blocking[0].Key != next.Key {
+		t.Errorf("blocking = %+v", blocking)
+	}
+
+	ready, blocked, err := s.ReadyToRun(ctx, ws, epic.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := func(l []models.Issue) (out []string) {
+		for _, i := range l {
+			out = append(out, i.Key)
+		}
+		return
+	}
+	if got := keys(ready); len(got) != 2 || !slices.Contains(got, base.Key) || !slices.Contains(got, free.Key) {
+		t.Errorf("ready = %v, want %s and %s", got, base.Key, free.Key)
+	}
+	if len(blocked) != 1 || blocked[0] != next.Key {
+		t.Errorf("blocked = %v, want %s", blocked, next.Key)
+	}
+
+	// The blocker is Done: the next ticket is free, and a running epic
+	// names itself as the one to restart.
+	s.SetEpicAutorun(ctx, ws, epic.ID, true)
+	done := "Done"
+	s.UpdateIssue(ctx, ws, base.ID, IssuePatch{StateName: &done})
+	if open, _ := s.OpenBlockers(ctx, ws, next.ID); len(open) != 0 {
+		t.Errorf("a Done blocker still blocks: %+v", open)
+	}
+	if epics, _ := s.AutorunDependents(ctx, ws, base.ID); len(epics) != 1 || epics[0] != epic.ID {
+		t.Errorf("autorun epics = %v", epics)
+	}
+	s.SetEpicAutorun(ctx, ws, epic.ID, false)
+	if epics, _ := s.AutorunDependents(ctx, ws, base.ID); len(epics) != 0 {
+		t.Errorf("a stopped epic still restarts: %v", epics)
 	}
 }

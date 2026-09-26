@@ -1,5 +1,5 @@
 Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-    import server; assert server.port()==9999, server.port()
-                          ^^^^^^^^^^^^^^^^^^^
-AssertionError: 8080
+  File [35m"<string>"[0m, line [35m1[0m, in [35m<module>[0m
+    import server; assert [1;31mserver.port()==9999[0m, server.port()
+                          [1;31m^^^^^^^^^^^^^^^^^^^[0m
+[1;35mAssertionError[0m: [35m8080[0m

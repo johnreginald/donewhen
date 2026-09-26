@@ -119,6 +119,7 @@ func runServe() {
 	mcpHandler := appmcp.NewHandler(svc, st, cfg)
 
 	srv := api.NewServer(cfg, st, svc, bus, mcpHandler)
+	go srv.WatchEpics(ctx)
 
 	// Each minute: fire agents' heartbeats, and close work
 	// whose machine went away — a claimed job or an open run from a host that

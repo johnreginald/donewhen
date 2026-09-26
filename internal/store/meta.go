@@ -311,7 +311,7 @@ func (s *Store) ListProjects(ctx context.Context, wsID, initiativeID string) ([]
 }
 
 func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiativeID string) ([]models.Project, error) {
-	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
+	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, autorun, created_at, updated_at
 	      FROM projects WHERE workspace_id = ANY($1)`
 	args := []any{wsIDs}
 	if initiativeID != "" {
@@ -327,7 +327,7 @@ func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiati
 	var out []models.Project
 	for rows.Next() {
 		var p models.Project
-		if err := rows.Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.Autorun, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -338,9 +338,9 @@ func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiati
 func (s *Store) GetProject(ctx context.Context, wsID, id string) (models.Project, error) {
 	var p models.Project
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
+		`SELECT id, initiative_id, name, description_md, status, position, repo_url, autorun, created_at, updated_at
 		 FROM projects WHERE id=$1 AND workspace_id=$2`, id, wsID).
-		Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt)
+		Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.Autorun, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
 	}

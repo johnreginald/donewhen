@@ -488,6 +488,9 @@ func (d *deps) register(s *server.MCPServer) {
 		mcp.WithNumber("priority", mcp.Description("0 none, 1 urgent, 2 high, 3 medium, 4 low")),
 		mcp.WithArray("labels", mcp.Description("Label names (exclusive groups enforced)"),
 			mcp.Items(map[string]any{"type": "string"})),
+		mcp.WithArray("blockedBy", mcp.Description("Keys of the tickets that must be Done before this one may run; "+
+			"replaces the list. A ticket is not run while any of them is open."),
+			mcp.Items(map[string]any{"type": "string"})),
 		wsArg(),
 	), d.handleSaveIssue)
 
@@ -602,6 +605,9 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		if res := d.saveBlockers(ctx, req, wsID, is.ID); res != nil {
+			return res, nil
+		}
 		return jsonResult(is)
 	}
 
@@ -637,7 +643,22 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if res := d.saveBlockers(ctx, req, wsID, is.ID); res != nil {
+		return res, nil
+	}
 	return jsonResult(is)
+}
+
+// saveBlockers sets the "blocked by" list when the call names one. It
+// returns an error result to hand back, or nil.
+func (d *deps) saveBlockers(ctx context.Context, req mcp.CallToolRequest, wsID, issueID string) *mcp.CallToolResult {
+	if _, ok := req.GetArguments()["blockedBy"]; !ok {
+		return nil
+	}
+	if _, err := d.store.SetBlockers(ctx, wsID, issueID, stringSlice(req, "blockedBy")); err != nil {
+		return mcp.NewToolResultError("saved, but its blockers were not: " + err.Error())
+	}
+	return nil
 }
 
 // issueList renders issues as a list result: slim rows unless verbose.

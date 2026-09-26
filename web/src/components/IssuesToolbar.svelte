@@ -2,7 +2,8 @@
 	// The controls above every issue view — search, scope, labels and
 	// the List / By epic / Board switch — laid out like Paperclip's Tasks bar.
 	import { page } from '$app/stores';
-	import { issueQuery } from '$lib/store.js';
+	import { issueQuery, activeProject } from '$lib/store.js';
+	import EpicRun from './EpicRun.svelte';
 	import ProjectSwitcher from './ProjectSwitcher.svelte';
 	import LabelFilter from './LabelFilter.svelte';
 	import { Search, List, Rows3, Columns3 } from '@lucide/svelte';
@@ -22,6 +23,7 @@
 	<ProjectSwitcher />
 	<LabelFilter />
 	<div class="spacer"></div>
+	{#if $activeProject}<EpicRun epicId={$activeProject} />{/if}
 	<div class="vtoggle" role="tablist">
 		{#each views as v (v.href)}
 			{@const Icon = v.icon}

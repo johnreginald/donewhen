@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { states, projects, labels as allLabels, PRIORITIES, priorityAgents, taskAgentId } from '$lib/store.js';
+	import { states, projects, labels as allLabels, PRIORITIES, priorityAgents, taskAgentId, blockLinks } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
@@ -14,6 +14,7 @@
 	import ActivityFeed from '$components/ActivityFeed.svelte';
 	import RunTicket from '$components/RunTicket.svelte';
 	import Conversation from '$components/Conversation.svelte';
+	import Blockers from '$components/Blockers.svelte';
 	import ReviewBlock from '$components/ReviewBlock.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { touchRecent } from '$lib/recent.js';
@@ -23,6 +24,7 @@
 	let issue = $state(null);
 	let pane = $state('task'); // which half a narrow window shows
 	// Who works this task when nobody chose an agent: the default for its priority.
+	const blocksCount = $derived(issue ? $blockLinks.filter((l) => l.blockerId === issue.id).length : 0);
 	const defaultAgent = $derived(issue && $agents.find((a) => a.id === $priorityAgents[issue.priority ?? 0]));
 	let docs = $state([]);
 	let children = $state([]);
@@ -194,6 +196,12 @@
 					<dd><EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} /></dd>
 					<dt>Labels</dt>
 					<dd class="wide"><LabelPicker selected={issue.labels.map((l) => l.id)} onchange={(ids) => patch({ labelIds: ids })} /></dd>
+					<dt>Blocked by</dt>
+					<dd class="wide">{#key issue.id}<Blockers {issue} />{/key}</dd>
+					{#if blocksCount}
+						<dt>Blocks</dt>
+						<dd class="wide">{#key issue.id}<Blockers {issue} which="blocking" />{/key}</dd>
+					{/if}
 				</dl>
 
 				<div class="desc">

@@ -2,11 +2,11 @@
 	import LabelPill from './LabelPill.svelte';
 	import PriorityIcon from './PriorityIcon.svelte';
 	import StateIcon from './StateIcon.svelte';
-	import { Box, Bot, LoaderCircle } from '@lucide/svelte';
+	import { Box, Bot, LoaderCircle, Lock } from '@lucide/svelte';
 	import { openIssue, flashIssueId } from '$lib/ui.js';
 	import {
 		states, projects, activeProject, activeInitiative, activeLabel, loadIssues,
-		agents, activeJobs, priorityAgents, taskAgentId
+		agents, activeJobs, priorityAgents, taskAgentId, blockLinks, issues
 	} from '$lib/store.js';
 
 	let { issue } = $props();
@@ -18,6 +18,10 @@
 	const job = $derived($activeJobs.find((j) => j.issueId === issue.id));
 	const agent = $derived($agents.find((a) => a.id === (job?.agentId || taskAgentId(issue, $priorityAgents))));
 	const DOING = { run_ticket: 'Working', chat: 'Thinking', verify: 'Verifying', finish: 'Finishing' };
+	// Tickets still in its way: it does not run until they are Done.
+	const waitingOn = $derived(
+		$blockLinks.filter((l) => l.issueId === issue.id && !l.done).map((l) => $issues.find((i) => i.id === l.blockerId)?.key || '')
+	);
 	const doing = $derived(job && (job.status === 'queued' ? 'Queued' : DOING[job.kind] || 'Working'));
 
 	// Click the epic tag → filter the board to that epic.
@@ -59,6 +63,9 @@
 			<span class="nodoc" title="No implementation doc yet">✦</span>
 		{/if}
 		<span class="spacer"></span>
+		{#if waitingOn.length}
+			<span class="lock" title="Blocked by {waitingOn.filter(Boolean).join(', ')} — runs once they are Done"><Lock size={11} strokeWidth={2.4} />{waitingOn.length}</span>
+		{/if}
 		<span class="assignee" class:on={issue.assigneeId}></span>
 	</div>
 
@@ -229,6 +236,17 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+	.lock {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		font-size: 11px;
+		color: #fbbf24;
+		background: color-mix(in srgb, #fbbf24 12%, transparent);
+		border-radius: 5px;
+		padding: 1px 5px;
+		font-variant-numeric: tabular-nums;
 	}
 	/* A card an agent is working on says so at a glance. */
 	.card.running {

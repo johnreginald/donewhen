@@ -71,15 +71,18 @@ type Initiative struct {
 }
 
 type Project struct {
-	ID            string    `json:"id"`
-	InitiativeID  *string   `json:"initiativeId"`
-	Name          string    `json:"name"`
-	DescriptionMD string    `json:"descriptionMd"`
-	Status        string    `json:"status"`
-	Position      int       `json:"position"`
-	RepoURL       *string   `json:"repoUrl"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID            string  `json:"id"`
+	InitiativeID  *string `json:"initiativeId"`
+	Name          string  `json:"name"`
+	DescriptionMD string  `json:"descriptionMd"`
+	Status        string  `json:"status"`
+	Position      int     `json:"position"`
+	RepoURL       *string `json:"repoUrl"`
+	// Autorun: the epic is running — each Ready ticket starts once nothing
+	// blocks it, until it is stopped.
+	Autorun   bool      `json:"autorun"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type WorkflowState struct {

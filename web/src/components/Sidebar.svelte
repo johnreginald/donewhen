@@ -192,6 +192,7 @@
 			<div class="epic-row">
 				<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
 					<span class="icon epic-ic"><Box size={13} strokeWidth={2} /></span><span class="pname">{p.name}</span>
+					{#if p.autorun}<span class="epic-run" title="Epic running"></span>{/if}
 					<span class="ini-count">{p.count}</span>
 				</button>
 				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
@@ -252,6 +253,13 @@
 	}
 	.section-toggle .chev.open {
 		transform: rotate(90deg);
+	}
+	.epic-run {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--st-progress);
+		flex: none;
 	}
 	.menu-backdrop {
 		position: fixed;

@@ -12,6 +12,17 @@ export const agents = writable([]); // the workspace's configured agents
 // turns, verify and finish — newest first. Kept live from job events.
 export const activeJobs = writable([]);
 const isActive = (j) => j.issueId && j.kind !== 'test_env' && (j.status === 'queued' || j.status === 'claimed');
+// "Blocked by" links in the workspace: { issueId, blockerId, done }.
+export const blockLinks = writable([]);
+export async function loadBlockLinks() {
+	blockLinks.set((await api.get('/blockers').catch(() => [])) || []);
+}
+// The blockers of each ticket still in its way, by issue id.
+export function openBlockersByIssue(links) {
+	const m = {};
+	for (const l of links) if (!l.done) (m[l.issueId] ||= []).push(l.blockerId);
+	return m;
+}
 // priority -> agent id: who works a task nobody chose an agent for.
 export const priorityAgents = writable({});
 export const issues = writable([]);
@@ -78,6 +89,7 @@ export async function loadMeta() {
 		api.jobs({ active: 1, limit: 100 }).catch(() => [])
 	]);
 	activeJobs.set((aj || []).filter(isActive));
+	loadBlockLinks();
 	agents.set(ag || []);
 	priorityAgents.set(Object.fromEntries((pa || []).map((p) => [p.priority, p.agentId])));
 	states.set(st || []);
@@ -102,6 +114,9 @@ export async function loadIssues() {
 // applyEvent reconciles a live SSE event into the issues store.
 export function applyEvent(ev) {
 	if (!ev) return;
+	// A ticket moving can free (or re-block) the tickets it blocks.
+	if (ev.type === 'issue.blockers' || ev.type === 'issue.state_changed') loadBlockLinks();
+	if (ev.type === 'project.running') loadMeta();
 	if (ev.job?.issueId && ev.job.kind !== 'test_env') {
 		const j = ev.job;
 		activeJobs.update((l) => {

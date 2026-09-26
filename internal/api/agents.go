@@ -310,6 +310,16 @@ func (s *Server) handleRunIssue(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
+	// A ticket waits for the tickets that block it: its work builds on
+	// theirs, which is only on the base branch once they are Done.
+	open, err := s.store.OpenBlockers(r.Context(), ws(r), is.ID)
+	if handleStoreErr(w, err) {
+		return
+	}
+	if len(open) > 0 {
+		writeErr(w, http.StatusConflict, store.BlockedMessage(open))
+		return
+	}
 	a, ok := s.agentFor(w, r, is, body.Agent)
 	if !ok {
 		return

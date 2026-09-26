@@ -6,10 +6,10 @@
 	// neither. You decide when an agent runs — nothing here starts on its own.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { agents, states, priorityAgents, taskAgentId } from '$lib/store.js';
+	import { agents, states, priorityAgents, taskAgentId, blockLinks, issues } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
-	import { Play, LoaderCircle, Check, X } from '@lucide/svelte';
+	import { Play, LoaderCircle, Check, X, Lock } from '@lucide/svelte';
 
 	let { issue } = $props();
 	let job = $state(null);
@@ -22,6 +22,10 @@
 	const closed = $derived(state && (state.category === 'completed' || state.category === 'canceled'));
 	const aligning = $derived(state && ready && state.position < ready.position);
 	let starting = $state(false);
+	// Tickets that must be Done first: Run waits for them.
+	const waitingOn = $derived(
+		$blockLinks.filter((l) => l.issueId === issue.id && !l.done).map((l) => $issues.find((i) => i.id === l.blockerId)?.key || 'another ticket')
+	);
 
 	onMount(async () => {
 		const list = await api.jobs({ issue: issue.key, kind: 'run_ticket', limit: 1 }).catch(() => []);
@@ -67,7 +71,10 @@
 				{:else}<X size={13} strokeWidth={2.4} />{job.error ? job.error.slice(0, 80) : 'Failed'}{/if}
 			</span>
 		{/if}
-		<button class="btn primary sm" onclick={run} disabled={busy || agent.status === 'paused'}>
+		{#if waitingOn.length && !busy}
+			<span class="st blocked" title="It runs once they are Done"><Lock size={13} strokeWidth={2.4} />Waiting on {waitingOn.join(', ')}</span>
+		{/if}
+		<button class="btn primary sm" onclick={run} disabled={busy || agent.status === 'paused' || waitingOn.length > 0}>
 			<Play size={13} strokeWidth={2.4} />Run with {agent.name}
 		</button>
 	</div>
@@ -79,6 +86,9 @@
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
+	}
+	.st.blocked {
+		color: #fbbf24;
 	}
 	.st {
 		display: inline-flex;
