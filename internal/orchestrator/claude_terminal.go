@@ -69,6 +69,9 @@ func (r *ClaudeRunner) runTerminal(ctx context.Context, req RunRequest) (RunResu
 	if r.OAuthToken != "" {
 		res.Billing = "subscription"
 	}
+	if u, ok := claudeSessionUsage(res.transcript); ok {
+		res.Usage, res.Tokens = u, u.Total()
+	}
 	return res, err
 }
 
@@ -120,7 +123,7 @@ func terminalRun(ctx context.Context, req RunRequest,
 		}
 	})
 	res.Duration = time.Since(start)
-	res.SessionID, res.Answer = turn.SessionID, turn.Message
+	res.SessionID, res.Answer, res.transcript = turn.SessionID, turn.Message, turn.Transcript
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		res.Aborted, res.Exit = true, 124

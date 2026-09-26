@@ -161,6 +161,9 @@ type RunResult struct {
 	// can see the agent was stopped rather than merely unlucky.
 	DeniedTools []string
 	Duration    time.Duration
+
+	// transcript is a terminal run's session file, read for its usage.
+	transcript string
 }
 
 // Environment variables that would switch a CLI from its subscription login to

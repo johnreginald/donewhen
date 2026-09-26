@@ -193,6 +193,8 @@ type Turn struct {
 	Message   string
 	// Input is the turn's first user message, when the harness reports it.
 	Input string
+	// Transcript is the harness's session file, when it reports one.
+	Transcript string
 }
 
 // WaitTurn blocks until the harness reports the next finished turn, the
@@ -289,6 +291,7 @@ func parseTurn(line string) Turn {
 		SessionID: str("session_id", "thread-id", "thread_id"),
 		Message:   str("last_assistant_message", "last-assistant-message"),
 	}
+	turn.Transcript = str("transcript_path")
 	if in, ok := raw["input-messages"].([]any); ok && len(in) > 0 {
 		turn.Input, _ = in[0].(string)
 	}

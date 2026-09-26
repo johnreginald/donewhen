@@ -58,6 +58,9 @@ func (r *CodexRunner) runTerminal(ctx context.Context, req RunRequest) (RunResul
 		return terminalScript(runDir, env, req.Cwd, r.bin(), args), func() {}, nil
 	})
 	res.Billing = "subscription"
+	if u, ok := codexSessionUsage(r.Home, res.SessionID); ok {
+		res.Usage, res.Tokens = u, u.Total()
+	}
 	return res, err
 }
 
