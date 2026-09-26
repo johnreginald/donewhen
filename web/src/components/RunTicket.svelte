@@ -6,10 +6,10 @@
 	// neither. You decide when an agent runs — nothing here starts on its own.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { agents, states, priorityAgents, taskAgentId, blockLinks, issues } from '$lib/store.js';
+	import { agents, states, priorityAgents, taskAgentId, blockLinks, issues, activeJobs } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
-	import { Play, LoaderCircle, Check, X, Lock } from '@lucide/svelte';
+	import { Play, LoaderCircle, Check, X, Lock, Square } from '@lucide/svelte';
 
 	let { issue } = $props();
 	let job = $state(null);
@@ -55,10 +55,31 @@
 		}
 	}
 	const verdict = $derived(job?.result?.status);
+
+	// Anything an agent is doing or about to do on this ticket can be stopped.
+	const active = $derived($activeJobs.filter((j) => j.issueId === issue.id));
+	const stopping = $derived(active.length > 0 && active.every((j) => j.stopRequested));
+	let stopBusy = $state(false);
+	async function stop() {
+		stopBusy = true;
+		try {
+			await api.post(`/issues/${issue.key}/stop`, {});
+			showToast(active.some((j) => j.status === 'claimed') ? 'Stopping — the agent ends within a few seconds' : 'Stopped');
+		} catch (e) {
+			showToast(e.message, 'error');
+		} finally {
+			stopBusy = false;
+		}
+	}
 </script>
 
+{#if active.length}
+	<button class="btn sm stop" onclick={stop} disabled={stopBusy || stopping} title="Stop what the agent is doing on this ticket">
+		<Square size={12} strokeWidth={2.6} />{stopping ? 'Stopping…' : 'Stop'}
+	</button>
+{/if}
 {#if agent && aligning}
-	<button class="btn primary sm" onclick={start} disabled={starting || agent.status === 'paused'}>
+	<button class="btn primary sm" onclick={start} disabled={starting || agent.status === 'paused' || active.length > 0}>
 		<Play size={13} strokeWidth={2.4} />Start task
 	</button>
 {:else if agent && !closed}
@@ -68,6 +89,7 @@
 				{#if job.status === 'queued'}<LoaderCircle size={13} class="spin" />Waiting for a host
 				{:else if job.status === 'claimed'}<LoaderCircle size={13} class="spin" />{agent.name} is working on {job.host}
 				{:else if job.status === 'succeeded'}<Check size={13} strokeWidth={2.4} />Handed back{verdict ? ` · ${verdict}` : ''} · {rel(job.finishedAt)}
+				{:else if job.status === 'canceled'}<X size={13} strokeWidth={2.4} />Stopped · {rel(job.finishedAt)}
 				{:else}<X size={13} strokeWidth={2.4} />{job.error ? job.error.slice(0, 80) : 'Failed'}{/if}
 			</span>
 		{/if}
@@ -86,6 +108,13 @@
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
+	}
+	.stop {
+		color: #f87171;
+		border-color: color-mix(in srgb, #f87171 40%, var(--border));
+	}
+	.stop:hover:not(:disabled) {
+		background: color-mix(in srgb, #f87171 12%, transparent);
 	}
 	.st.blocked {
 		color: #fbbf24;

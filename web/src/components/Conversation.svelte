@@ -14,7 +14,7 @@
 	import ProposalCard from './ProposalCard.svelte';
 	import EpicMenu from './EpicMenu.svelte';
 	import { tick } from 'svelte';
-	import { Bot, LoaderCircle, CircleHelp, CircleAlert, Send, Play } from '@lucide/svelte';
+	import { Bot, LoaderCircle, CircleHelp, CircleAlert, Send, Play, ArrowDown } from '@lucide/svelte';
 
 	let { issue } = $props();
 
@@ -28,20 +28,36 @@
 	let sending = $state(false);
 	let scroller = $state(null);
 
-	// Keep the newest message in view, as a chat does, unless the reader has
-	// scrolled up to read something older.
-	let pinned = true;
+	// Keep the newest message in view, as a chat does — including a run's
+	// lines as they stream in — unless the reader has scrolled up to read
+	// something older; then offer a way back down.
+	let pinned = $state(true);
+	const toBottom = (smooth = false) =>
+		scroller && scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+	$effect(() => {
+		if (!scroller) return;
+		const onScroll = () => (pinned = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 60);
+		scroller.addEventListener('scroll', onScroll);
+		// Whatever grows the thread — a message, a card, a transcript line, an
+		// image loading — follows the bottom while pinned.
+		const grew = new ResizeObserver(() => pinned && toBottom());
+		for (const child of scroller.children) grew.observe(child);
+		const added = new MutationObserver(() => {
+			for (const child of scroller.children) grew.observe(child);
+			if (pinned) toBottom();
+		});
+		added.observe(scroller, { childList: true, subtree: true });
+		tick().then(() => toBottom());
+		return () => {
+			scroller?.removeEventListener('scroll', onScroll);
+			grew.disconnect();
+			added.disconnect();
+		};
+	});
 	$effect(() => {
 		timeline.length;
 		thinking;
-		if (!scroller) return;
-		if (pinned) tick().then(() => scroller && (scroller.scrollTop = scroller.scrollHeight));
-	});
-	$effect(() => {
-		if (!scroller) return;
-		const onScroll = () => (pinned = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 40);
-		scroller.addEventListener('scroll', onScroll);
-		return () => scroller?.removeEventListener('scroll', onScroll);
+		if (pinned) tick().then(() => toBottom());
 	});
 
 	const agentById = (id) => $agents.find((a) => a.id === id);
@@ -255,6 +271,12 @@
 
 	</div>
 
+	{#if !pinned}
+		<button class="jump" onclick={() => ((pinned = true), toBottom(true))} aria-label="Jump to the latest">
+			<ArrowDown size={13} strokeWidth={2.4} />Latest
+		</button>
+	{/if}
+
 	{#if workPending && !runLive}
 		<div class="thinking">
 			<LoaderCircle size={14} class="spin" />
@@ -292,6 +314,7 @@
 
 <style>
 	.conv {
+		position: relative;
 		height: 100%;
 		display: flex;
 		flex-direction: column;
@@ -467,6 +490,26 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+	.jump {
+		position: absolute;
+		left: 50%;
+		bottom: 150px;
+		transform: translateX(-50%);
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		background: var(--bg-elev2);
+		border: 1px solid var(--border-strong);
+		border-radius: 999px;
+		padding: 4px 12px;
+		font-size: 12px;
+		color: var(--text);
+		box-shadow: var(--shadow);
+		z-index: 5;
+	}
+	.jump:hover {
+		background: var(--bg-hover);
 	}
 	.composer {
 		flex-shrink: 0;

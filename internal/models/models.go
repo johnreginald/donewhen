@@ -338,6 +338,8 @@ type Job struct {
 	CreatedAt   time.Time       `json:"createdAt"`
 	ClaimedAt   *time.Time      `json:"claimedAt"`
 	FinishedAt  *time.Time      `json:"finishedAt"`
+	// StopRequested: a person asked to stop it while a host works on it.
+	StopRequested bool `json:"stopRequested"`
 }
 
 // Interaction is something an agent asked of a human on a ticket.

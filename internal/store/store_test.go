@@ -1055,3 +1055,37 @@ func TestWorkspaceAllowedTools(t *testing.T) {
 		t.Errorf("a refused update changed the rules: %v", got)
 	}
 }
+
+// Stopping a queued job cancels it; stopping one a host works on marks it for
+// the host to end; a finished job is left alone.
+func TestStopJob(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	is, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "t", StateName: "Ready", AgentID: &a.ID})
+
+	q, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "chat", AgentID: a.ID, IssueID: is.ID})
+	if j, err := s.StopJob(ctx, ws, q.ID); err != nil || j.Status != "canceled" {
+		t.Errorf("queued job after stop = %s, %v", j.Status, err)
+	}
+
+	w, _ := s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID})
+	if _, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"}); !ok {
+		t.Fatal("not claimed")
+	}
+	if ids, _ := s.ActiveJobsFor(ctx, ws, is.ID); len(ids) != 1 || ids[0] != w.ID {
+		t.Errorf("active = %v", ids)
+	}
+	j, _ := s.StopJob(ctx, ws, w.ID)
+	if j.Status != "claimed" || !j.StopRequested {
+		t.Errorf("working job after stop = %s stop=%v", j.Status, j.StopRequested)
+	}
+	if f, err := s.FinishJob(ctx, ws, w.ID, "mac", "canceled", nil, "stopped by you"); err != nil || f.Status != "canceled" {
+		t.Errorf("host could not report the stop: %v %v", f.Status, err)
+	}
+	if j, _ := s.StopJob(ctx, ws, w.ID); j.Status != "canceled" {
+		t.Errorf("a finished job changed: %s", j.Status)
+	}
+}

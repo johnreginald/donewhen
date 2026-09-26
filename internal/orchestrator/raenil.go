@@ -252,6 +252,12 @@ func (c *RaenilClient) ClaimJob(ctx context.Context, host string, harnesses []st
 }
 
 // FinishJob reports how a claimed job ended.
+// Job reads one job, as a host checks whether it has been asked to stop.
+func (c *RaenilClient) Job(ctx context.Context, id string) (models.Job, error) {
+	var j models.Job
+	return j, c.do(ctx, http.MethodGet, "/api/jobs/"+id, nil, &j)
+}
+
 func (c *RaenilClient) FinishJob(ctx context.Context, id, host, status string, result any, errText string) error {
 	return c.do(ctx, http.MethodPost, "/api/jobs/"+id+"/finish",
 		map[string]any{"host": host, "status": status, "result": result, "error": errText}, nil)

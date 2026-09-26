@@ -417,3 +417,41 @@ func (s *Server) handleSetPriorityAgent(w http.ResponseWriter, r *http.Request) 
 	}
 	s.handleListPriorityAgents(w, r)
 }
+
+// handleStopJob stops one job: canceled now if still queued, or ended by its
+// host within a few seconds if one is working on it.
+func (s *Server) handleStopJob(w http.ResponseWriter, r *http.Request) {
+	j, err := s.store.StopJob(r.Context(), ws(r), r.PathValue("id"))
+	if handleStoreErr(w, err) {
+		return
+	}
+	e := events.Event{Type: "job.updated", Job: &j}
+	if j.IssueID != nil {
+		e.IssueID = *j.IssueID
+	}
+	s.publish(r, e)
+	writeJSON(w, http.StatusOK, j)
+}
+
+// handleStopIssue stops everything an agent is doing or about to do on a
+// ticket — the Stop button on the task.
+func (s *Server) handleStopIssue(w http.ResponseWriter, r *http.Request) {
+	is, err := s.resolveIssue(r, r.PathValue("id"))
+	if handleStoreErr(w, err) {
+		return
+	}
+	ids, err := s.store.ActiveJobsFor(r.Context(), ws(r), is.ID)
+	if handleStoreErr(w, err) {
+		return
+	}
+	stopped := []models.Job{}
+	for _, id := range ids {
+		j, err := s.store.StopJob(r.Context(), ws(r), id)
+		if err != nil {
+			continue
+		}
+		stopped = append(stopped, j)
+		s.publish(r, events.Event{Type: "job.updated", Job: &j, IssueID: is.ID})
+	}
+	writeJSON(w, http.StatusOK, stopped)
+}

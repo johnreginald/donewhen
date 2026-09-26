@@ -67,13 +67,13 @@ func (s *Store) ListHosts(ctx context.Context, wsID string) ([]models.RunnerHost
 // ---- jobs ----
 
 const jobCols = `j.id, j.kind, j.agent_id, j.input, j.issue_id, coalesce(i.key, ''), j.status, j.host, j.result, j.error,
-	j.created_at, j.claimed_at, j.finished_at`
+	j.created_at, j.claimed_at, j.finished_at, j.stop_requested_at IS NOT NULL`
 
 func scanJob(row pgx.Row) (models.Job, error) {
 	var j models.Job
 	var result, input []byte
 	err := row.Scan(&j.ID, &j.Kind, &j.AgentID, &input, &j.IssueID, &j.IssueKey, &j.Status, &j.Host, &result, &j.Error,
-		&j.CreatedAt, &j.ClaimedAt, &j.FinishedAt)
+		&j.CreatedAt, &j.ClaimedAt, &j.FinishedAt, &j.StopRequested)
 	j.Result, j.Input = json.RawMessage(result), json.RawMessage(input)
 	return j, err
 }
@@ -185,8 +185,8 @@ func (s *Store) ClaimJob(ctx context.Context, wsID, host string, harnesses []str
 // FinishJob records how a claimed job ended. Only the host that claimed it
 // can finish it, and only once.
 func (s *Store) FinishJob(ctx context.Context, wsID, id, host, status string, result json.RawMessage, errText string) (models.Job, error) {
-	if status != "succeeded" && status != "failed" {
-		return models.Job{}, invalid("status must be succeeded or failed, not %q", status)
+	if status != "succeeded" && status != "failed" && status != "canceled" {
+		return models.Job{}, invalid("status must be succeeded, failed or canceled, not %q", status)
 	}
 	if len(result) == 0 {
 		result = json.RawMessage(`{}`)
@@ -397,6 +397,45 @@ func (s *Store) abortRuns(ctx context.Context, where, why string, args ...any) (
 		}
 		r.WorkspaceID = k.ws
 		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// StopJob stops a job for a person: a queued one is canceled now; one a host
+// is working on is marked, and the host ends it when it next checks. A job
+// already over is left as it is.
+func (s *Store) StopJob(ctx context.Context, wsID, id string) (models.Job, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE jobs SET status = 'canceled', error = 'stopped by you', finished_at = now()
+		WHERE workspace_id = $1 AND id::text = $2 AND status = 'queued'`, wsID, id)
+	if err != nil {
+		return models.Job{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := s.pool.Exec(ctx, `
+			UPDATE jobs SET stop_requested_at = coalesce(stop_requested_at, now())
+			WHERE workspace_id = $1 AND id::text = $2 AND status = 'claimed'`, wsID, id); err != nil {
+			return models.Job{}, err
+		}
+	}
+	return s.GetJob(ctx, wsID, id)
+}
+
+// ActiveJobsFor lists the ids of a ticket's jobs still queued or being worked.
+func (s *Store) ActiveJobsFor(ctx context.Context, wsID, issueID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id FROM jobs WHERE workspace_id = $1 AND issue_id = $2
+		AND status IN ('queued', 'claimed')`, wsID, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
 	}
 	return out, rows.Err()
 }

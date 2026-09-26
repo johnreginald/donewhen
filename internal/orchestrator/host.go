@@ -46,6 +46,7 @@ type Host struct {
 	// should not cost the turn or run in progress.
 	Drain     time.Duration
 	Poll      time.Duration // how often to ask for work (default 3s)
+	StopCheck time.Duration // how often a running job looks for a stop request (default 3s)
 	Heartbeat time.Duration // how often to report health (default 30s)
 	Logf      func(format string, args ...any)
 
@@ -214,8 +215,35 @@ func (h *Host) pollOnce(ctx context.Context) {
 	}
 }
 
-func (h *Host) handle(ctx context.Context, c *RaenilClient, job ClaimedJob) {
+func (h *Host) handle(parent context.Context, c *RaenilClient, job ClaimedJob) {
 	h.logf("job %s: %s for %s", job.ID[:8], job.Kind, agentLabel(job.Agent))
+	// A person may stop the job from Raenil: look every few seconds, and end
+	// it — the agent's process with it — when asked.
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	stopped := make(chan struct{})
+	go func() {
+		every := h.StopCheck
+		if every <= 0 {
+			every = 3 * time.Second
+		}
+		t := time.NewTicker(every)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				j, err := c.Job(ctx, job.ID)
+				if err == nil && j.StopRequested {
+					h.logf("job %s: stopped from Raenil", job.ID[:8])
+					close(stopped)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
 	var result any
 	var err error
 	switch job.Kind {
@@ -239,9 +267,14 @@ func (h *Host) handle(ctx context.Context, c *RaenilClient, job ClaimedJob) {
 		err = fmt.Errorf("unknown job kind %q", job.Kind)
 	}
 	status, errText := "succeeded", ""
-	if err != nil {
-		status, errText = "failed", err.Error()
-		h.logf("job %s failed: %v", job.ID[:8], err)
+	select {
+	case <-stopped:
+		status, errText = "canceled", "stopped by you"
+	default:
+		if err != nil {
+			status, errText = "failed", err.Error()
+			h.logf("job %s failed: %v", job.ID[:8], err)
+		}
 	}
 	if ferr := c.FinishJob(context.WithoutCancel(ctx), job.ID, h.Name, status, result, errText); ferr != nil {
 		h.logf("job %s: could not report the result: %v", job.ID[:8], ferr)

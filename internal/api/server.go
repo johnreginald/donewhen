@@ -187,6 +187,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/projects/{id}/stop", s.wsGuard(s.handleStopEpic))
 	mux.HandleFunc("GET /api/allowed-tools", s.wsGuard(s.handleGetWorkspaceAllowed))
 	mux.HandleFunc("PUT /api/allowed-tools", s.wsGuard(s.handleSetWorkspaceAllowed))
+	mux.HandleFunc("POST /api/jobs/{id}/stop", s.wsGuard(s.handleStopJob))
+	mux.HandleFunc("POST /api/issues/{id}/stop", s.wsGuard(s.handleStopIssue))
 	mux.HandleFunc("GET /api/priority-agents", s.wsGuard(s.handleListPriorityAgents))
 	mux.HandleFunc("PUT /api/priority-agents", s.wsGuard(s.handleSetPriorityAgent))
 	mux.HandleFunc("POST /api/issues/{id}/run", s.wsGuard(s.handleRunIssue))

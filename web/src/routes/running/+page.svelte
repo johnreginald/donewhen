@@ -9,7 +9,8 @@
 	import { onLive } from '$lib/ui.js';
 	import { rel, duration, tokens } from '$lib/format.js';
 	import { hostOnline, harnessName } from '$lib/harness.js';
-	import { Bot, Check, X, LoaderCircle, Clock, Terminal, MessageSquare, ShieldCheck, Flag, ArrowRight, Server, Wrench } from '@lucide/svelte';
+	import { Bot, Check, X, LoaderCircle, Clock, Terminal, MessageSquare, ShieldCheck, Flag, ArrowRight, Server, Wrench, Square } from '@lucide/svelte';
+	import { showToast } from '$lib/ui.js';
 
 	const KIND = {
 		run_ticket: { label: 'Run', doing: 'Working', icon: Terminal },
@@ -28,6 +29,16 @@
 	let now = $state(Date.now());
 
 	const agentOf = (id) => $agents.find((a) => a.id === id);
+	async function stop(e, j) {
+		e.preventDefault();
+		e.stopPropagation();
+		try {
+			await api.post(`/jobs/${j.id}/stop`, {});
+			showToast(j.status === 'claimed' ? `Stopping ${j.issueKey} — the agent ends within a few seconds` : `${j.issueKey} taken off the queue`);
+		} catch (err) {
+			showToast(err.message, 'error');
+		}
+	}
 	const issueOf = (id) => $issues.find((i) => i.id === id);
 	const since = (iso) => duration(iso, new Date(now).toISOString());
 
@@ -219,7 +230,13 @@
 									<div class="fl wait"><LoaderCircle size={12} strokeWidth={2.2} class="spin" />{j.kind === 'run_ticket' ? 'Setting up the worktree and checking the harness…' : `${k.doing}…`}</div>
 								{/each}
 							</div>
-							<div class="cf"><span class="doing"><span class="pulse"></span>{k.doing}</span><span class="open">Open task <ArrowRight size={12} strokeWidth={2.2} /></span></div>
+							<div class="cf">
+								<span class="doing"><span class="pulse"></span>{j.stopRequested ? 'Stopping…' : k.doing}</span>
+								<span class="cfr">
+									<button class="stopb" onclick={(e) => stop(e, j)} disabled={j.stopRequested} title="Stop this"><Square size={11} strokeWidth={2.6} />Stop</button>
+									<span class="open">Open task <ArrowRight size={12} strokeWidth={2.2} /></span>
+								</span>
+							</div>
 						</a>
 					{/each}
 				</div>
@@ -249,6 +266,7 @@
 							<span class="kind"><k.icon size={12} strokeWidth={2.2} />{k.label}</span>
 							<span class="qa"><Bot size={12} strokeWidth={2} />{agentOf(j.agentId)?.name || 'Agent'}</span>
 							<span class="qw">waiting {since(j.createdAt)}</span>
+							<button class="stopb" onclick={(e) => stop(e, j)} title="Take it off the queue"><X size={11} strokeWidth={2.6} /></button>
 						</a>
 					{/each}
 				</div>
@@ -561,6 +579,29 @@
 		background: var(--st-progress);
 		animation: rp-pulse 1.4s ease-in-out infinite;
 	}
+	.cfr {
+		display: inline-flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.stopb {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 4px;
+		background: none;
+		border: 1px solid color-mix(in srgb, #f87171 35%, var(--border));
+		color: #f87171;
+		border-radius: 6px;
+		padding: 2px 8px;
+		font-size: 11.5px;
+	}
+	.stopb:hover:not(:disabled) {
+		background: color-mix(in srgb, #f87171 12%, transparent);
+	}
+	.stopb:disabled {
+		opacity: 0.5;
+	}
 	.open {
 		display: inline-flex;
 		align-items: center;
@@ -646,7 +687,7 @@
 		background: var(--bg-hover);
 	}
 	.qrow {
-		grid-template-columns: 22px minmax(0, 1fr) auto minmax(0, 160px) 110px;
+		grid-template-columns: 22px minmax(0, 1fr) auto minmax(0, 160px) 110px 28px;
 	}
 	.pos {
 		display: grid;

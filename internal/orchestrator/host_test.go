@@ -329,3 +329,69 @@ func TestHostFinishesItsJobWhenStopped(t *testing.T) {
 		})
 	}
 }
+
+// A person stopping a job from Raenil ends it on the host, reported as
+// canceled rather than failed.
+func TestHostStopsAJobWhenAsked(t *testing.T) {
+	var mu sync.Mutex
+	var finished map[string]any
+	stopAsked := false
+	started := make(chan struct{})
+	agent := models.Agent{ID: "ag-1", Name: "Engineer", Harness: "claude", Model: "haiku"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/hosts/heartbeat", func(w http.ResponseWriter, r *http.Request) {})
+	once := sync.Once{}
+	mux.HandleFunc("POST /api/jobs/claim", func(w http.ResponseWriter, r *http.Request) {
+		served := false
+		once.Do(func() {
+			served = true
+			json.NewEncoder(w).Encode(ClaimedJob{Job: models.Job{ID: "job-00001", Kind: "test_env"}, Agent: &agent})
+		})
+		if !served {
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+	mux.HandleFunc("GET /api/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		json.NewEncoder(w).Encode(models.Job{ID: "job-00001", Status: "claimed", StopRequested: stopAsked})
+	})
+	mux.HandleFunc("POST /api/jobs/{id}/finish", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		json.NewDecoder(r.Body).Decode(&finished)
+		mu.Unlock()
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	h := &Host{
+		Name:    "mac",
+		Clients: []*RaenilClient{{BaseURL: srv.URL, Token: "t", Workspace: "ws"}},
+		Runners: RunnerSet{"claude": drainRunner{wait: 10 * time.Second, started: started}},
+		Probe: func(_ context.Context, harness string, r Runner) models.HarnessStatus {
+			return models.HarnessStatus{Harness: harness, Installed: r != nil, Ready: r != nil}
+		},
+		Poll: 10 * time.Millisecond, Heartbeat: time.Hour, StopCheck: 20 * time.Millisecond,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go h.Run(ctx)
+	<-started
+	mu.Lock()
+	stopAsked = true
+	mu.Unlock()
+	for ctx.Err() == nil {
+		mu.Lock()
+		done := finished != nil
+		mu.Unlock()
+		if done {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if finished == nil || finished["status"] != "canceled" {
+		t.Fatalf("job ended %v, want canceled", finished)
+	}
+}
