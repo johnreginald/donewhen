@@ -194,7 +194,7 @@ func (d *deps) scopeOne(ctx context.Context, req mcp.CallToolRequest, refs ...re
 // definition sits in the agent's context on every turn — the full set measured
 // about 7,000 tokens a turn — so an agent is given only what its work uses.
 var agentTools = map[string]bool{
-	"ask_user": true, "propose_tickets": true,
+	"ask_user": true, "propose_tickets": true, "add_blocker": true,
 	"get_issue": true, "list_comments": true, "get_criteria": true,
 	"list_issues": true, "get_document": true, "list_documents": true,
 }

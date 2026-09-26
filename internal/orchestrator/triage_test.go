@@ -53,6 +53,14 @@ func TestTriageRefusedCommandBouncesImmediately(t *testing.T) {
 	}
 }
 
+// A dependency found mid-run is waited for, not retried through.
+func TestTriageWaitingOnABlockerStops(t *testing.T) {
+	d := policy().Decide(Verdict{Status: StatusFailed, Attempt: 1, WaitingOn: []string{"MYINF-20"}}, nil)
+	if d.Action != ActionBounce || !strings.Contains(d.Reason, "MYINF-20") {
+		t.Errorf("decision = %s %q, want bounce naming the blocker", d.Action, d.Reason)
+	}
+}
+
 // A worker that tried to weaken the tests must not be retried in place.
 func TestTriageRewardHackNeverRetries(t *testing.T) {
 	ev := []Evidence{{

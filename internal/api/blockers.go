@@ -8,6 +8,7 @@ import (
 
 	"raenil/internal/auth"
 	"raenil/internal/events"
+	"raenil/internal/models"
 	"raenil/internal/store"
 )
 
@@ -107,37 +108,69 @@ func (s *Server) runEpic(ctx context.Context, wsID, epicID, actor string) (EpicR
 	}
 	res.Blocked = append(res.Blocked, blocked...)
 	for _, is := range ready {
-		// A run with nothing to check it against is refused by the host;
-		// queueing it would only fail.
-		if crit, err := s.store.ListCriteria(ctx, wsID, is.ID); err != nil {
+		switch why, err := s.queueRun(ctx, wsID, is, actor); {
+		case err != nil:
 			return res, err
-		} else if len(crit) == 0 {
+		case why == "":
+			res.Queued = append(res.Queued, is.Key)
+		case why == "no checks":
 			res.NoCheck = append(res.NoCheck, is.Key)
-			continue
-		}
-		ref, err := s.store.IssueAgentRef(ctx, wsID, is)
-		if err != nil {
-			return res, err
-		}
-		if ref == "" {
+		case why == "no agent":
 			res.NoAgent = append(res.NoAgent, is.Key)
-			continue
+		default:
+			log.Printf("epic %s: %s not queued: %s", epicID, is.Key, why)
 		}
-		a, err := s.store.GetAgent(ctx, wsID, ref)
-		if err != nil || a.Status == "paused" {
-			res.NoAgent = append(res.NoAgent, is.Key)
-			continue
-		}
-		j, err := s.store.EnqueueJob(ctx, wsID, store.JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID})
-		if err != nil {
-			// Over budget, most likely: the rest may still go.
-			log.Printf("epic %s: %s not queued: %v", epicID, is.Key, err)
-			continue
-		}
-		res.Queued = append(res.Queued, is.Key)
-		s.bus.Publish(events.Event{Type: "job.updated", WorkspaceID: wsID, Actor: actor, Job: &j, IssueID: is.ID})
 	}
 	return res, nil
+}
+
+// queueRun queues a run of one ticket on its agent (or its priority's
+// default). It returns why it did not, when it did not: "no checks" — a run
+// with nothing to check it against would only be refused — "no agent", or
+// the reason the queue refused it (a budget, most likely).
+func (s *Server) queueRun(ctx context.Context, wsID string, is models.Issue, actor string) (string, error) {
+	crit, err := s.store.ListCriteria(ctx, wsID, is.ID)
+	if err != nil {
+		return "", err
+	}
+	if len(crit) == 0 {
+		return "no checks", nil
+	}
+	ref, err := s.store.IssueAgentRef(ctx, wsID, is)
+	if err != nil {
+		return "", err
+	}
+	if ref == "" {
+		return "no agent", nil
+	}
+	a, err := s.store.GetAgent(ctx, wsID, ref)
+	if err != nil || a.Status == "paused" {
+		return "no agent", nil
+	}
+	j, err := s.store.EnqueueJob(ctx, wsID, store.JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID})
+	if err != nil {
+		return err.Error(), nil
+	}
+	s.bus.Publish(events.Event{Type: "job.updated", WorkspaceID: wsID, Actor: actor, Job: &j, IssueID: is.ID})
+	return "", nil
+}
+
+// runWaiting starts the tickets that were waiting on this one and asked to
+// start again on their own, now that nothing is in their way.
+func (s *Server) runWaiting(ctx context.Context, wsID, blockerID string) {
+	waiting, err := s.store.UnblockedWaiting(ctx, wsID, blockerID)
+	if err != nil {
+		log.Printf("waiting tickets: %v", err)
+		return
+	}
+	for _, is := range waiting {
+		if why, err := s.queueRun(ctx, wsID, is, auth.ActorAI); err != nil || why != "" {
+			log.Printf("%s was waiting and is free, but not started: %v %s", is.Key, err, why)
+			continue
+		}
+		_ = s.store.ClearRunWhenUnblocked(ctx, wsID, is.ID)
+		log.Printf("%s: its blocker cleared, started again", is.Key)
+	}
 }
 
 // WatchEpics starts the next tickets of a running epic when one it waits on
@@ -157,6 +190,7 @@ func (s *Server) WatchEpics(ctx context.Context) {
 				(e.To.Category != "completed" && e.To.Category != "canceled" && e.To.Name != "In Review") {
 				continue
 			}
+			s.runWaiting(ctx, e.WorkspaceID, e.Issue.ID)
 			epics, err := s.store.AutorunDependents(ctx, e.WorkspaceID, e.Issue.ID)
 			if err != nil {
 				log.Printf("epics: %v", err)

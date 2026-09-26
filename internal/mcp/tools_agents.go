@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -62,6 +63,44 @@ func (d *deps) registerAgents(s *server.MCPServer) {
 		d.svc.Bus.Publish(events.Event{Type: "interaction.created", WorkspaceID: wsID, Actor: "ai", IssueID: is.ID, Interaction: &it})
 		return mcp.NewToolResultText(fmt.Sprintf("Posted %d question(s) on %s. End your turn now; "+
 			"you will be resumed with the answers.", len(qs), is.Key)), nil
+	})
+
+	s.AddTool(mcp.NewTool("add_blocker",
+		mcp.WithDescription("Record that a ticket cannot be done until another one is: use it when the work "+
+			"needs code or tables another ticket delivers and that ticket is not listed as a blocker. The link is "+
+			"saved, the ticket waits, and it starts again on its own once the blocker is In Review or Done, "+
+			"building on that ticket's branch. After calling it, END YOUR TURN — say what is missing and stop; do "+
+			"not work around the gap."),
+		mcp.WithString("issue", mcp.Required(), mcp.Description("The ticket that has to wait, e.g. RAE-21")),
+		mcp.WithString("blocker", mcp.Required(), mcp.Description("The ticket it waits on, e.g. RAE-20")),
+		mcp.WithString("reason", mcp.Required(), mcp.Description("What this ticket needs from it, in a sentence")),
+		wsArg(),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ref := req.GetString("issue", "")
+		wsID, err := d.scopeOne(ctx, req, issueRef(ref))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		is, err := d.resolveIssueRef(ctx, wsID, ref)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		b, err := d.store.AddBlocker(ctx, wsID, is.ID, req.GetString("blocker", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		body := fmt.Sprintf("Waiting on **%s** (%s): %s\n\nThis ticket starts again on its own once %s is In Review or Done.",
+			b.Key, b.State, req.GetString("reason", ""), b.Key)
+		c, err := d.store.CreateComment(ctx, wsID, is.ID, body, "ai", agentFrom(ctx))
+		if err == nil {
+			d.svc.Bus.Publish(events.Event{Type: "comment.added", WorkspaceID: wsID, Actor: "ai", IssueID: is.ID, Comment: &c})
+		}
+		d.svc.Bus.Publish(events.Event{Type: "issue.blockers", WorkspaceID: wsID, Actor: "ai", IssueID: is.ID})
+		state := "it is " + b.State + " — "
+		if b.Done {
+			state = "it is already " + b.State + ", so this ticket can be run again now — "
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("%s now waits on %s (%s). End your turn now.", is.Key, b.Key, strings.TrimSuffix(state, " — "))), nil
 	})
 }
 

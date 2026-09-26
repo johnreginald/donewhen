@@ -119,6 +119,10 @@ type Verdict struct {
 	// DeniedTools are the calls the harness refused. Retrying meets the same
 	// refusals, so these stop the attempts until a person allows them.
 	DeniedTools []string `json:"denied_tools,omitempty"`
+	// WaitingOn are blockers found during the attempt that are still open:
+	// the agent recorded a dependency the plan missed. The ticket waits for
+	// them rather than retrying.
+	WaitingOn []string `json:"waiting_on,omitempty"`
 	// Next is the recommended action: retry, escalate, review, bounce.
 	Next string `json:"next,omitempty"`
 	// Blocked explains a StatusBlocked verdict.

@@ -342,7 +342,11 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if o.MCP != nil {
 		prompt += "\n\n## When you need a decision\n\nIf you cannot finish without a decision only the user can make, " +
 			"call the Raenil tool ask_user on " + issue.Key + " with a few concrete options, then end your turn. " +
-			"Do not guess, and do not stop for anything you can decide yourself.\n"
+			"Do not guess, and do not stop for anything you can decide yourself.\n\n" +
+			"If the work needs code, tables or files another ticket delivers and that ticket is not in place, " +
+			"call the Raenil tool add_blocker on " + issue.Key + " naming that ticket and what you need from it, then " +
+			"end your turn. Do not build a stand-in for the other ticket's work; this ticket starts again on its " +
+			"own, on top of that work, once it is ready.\n"
 	}
 	if err := os.WriteFile(runDir.File("context.md"), []byte(prompt), 0o644); err != nil {
 		return v, nil, err
@@ -460,6 +464,15 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	v.CostUSD += res.CostUSD // Summarise already counted what evaluation spent
 	v.DurationS = int64(res.Duration.Seconds())
 	v.SessionID, v.Questions, v.DeniedTools = res.SessionID, res.Questions, res.DeniedTools
+	if o.AgentID != "" {
+		if blockers, err := o.Raenil.Blockers(ctx, issue.Key); err == nil {
+			for _, b := range blockers {
+				if !b.Done {
+					v.WaitingOn = append(v.WaitingOn, b.Key)
+				}
+			}
+		}
+	}
 	if res.Aborted {
 		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", "worker timed out"
 	}

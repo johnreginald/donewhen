@@ -1116,3 +1116,36 @@ func TestClaimOneJobPerTicket(t *testing.T) {
 		t.Error("the ticket's next job was not handed out once the first finished")
 	}
 }
+
+// An agent that finds a missing dependency links it, and the ticket starts
+// again on its own once that ticket clears — only while it is still waiting.
+func TestAddBlockerRunsWhenUnblocked(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	config, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "config", StateName: "In Progress"})
+	logging, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "logging", StateName: "Ready"})
+	other, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "other", StateName: "Done"})
+	s.SetBlockers(ctx, ws, logging.ID, []string{other.Key})
+
+	b, err := s.AddBlocker(ctx, ws, logging.ID, config.Key)
+	if err != nil || b.Key != config.Key || b.Done {
+		t.Fatalf("add = %+v, %v", b, err)
+	}
+	if all, _ := s.ListBlockers(ctx, ws, logging.ID); len(all) != 2 {
+		t.Errorf("the existing blocker was dropped: %+v", all)
+	}
+	if w, _ := s.UnblockedWaiting(ctx, ws, config.ID); len(w) != 0 {
+		t.Error("offered to run while its blocker is still in progress")
+	}
+	review := "In Review"
+	s.UpdateIssue(ctx, ws, config.ID, IssuePatch{StateName: &review})
+	w, _ := s.UnblockedWaiting(ctx, ws, config.ID)
+	if len(w) != 1 || w[0].ID != logging.ID {
+		t.Fatalf("waiting = %+v, want the logging ticket", w)
+	}
+	s.ClearRunWhenUnblocked(ctx, ws, logging.ID)
+	if w, _ := s.UnblockedWaiting(ctx, ws, config.ID); len(w) != 0 {
+		t.Error("offered again after being started")
+	}
+}

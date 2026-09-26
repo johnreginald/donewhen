@@ -254,3 +254,75 @@ func (s *Store) issueByRef(ctx context.Context, wsID, ref string) (models.Issue,
 	}
 	return s.GetIssueByKey(ctx, wsID, ref)
 }
+
+// AddBlocker links one more ticket that must clear before an issue runs, and
+// marks the issue to start again on its own once its blockers clear — the
+// path an agent takes when it finds a dependency the plan missed.
+func (s *Store) AddBlocker(ctx context.Context, wsID, issueID, blockerRef string) (Blocker, error) {
+	current, err := s.ListBlockers(ctx, wsID, issueID)
+	if err != nil {
+		return Blocker{}, err
+	}
+	refs := []string{blockerRef}
+	for _, b := range current {
+		refs = append(refs, b.Key)
+	}
+	all, err := s.SetBlockers(ctx, wsID, issueID, refs)
+	if err != nil {
+		return Blocker{}, err
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE issues SET run_when_unblocked = true WHERE id = $1 AND workspace_id = $2`,
+		issueID, wsID); err != nil {
+		return Blocker{}, err
+	}
+	b, _ := s.issueByRef(ctx, wsID, blockerRef)
+	for _, x := range all {
+		if x.ID == b.ID {
+			return x, nil
+		}
+	}
+	return Blocker{}, ErrNotFound
+}
+
+// UnblockedWaiting lists the tickets a now-cleared ticket was holding back
+// that asked to start again on their own and have nothing else in the way.
+func (s *Store) UnblockedWaiting(ctx context.Context, wsID, blockerID string) ([]models.Issue, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT i.id FROM issue_blockers ib
+		JOIN issues i ON i.id = ib.issue_id
+		JOIN workflow_states st ON st.id = i.state_id
+		WHERE ib.blocker_id = $1 AND i.workspace_id = $2 AND i.run_when_unblocked
+		  AND st.name = 'Ready' 
+		  AND NOT EXISTS (SELECT 1 FROM issue_blockers o JOIN issues b ON b.id = o.blocker_id
+		                  JOIN workflow_states bs ON bs.id = b.state_id
+		                  WHERE o.issue_id = i.id AND bs.category NOT IN ('completed', 'canceled') AND bs.name <> 'In Review')
+		  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.issue_id = i.id AND j.status IN ('queued', 'claimed'))`, blockerID, wsID)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	var out []models.Issue
+	for _, id := range ids {
+		is, err := s.GetIssue(ctx, wsID, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, is)
+	}
+	return out, nil
+}
+
+// ClearRunWhenUnblocked drops the flag once the ticket has been started.
+func (s *Store) ClearRunWhenUnblocked(ctx context.Context, wsID, issueID string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE issues SET run_when_unblocked = false WHERE id = $1 AND workspace_id = $2`, issueID, wsID)
+	return err
+}

@@ -39,8 +39,8 @@ func RaenilMCP(baseURL, token, agentID, workspace string, tools ...string) *MCPS
 // propose new tickets; a worker that finds one missing asks instead.
 var (
 	readMCPTools = []string{"get_issue", "list_comments", "get_criteria", "list_issues", "get_document", "list_documents"}
-	ChatMCPTools = append([]string{"ask_user", "propose_tickets"}, readMCPTools...)
-	WorkMCPTools = append([]string{"ask_user"}, readMCPTools...)
+	ChatMCPTools = append([]string{"ask_user", "propose_tickets", "add_blocker"}, readMCPTools...)
+	WorkMCPTools = append([]string{"ask_user", "add_blocker"}, readMCPTools...)
 )
 
 // claudeMCPConfig writes a private one-run config file for Claude.

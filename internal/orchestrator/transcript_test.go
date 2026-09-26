@@ -95,7 +95,7 @@ func TestWorkRunMayReadTheTracker(t *testing.T) {
 			allowed = args[i+1]
 		}
 	}
-	for _, want := range []string{"mcp__raenil__get_issue", "mcp__raenil__list_comments", "mcp__raenil__ask_user"} {
+	for _, want := range []string{"mcp__raenil__get_issue", "mcp__raenil__list_comments", "mcp__raenil__ask_user", "mcp__raenil__add_blocker"} {
 		if !strings.Contains(allowed, want) {
 			t.Errorf("work run cannot call %s without asking: %s", want, allowed)
 		}

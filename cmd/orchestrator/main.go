@@ -1013,6 +1013,16 @@ func cmdHost(ctx context.Context, args []string) error {
 		v, err := o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
 			Triage: orchestrator.TriagePolicy{MaxAttempts: *maxAttempts, EscalateAfter: *maxAttempts},
 		})
+		if err == nil && len(v.WaitingOn) > 0 {
+			// It found a dependency the plan missed: back to Ready to wait,
+			// and Raenil starts it again once the blocker clears.
+			if serr := c.SetState(ctx, job.IssueKey, "Ready"); serr != nil {
+				logf("%s waits on %s but could not be moved back to Ready: %v", job.IssueKey, strings.Join(v.WaitingOn, ", "), serr)
+			} else {
+				logf("%s waits on %s — back to Ready until it clears", job.IssueKey, strings.Join(v.WaitingOn, ", "))
+			}
+			return v, nil
+		}
 		if err != nil || v.Status != orchestrator.StatusPassed {
 			return v, err
 		}
