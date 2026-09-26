@@ -737,9 +737,11 @@ func decisionsMade(its []models.Interaction) string {
 	return strings.TrimSpace(b.String())
 }
 
-// reviewBranches are the branches of the tickets an issue waits on that are
-// In Review: done enough to build on, not yet merged. A blocker still open is
-// the server's to refuse; a Done one is on the main line already.
+// reviewBranches are the branches of the tickets an issue waits on: done
+// enough to build on — In Review, or Done — whether or not anyone has merged
+// them yet. MergeBlockerBranches skips any already on the main line, so a
+// ticket marked Done before its branch was merged still hands its work on.
+// A blocker still open is the server's to refuse.
 func (o *Orchestrator) reviewBranches(ctx context.Context, key string) ([]string, error) {
 	blockers, err := o.Raenil.Blockers(ctx, key)
 	if err != nil {
@@ -750,15 +752,16 @@ func (o *Orchestrator) reviewBranches(ctx context.Context, key string) ([]string
 		if !b.Done {
 			return nil, fmt.Errorf("blocked by %s (%s)", b.Key, b.State)
 		}
-		if b.State != "In Review" {
-			continue
-		}
 		bi, err := o.Raenil.Issue(ctx, b.Key)
 		if err != nil {
 			return nil, err
 		}
 		if bi.GitBranch == nil || *bi.GitBranch == "" {
-			return nil, fmt.Errorf("%s is In Review but has no branch recorded to build on", b.Key)
+			// Done by hand with no run behind it: nothing to build on.
+			if b.State == "In Review" {
+				return nil, fmt.Errorf("%s is In Review but has no branch recorded to build on", b.Key)
+			}
+			continue
 		}
 		out = append(out, *bi.GitBranch)
 	}

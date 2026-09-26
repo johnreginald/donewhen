@@ -207,12 +207,24 @@ func MergeBlockerBranches(ctx context.Context, dir string, branches []string) er
 	if len(branches) == 0 {
 		return nil
 	}
+	merged := 0
 	for _, b := range branches {
+		// Gone (deleted after merging) or already on this line: nothing to add.
+		if _, err := git(ctx, dir, "rev-parse", "--verify", "--quiet", b+"^{commit}"); err != nil {
+			continue
+		}
+		if _, err := git(ctx, dir, "merge-base", "--is-ancestor", b, "HEAD"); err == nil {
+			continue
+		}
+		merged++
 		if _, err := git(ctx, dir, "-c", "user.email=orchestrator@raenil.local", "-c", "user.name=Raenil Orchestrator",
 			"merge", "--no-ff", "--no-edit", "-m", "Build on "+b, b); err != nil {
 			_, _ = git(ctx, dir, "merge", "--abort")
 			return fmt.Errorf("could not build on %s: it conflicts with the other work this ticket waits on — merge its blockers first: %w", b, err)
 		}
+	}
+	if merged == 0 {
+		return nil
 	}
 	sha, err := git(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {

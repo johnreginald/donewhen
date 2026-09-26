@@ -158,6 +158,16 @@ func TestMergeBlockerBranches(t *testing.T) {
 		t.Errorf("diff = %v, want only api/main.go", d.Files)
 	}
 
+	// A branch already on the main line, or deleted after merging, adds
+	// nothing and records no base.
+	plain, _ := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "plain"), "ticket/plain-1", "HEAD")
+	if err := MergeBlockerBranches(ctx, plain.Path, []string{"main", "ticket/gone-9"}); err != nil {
+		t.Errorf("merged or missing branches: %v", err)
+	}
+	if WorktreeBase(ctx, plain.Path) != "" {
+		t.Error("a base was recorded with nothing merged")
+	}
+
 	// Two blockers whose work collides: the ticket does not start.
 	other, _ := AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "oth"), "ticket/oth-1", "HEAD")
 	write(t, filepath.Join(other.Path, "api"), "go.mod", "module y\n")
