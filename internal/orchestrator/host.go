@@ -44,7 +44,10 @@ type Host struct {
 	// Drain is how long a stopping host keeps working on the job it has
 	// before giving up on it (default 15m). Restarting the host to update it
 	// should not cost the turn or run in progress.
-	Drain     time.Duration
+	Drain time.Duration
+	// Parallel is how many jobs run at once (default 3). Each ticket works in
+	// its own worktree; the server never hands out two jobs for one ticket.
+	Parallel  int
 	Poll      time.Duration // how often to ask for work (default 3s)
 	StopCheck time.Duration // how often a running job looks for a stop request (default 3s)
 	Heartbeat time.Duration // how often to report health (default 30s)
@@ -52,7 +55,7 @@ type Host struct {
 
 	mu     sync.Mutex
 	status []models.HarnessStatus
-	busy   bool // a job is running
+	busy   int // jobs running now
 	jobs   sync.WaitGroup
 	// jobCtx is what jobs run under: it outlives the host's own context by
 	// Drain, so stopping lets the current job finish.
@@ -105,10 +108,10 @@ func (h *Host) Run(ctx context.Context) error {
 // so Raenil does not reap it, until it finishes or Drain runs out.
 func (h *Host) drain(jobCtx context.Context, cancelJobs context.CancelFunc, beat *time.Ticker) error {
 	h.mu.Lock()
-	busy := h.busy
+	busy := h.busy > 0
 	h.mu.Unlock()
 	if busy {
-		h.logf("stopping: finishing the current job first (up to %s)", h.Drain)
+		h.logf("stopping: finishing the jobs in hand first (up to %s)", h.Drain)
 	}
 	done := make(chan struct{})
 	go func() {
@@ -167,20 +170,24 @@ func (h *Host) ready() []string {
 	return out
 }
 
-// pollOnce claims one job when the host is idle and runs it in the
-// background, so the heartbeat keeps going while it works.
+// pollOnce claims work while the host has room — up to Parallel jobs, one
+// claim per workspace per poll so no workspace starves the others — and runs
+// each in the background, so the heartbeat keeps going while they work.
 func (h *Host) pollOnce(ctx context.Context) {
-	h.mu.Lock()
-	if h.busy {
-		h.mu.Unlock()
-		return
+	if h.Parallel <= 0 {
+		h.Parallel = 3
 	}
-	h.mu.Unlock()
 	harnesses := h.ready()
 	if len(harnesses) == 0 {
 		return
 	}
 	for _, c := range h.Clients {
+		h.mu.Lock()
+		full := h.busy >= h.Parallel
+		h.mu.Unlock()
+		if full {
+			return
+		}
 		// A claim is not cut off by the host stopping: the server may already
 		// have handed the job over, and a job handed over is run (and
 		// drained), never dropped.
@@ -195,14 +202,14 @@ func (h *Host) pollOnce(ctx context.Context) {
 			continue
 		}
 		h.mu.Lock()
-		h.busy = true
+		h.busy++
 		h.mu.Unlock()
 		h.jobs.Add(1)
 		go func() {
 			defer h.jobs.Done()
 			defer func() {
 				h.mu.Lock()
-				h.busy = false
+				h.busy--
 				h.mu.Unlock()
 			}()
 			jctx := h.jobCtx
@@ -211,7 +218,6 @@ func (h *Host) pollOnce(ctx context.Context) {
 			}
 			h.handle(jctx, c, job)
 		}()
-		return
 	}
 }
 

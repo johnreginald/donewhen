@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -394,4 +395,91 @@ func TestHostStopsAJobWhenAsked(t *testing.T) {
 	if finished == nil || finished["status"] != "canceled" {
 		t.Fatalf("job ended %v, want canceled", finished)
 	}
+}
+
+// A host runs several jobs at once, up to Parallel.
+func TestHostRunsJobsInParallel(t *testing.T) {
+	var mu sync.Mutex
+	next := 0
+	running, peak := 0, 0
+	agent := models.Agent{ID: "ag-1", Name: "Engineer", Harness: "claude", Model: "haiku"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/hosts/heartbeat", func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc("POST /api/jobs/claim", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if next >= 3 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next++
+		json.NewEncoder(w).Encode(ClaimedJob{Job: models.Job{ID: fmt.Sprintf("job-%05d", next), Kind: "test_env"}, Agent: &agent})
+	})
+	mux.HandleFunc("GET /api/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(models.Job{Status: "claimed"})
+	})
+	finished := 0
+	mux.HandleFunc("POST /api/jobs/{id}/finish", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		finished++
+		mu.Unlock()
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	h := &Host{
+		Name:    "mac",
+		Clients: []*RaenilClient{{BaseURL: srv.URL, Token: "t", Workspace: "ws"}},
+		Runners: RunnerSet{"claude": countingRunner{mu: &mu, running: &running, peak: &peak, wait: 300 * time.Millisecond}},
+		Probe: func(_ context.Context, harness string, r Runner) models.HarnessStatus {
+			return models.HarnessStatus{Harness: harness, Installed: r != nil, Ready: r != nil}
+		},
+		Poll: 10 * time.Millisecond, Heartbeat: time.Hour, Parallel: 2,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go h.Run(ctx)
+	for ctx.Err() == nil {
+		mu.Lock()
+		done := finished == 3
+		mu.Unlock()
+		if done {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if finished != 3 {
+		t.Fatalf("finished %d of 3 jobs", finished)
+	}
+	if peak != 2 {
+		t.Errorf("at most %d ran at once, want 2 (Parallel)", peak)
+	}
+}
+
+// countingRunner records how many answers are being worked on at once.
+type countingRunner struct {
+	mu            *sync.Mutex
+	running, peak *int
+	wait          time.Duration
+}
+
+func (countingRunner) Name() string                                       { return "claude" }
+func (countingRunner) Run(context.Context, RunRequest) (RunResult, error) { return RunResult{}, nil }
+func (c countingRunner) Ask(ctx context.Context, _, _ string) (string, float64, error) {
+	c.mu.Lock()
+	*c.running++
+	if *c.running > *c.peak {
+		*c.peak = *c.running
+	}
+	c.mu.Unlock()
+	time.Sleep(c.wait)
+	c.mu.Lock()
+	*c.running--
+	c.mu.Unlock()
+	return "hello", 0, nil
+}
+func (c countingRunner) AskIn(ctx context.Context, m, p, _ string) (string, float64, error) {
+	return c.Ask(ctx, m, p)
 }

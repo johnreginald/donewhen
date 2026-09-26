@@ -167,6 +167,10 @@ func (s *Store) ClaimJob(ctx context.Context, wsID, host string, harnesses []str
 		WHERE id = (
 			SELECT j.id FROM jobs j JOIN agents a ON a.id = j.agent_id
 			WHERE j.workspace_id = $1 AND j.status = 'queued' AND a.harness = ANY($3) AND a.status = 'active'
+			  -- One job per ticket at a time: hosts now run several at once, and
+			  -- a run and a verify on one worktree must not overlap.
+			  AND (j.issue_id IS NULL OR NOT EXISTS (
+			        SELECT 1 FROM jobs o WHERE o.issue_id = j.issue_id AND o.status = 'claimed'))
 			ORDER BY j.created_at
 			FOR UPDATE OF j SKIP LOCKED
 			LIMIT 1

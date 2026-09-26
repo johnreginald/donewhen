@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -278,9 +279,13 @@ func (r *OpenCodeRunner) Run(ctx context.Context, req RunRequest) (RunResult, er
 
 	// Raenil's tools for this run: registered on the server for its duration,
 	// then disconnected, so the next run — maybe another agent's, maybe a judge
-	// that should have none — never inherits them. The host runs one job at a
-	// time, so runs never share the registration.
+	// that should have none — never inherits them. The registration belongs to
+	// the directory, and the host runs jobs in parallel: runs in one directory
+	// (conversation turns in the same repo) take turns so none sees another
+	// agent's tools or has them disconnected under it. Work runs each have
+	// their own worktree and run side by side.
 	if req.MCP != nil && !req.DisableTools {
+		defer lockDir(req.Cwd)()
 		if err := r.addMCP(ctx, dirQ, *req.MCP); err != nil {
 			return res, fmt.Errorf("give the run Raenil's tools: %w", err)
 		}
@@ -654,4 +659,14 @@ func (r *OpenCodeRunner) addMCP(ctx context.Context, dirQ url.Values, m MCPServe
 		return err
 	}
 	return r.do(ctx, r.client(), http.MethodPost, "/mcp/"+m.Name+"/connect", dirQ, nil, nil)
+}
+
+// dirLocks serialises OpenCode runs that share a working directory.
+var dirLocks sync.Map // dir -> *sync.Mutex
+
+func lockDir(dir string) func() {
+	m, _ := dirLocks.LoadOrStore(dir, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }

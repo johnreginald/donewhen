@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -918,6 +919,7 @@ func cmdHost(ctx context.Context, args []string) error {
 	baseRef := fs.String("base", "HEAD", "what a worktree branches from")
 	timeout := fs.Duration("timeout", 30*time.Minute, "bound one attempt")
 	maxAttempts := fs.Int("max-attempts", 3, "attempts before a ticket is handed back")
+	parallel := fs.Int("parallel", envInt("ORCHESTRATOR_PARALLEL", 3), "jobs run at once, each ticket in its own worktree")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1067,13 +1069,14 @@ func cmdHost(ctx context.Context, args []string) error {
 		Repo:      *repo,
 		MCPURL:    rc.BaseURL + "/mcp",
 		Poll:      *poll,
+		Parallel:  *parallel,
 		Logf:      logf,
 	}
 	names := make([]string, len(serve))
 	for i, c := range serve {
 		names[i] = c.Workspace
 	}
-	fmt.Fprintf(os.Stderr, "host %s serving %s\n", *name, strings.Join(names, ", "))
+	fmt.Fprintf(os.Stderr, "host %s serving %s, %d jobs at once\n", *name, strings.Join(names, ", "), *parallel)
 	err = h.Run(ctx)
 	if errors.Is(err, context.Canceled) {
 		return nil
@@ -1189,4 +1192,13 @@ func readSecret() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+// envInt reads a whole number from the environment, or def when it is unset
+// or not a number.
+func envInt(name string, def int) int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(name))); err == nil && n > 0 {
+		return n
+	}
+	return def
 }

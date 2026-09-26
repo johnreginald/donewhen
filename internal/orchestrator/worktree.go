@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Worktree is a disposable checkout a worker is allowed to write to freely.
@@ -37,10 +38,27 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 
 // AddWorktree creates a worktree for a ticket at path, on a new branch off base.
 // Workers never touch the main checkout.
+// repoLocks serialises the git operations that change a repository's shared
+// state — adding and removing worktrees, deleting branches. Several jobs run
+// at once, each in its own worktree, and two of these at the same moment
+// trip over git's own lock files.
+var repoLocks sync.Map // repo path -> *sync.Mutex
+
+func lockRepo(repo string) func() {
+	if abs, err := filepath.Abs(repo); err == nil {
+		repo = abs
+	}
+	m, _ := repoLocks.LoadOrStore(repo, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
 func AddWorktree(ctx context.Context, repo, path, branch, base string) (*Worktree, error) {
 	if base == "" {
 		base = "HEAD"
 	}
+	defer lockRepo(repo)()
 	if _, err := git(ctx, repo, "worktree", "add", "-b", branch, path, base); err != nil {
 		return nil, err
 	}
@@ -57,6 +75,7 @@ func (w *Worktree) Remove(ctx context.Context) error { return w.remove(ctx, true
 func (w *Worktree) Detach(ctx context.Context) error { return w.remove(ctx, false) }
 
 func (w *Worktree) remove(ctx context.Context, dropBranch bool) error {
+	defer lockRepo(w.Repo)()
 	var errs []string
 	if _, err := git(ctx, w.Repo, "worktree", "remove", "--force", w.Path); err != nil {
 		// The directory may already be gone; prune catches that case.

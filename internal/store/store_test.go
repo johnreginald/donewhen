@@ -1089,3 +1089,30 @@ func TestStopJob(t *testing.T) {
 		t.Errorf("a finished job changed: %s", j.Status)
 	}
 }
+
+// Hosts run jobs in parallel, but never two for one ticket at a time.
+func TestClaimOneJobPerTicket(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+	name, harness := "Eng", "claude"
+	a, _ := s.CreateAgent(ctx, ws, AgentInput{Name: &name, Harness: &harness})
+	one, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "one", StateName: "Ready", AgentID: &a.ID})
+	two, _ := s.CreateIssue(ctx, ws, IssueInput{Title: "two", StateName: "Ready", AgentID: &a.ID})
+	s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: one.ID})
+	s.EnqueueJob(ctx, ws, JobInput{Kind: "chat", AgentID: a.ID, IssueID: one.ID})
+	s.EnqueueJob(ctx, ws, JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: two.ID})
+
+	first, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"})
+	second, ok2, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"})
+	if !ok || !ok2 || *first.IssueID == *second.IssueID {
+		t.Fatalf("claimed %v and %v: want one job from each ticket", first.IssueKey, second.IssueKey)
+	}
+	if _, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"}); ok {
+		t.Error("a second job for a ticket already being worked was handed out")
+	}
+	s.FinishJob(ctx, ws, first.ID, "mac", "succeeded", nil, "")
+	if j, ok, _ := s.ClaimJob(ctx, ws, "mac", []string{"claude"}); !ok || *j.IssueID != one.ID {
+		t.Error("the ticket's next job was not handed out once the first finished")
+	}
+}
