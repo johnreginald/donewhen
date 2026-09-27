@@ -2,9 +2,11 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"raenil/internal/events"
 	"raenil/internal/models"
+	"raenil/internal/store"
 )
 
 // handleListReviews is a ticket's agent reviews, newest first.
@@ -38,4 +40,17 @@ func (s *Server) handleSaveReview(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publish(r, events.Event{Type: "review.saved", IssueID: id})
 	writeJSON(w, http.StatusCreated, rv)
+}
+
+// handleFlow is the factory's flow numbers over ?days= (default 7).
+func (s *Server) handleFlow(w http.ResponseWriter, r *http.Request) {
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	f, err := s.store.FlowStats(r.Context(), ws(r), days)
+	if handleStoreErr(w, err) {
+		return
+	}
+	if f.Runners == nil {
+		f.Runners = []store.RunnerFlow{}
+	}
+	writeJSON(w, 200, f)
 }

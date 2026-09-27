@@ -16,6 +16,7 @@
 	import Conversation from '$components/Conversation.svelte';
 	import Blockers from '$components/Blockers.svelte';
 	import ReviewBlock from '$components/ReviewBlock.svelte';
+	import EvidencePanel from '$components/EvidencePanel.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { agents } from '$lib/store.js';
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal, Bot } from '@lucide/svelte';
@@ -302,6 +303,7 @@
 				{/if}
 
 				{#key issue.id}<ReviewBlock {issue} stateName={stOf(issue)?.name} />{/key}
+				{#key issue.id}<EvidencePanel {issue} stateName={stOf(issue)?.name} />{/key}
 
 				{#if activity.length}
 					<section class="block">

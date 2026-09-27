@@ -9,14 +9,15 @@
 	import { onLive } from '$lib/ui.js';
 	import { rel, duration, tokens } from '$lib/format.js';
 	import { hostOnline, harnessName } from '$lib/harness.js';
-	import { Bot, Check, X, LoaderCircle, Clock, Terminal, MessageSquare, ShieldCheck, Flag, ArrowRight, Server, Wrench, Square } from '@lucide/svelte';
+	import { Bot, Check, X, LoaderCircle, Clock, Terminal, MessageSquare, ShieldCheck, Flag, ArrowRight, Server, Wrench, Square, GitMerge } from '@lucide/svelte';
 	import { showToast } from '$lib/ui.js';
 
 	const KIND = {
 		run_ticket: { label: 'Run', doing: 'Working', icon: Terminal },
 		chat: { label: 'Conversation', doing: 'Thinking', icon: MessageSquare },
 		verify: { label: 'Verify', doing: 'Verifying', icon: ShieldCheck },
-		finish: { label: 'Finish', doing: 'Finishing', icon: Flag }
+		finish: { label: 'Finish', doing: 'Finishing', icon: Flag },
+		merge: { label: 'Merge', doing: 'Merging', icon: GitMerge }
 	};
 
 	let hosts = $state([]);

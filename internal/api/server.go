@@ -182,6 +182,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/issues/{id}/runs", s.wsGuard(s.handleListIssueRuns))
 	mux.HandleFunc("GET /api/issues/{id}/reviews", s.wsGuard(s.handleListReviews))
 	mux.HandleFunc("POST /api/issues/{id}/reviews", s.wsGuard(s.handleSaveReview))
+	mux.HandleFunc("GET /api/issues/{id}/evidence", s.wsGuard(s.handleListEvidence))
+	mux.HandleFunc("PUT /api/issues/{id}/evidence", s.wsGuard(s.handlePutEvidence))
+	mux.HandleFunc("GET /api/evidence/{id}", s.wsGuard(s.handleEvidenceFile))
 	mux.HandleFunc("GET /api/issues/{id}/blockers", s.wsGuard(s.handleGetBlockers))
 	mux.HandleFunc("PUT /api/issues/{id}/blockers", s.wsGuard(s.handleSetBlockers))
 	mux.HandleFunc("GET /api/blockers", s.wsGuard(s.handleListBlockLinks))
@@ -227,6 +230,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Runs — each agent attempt, recorded by the machine that ran it.
 	mux.HandleFunc("GET /api/runs", s.wsGuard(s.handleListRuns))
+	mux.HandleFunc("GET /api/flow", s.wsGuard(s.handleFlow))
 	mux.HandleFunc("POST /api/runs", s.wsGuard(s.handleStartRun))
 	mux.HandleFunc("GET /api/runs/{id}", s.wsGuard(s.handleGetRun))
 	mux.HandleFunc("PATCH /api/runs/{id}", s.wsGuard(s.handleFinishRun))

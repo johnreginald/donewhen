@@ -19,8 +19,7 @@
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
-		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, ChevronRight, Activity
-	} from '@lucide/svelte';
+		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, ChevronRight, Activity, Gauge } from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
 	// issues, labels, the inbox badge) belongs to the selected workspace only.
@@ -162,6 +161,9 @@
 		<a href="/running" class="nav-item" class:active={$page.url.pathname === '/running'} onclick={onnavigate}>
 			<span class="icon"><Activity size={16} strokeWidth={2} /></span>Running
 			{#if runningCount}<span class="badge live">{runningCount}</span>{/if}
+		</a>
+		<a href="/flow" class="nav-item" class:active={$page.url.pathname === '/flow'} onclick={onnavigate}>
+			<span class="icon"><Gauge size={16} strokeWidth={2} /></span>Flow
 		</a>
 		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
 			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts

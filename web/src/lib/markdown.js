@@ -46,6 +46,20 @@ export function renderMarkdown(src) {
 		}
 		return origCode(code, lang);
 	};
+	// Tickets and review guides are written by agents that read untrusted
+	// code: raw HTML is shown as text, never run, and only safe link schemes
+	// are followed.
+	renderer.html = (t) => escapeHtml(typeof t === 'object' ? t.text || t.raw || '' : t || '');
+	const origLink = renderer.link.bind(renderer);
+	renderer.link = (...args) => {
+		const tok = args[0];
+		const href = String(typeof tok === 'object' ? tok.href : tok || '').trim();
+		if (/^(javascript|data|vbscript):/i.test(href)) {
+			if (typeof tok === 'object') tok.href = '#';
+			else args[0] = '#';
+		}
+		return origLink(...args);
+	};
 	return marked.parse(src, { renderer });
 }
 

@@ -161,6 +161,9 @@ export const api = {
 	},
 	run: (id) => request('GET', `/runs/${id}`),
 	issueRuns: (id) => request('GET', `/issues/${id}/runs`),
+	issueReviews: (id) => request('GET', `/issues/${id}/reviews`),
+	issueEvidence: (id) => request('GET', `/issues/${id}/evidence`),
+	evidenceUrl: (id) => `/api/evidence/${id}?workspace=${encodeURIComponent(getWorkspace() || '')}`,
 	// coverage
 	missingDocs: () => request('GET', '/issues/missing-docs'),
 	// inbox — review queue + recent AI activity

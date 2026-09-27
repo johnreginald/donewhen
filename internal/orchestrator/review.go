@@ -160,6 +160,9 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 		o.logf("review commit %s", sha[:min(8, len(sha))])
 	}
 
+	// What it looks like — screenshots and a preview — for the review.
+	o.CollectEvidence(ctx, issue.ID, issue.Key, wtPath)
+
 	// The work leaves the machine as a pull request, reviewed and merged from
 	// the ticket page.
 	branch := branchForWorktree(wtPath)
