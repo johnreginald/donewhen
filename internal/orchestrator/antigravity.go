@@ -45,9 +45,18 @@ func (r *AntigravityRunner) Available(ctx context.Context) error {
 	if _, err := exec.LookPath(r.bin()); err != nil {
 		return fmt.Errorf("agy is not on PATH: %w", err)
 	}
-	out, err := exec.CommandContext(ctx, r.bin(), "--version").CombinedOutput()
+	// agy models answers in a second and says when nobody is signed in; a
+	// print run would sit waiting for a browser sign-in instead.
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, r.bin(), "models")
+	cmd.Stdin = nil
+	out, err := cmd.CombinedOutput()
+	if strings.Contains(strings.ToLower(string(out)), "sign in") {
+		return errors.New("agy is not signed in: run agy once on this machine and sign in with Google")
+	}
 	if err != nil {
-		return fmt.Errorf("agy --version: %v: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("agy models: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

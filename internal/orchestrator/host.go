@@ -393,14 +393,14 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 		}
 	case *AntigravityRunner:
 		err := rr.Available(ctx)
-		st.Installed = err == nil
+		st.Installed = err == nil || !strings.Contains(err.Error(), "not on PATH")
 		st.Ready = err == nil
 		st.Auth = "Google subscription · this machine's agy login"
 		if err == nil {
 			st.Models = AntigravityModels(ctx, rr)
 		} else {
 			st.Detail = err.Error()
-			st.Fix = "install Antigravity's CLI (agy) and sign in"
+			st.Fix = "run agy once on the host and sign in with Google"
 		}
 	case *OpenCodeRunner:
 		// The keys are OpenCode's own (opencode auth login); Raenil only asks
