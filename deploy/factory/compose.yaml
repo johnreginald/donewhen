@@ -1,11 +1,14 @@
 # The PC factory. Runs next to Raenil (host network, so localhost reaches
 # Raenil, OpenCode and each project's own test database) with its own state
-# in ./state and its secrets in ./secrets.
+# in ./state and its secrets in ./secrets. Run it from the factory folder,
+# with this repository checked out in ./src:
+#
+#   docker compose -f src/deploy/factory/compose.yaml --project-directory . up -d --build
 name: raenil-factory
 services:
   factory:
     build:
-      context: ../..
+      context: ${FACTORY_SRC:-./src}
       dockerfile: deploy/factory/Dockerfile
       args:
         UID: "${FACTORY_UID:-1000}"
