@@ -73,6 +73,8 @@ func main() {
 		err = cmdReview(ctx, args, false)
 	case "finish":
 		err = cmdReview(ctx, args, true)
+	case "qualify":
+		err = cmdQualify(ctx, args)
 	case "health":
 		err = cmdHealth(ctx)
 	case "-h", "--help", "help":
@@ -100,6 +102,8 @@ func usage() {
   orchestrator propose <TICKET>       draft a typed done-when checklist for a ticket
   orchestrator verify  <TICKET>       re-run the criteria against the kept worktree
   orchestrator finish  <TICKET>       commit review fixes, record, move to In Review
+  orchestrator qualify <TICKET>       have an agent review the ticket itself before
+                                      it is built (--reviewer codex|claude|antigravity)
   orchestrator daemon                 work the Ready queue unattended
   orchestrator connect claude|codex   connect a subscription for Raenil's agents
                                       (claude setup-token / codex device login);
@@ -901,6 +905,58 @@ func cmdReview(ctx context.Context, args []string, finish bool) error {
 	return nil
 }
 
+// cmdQualify runs the ticket reviewer on one ticket and prints its findings.
+func cmdQualify(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("qualify", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository the ticket is worked in")
+	reposSpec := fs.String("repos", os.Getenv("ORCHESTRATOR_REPOS"), "repo:label routing")
+	reviewerName := fs.String("reviewer", "codex", "who reviews: codex, claude, antigravity or opencode")
+	pos, err := parsePermuted(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) < 1 {
+		return fmt.Errorf("a ticket key is required, e.g. PP-42")
+	}
+	rc, oc, err := clients()
+	if err != nil {
+		return err
+	}
+	repos, err := parseRepos(*reposSpec)
+	if err != nil {
+		return err
+	}
+	var reviewer orchestrator.Runner
+	switch *reviewerName {
+	case "codex":
+		reviewer = codexRunner()
+	case "claude":
+		reviewer = claudeRunner()
+	case "antigravity":
+		reviewer = &orchestrator.AntigravityRunner{}
+	case "opencode":
+		reviewer = oc
+	default:
+		return fmt.Errorf("unknown reviewer %q", *reviewerName)
+	}
+	o := &orchestrator.Orchestrator{Raenil: rc, Runner: noopRunner{}, Repos: repos,
+		Cfg: orchestrator.Config{Repo: *repo},
+		Log: func(format string, a ...any) { fmt.Printf(format+"\n", a...) }}
+	rv, err := o.QualifyTicket(ctx, pos[0], reviewer, *reviewerName)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n%s: %s\n%s\n", pos[0], rv.Verdict, rv.Summary)
+	for _, f := range rv.Findings {
+		fmt.Printf("- [%s] %s", f.Severity, f.Issue)
+		if f.Fix != "" {
+			fmt.Printf(" — %s", f.Fix)
+		}
+		fmt.Println()
+	}
+	return nil
+}
+
 // noopRunner backs `orchestrator check`: evaluate the criteria against the repo
 // exactly as it stands, with no agent and no cost.
 type noopRunner struct{}
@@ -949,9 +1005,19 @@ func cmdHost(ctx context.Context, args []string) error {
 
 	// Claude and Codex are always offered, so the dashboard can say what is
 	// missing; OpenCode only when a server is configured.
-	runners := orchestrator.RunnerSet{"claude": claudeRunner(), "codex": codexRunner()}
+	runners := orchestrator.RunnerSet{"claude": claudeRunner(), "codex": codexRunner(), "antigravity": &orchestrator.AntigravityRunner{}}
 	if oc.BaseURL != "" {
 		runners["opencode"] = oc
+	}
+	// Reviewers come from the harnesses that actually work here.
+	usable := func(ctx context.Context) orchestrator.RunnerSet {
+		out := orchestrator.RunnerSet{}
+		for name, r := range runners {
+			if err := orchestrator.RunnerAvailable(ctx, r); err == nil {
+				out[name] = r
+			}
+		}
+		return out
 	}
 
 	repos, err := parseRepos(*reposSpec)
@@ -1016,6 +1082,31 @@ func cmdHost(ctx context.Context, args []string) error {
 			return nil, err
 		}
 		o.MCP = orchestrator.RaenilMCP(rc.BaseURL, c.Token, job.Agent.ID, c.Workspace, orchestrator.WorkMCPTools...)
+		builder := job.Agent.Harness
+		reviewer, reviewerName := orchestrator.PickReviewer(builder, usable(ctx))
+
+		// Qualify the ticket before spending attempts on it. A blocking
+		// finding sends it back to the spec; "run anyway" skips this.
+		var in struct {
+			SkipQualify bool `json:"skipQualify"`
+		}
+		_ = json.Unmarshal(job.Input, &in)
+		if reviewer != nil && !in.SkipQualify {
+			rv, qerr := o.QualifyTicket(ctx, job.IssueKey, reviewer, reviewerName)
+			switch {
+			case qerr != nil:
+				logf("%s: %v — building without a ticket review", job.IssueKey, qerr)
+			case rv.Verdict == "changes":
+				issue, _ := c.Issue(ctx, job.IssueKey)
+				_ = c.Comment(ctx, issue.ID, orchestrator.TicketFindings(rv))
+				if serr := c.SetState(ctx, issue.ID, "Aligning"); serr != nil {
+					logf("%s failed its ticket review but could not move to Aligning: %v", job.IssueKey, serr)
+				}
+				logf("%s failed its ticket review — back to Aligning", job.IssueKey)
+				return map[string]any{"ticketReview": rv}, nil
+			}
+		}
+
 		v, err := o.Work(ctx, job.IssueKey, orchestrator.WorkConfig{
 			Triage: orchestrator.TriagePolicy{MaxAttempts: *maxAttempts, EscalateAfter: *maxAttempts},
 		})
@@ -1031,6 +1122,13 @@ func cmdHost(ctx context.Context, args []string) error {
 		}
 		if err != nil || v.Status != orchestrator.StatusPassed {
 			return v, err
+		}
+		// A different vendor reads the change before the user does; blocking
+		// findings go back to the builder's session first.
+		if reviewer != nil {
+			if _, rerr := o.ReviewAndRevise(ctx, job.IssueKey, v, builder, reviewer, reviewerName); rerr != nil {
+				logf("%s: code review: %v", job.IssueKey, rerr)
+			}
 		}
 		// Every gating check passed, so the ticket goes to In Review on its
 		// own: Finish checks again, commits, links the commit, saves the

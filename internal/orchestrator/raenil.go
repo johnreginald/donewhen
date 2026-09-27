@@ -449,3 +449,15 @@ func (c *RaenilClient) LabelGroups(ctx context.Context) (map[string]string, erro
 	}
 	return out, nil
 }
+
+// SaveReview records an agent review on a ticket.
+func (c *RaenilClient) SaveReview(ctx context.Context, issueID string, r models.Review) error {
+	return c.do(ctx, http.MethodPost, "/api/issues/"+issueID+"/reviews", r, nil)
+}
+
+// Reviews is a ticket's agent reviews, newest first.
+func (c *RaenilClient) Reviews(ctx context.Context, issueID string) ([]models.Review, error) {
+	var out []models.Review
+	err := c.do(ctx, http.MethodGet, "/api/issues/"+issueID+"/reviews", nil, &out)
+	return out, err
+}

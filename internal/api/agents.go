@@ -333,6 +333,9 @@ func (s *Server) publish(r *http.Request, e events.Event) {
 func (s *Server) handleRunIssue(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Agent string `json:"agent"`
+		// SkipQualify runs the ticket without its ticket review — "run
+		// anyway" after a review sent it back.
+		SkipQualify bool `json:"skipQualify"`
 	}
 	_ = readJSON(r, &body)
 	is, err := s.resolveIssue(r, r.PathValue("id"))
@@ -357,7 +360,11 @@ func (s *Server) handleRunIssue(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, a.Name+" is paused")
 		return
 	}
-	j, err := s.store.EnqueueJob(r.Context(), ws(r), store.JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID})
+	var input any
+	if body.SkipQualify {
+		input = map[string]bool{"skipQualify": true}
+	}
+	j, err := s.store.EnqueueJob(r.Context(), ws(r), store.JobInput{Kind: "run_ticket", AgentID: a.ID, IssueID: is.ID, Input: input})
 	if handleStoreErr(w, err) {
 		return
 	}

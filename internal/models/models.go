@@ -382,3 +382,30 @@ type AgentSession struct {
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
+
+// Review is an agent's review of a ticket (before it is built) or of a
+// change (after its checks pass, by a different vendor than the builder).
+type Review struct {
+	ID          string          `json:"id"`
+	IssueID     string          `json:"issueId"`
+	Kind        string          `json:"kind"` // ticket | code
+	Reviewer    string          `json:"reviewer"`
+	Builder     string          `json:"builder"`
+	Verdict     string          `json:"verdict"` // pass | changes
+	Summary     string          `json:"summary"`
+	Findings    []ReviewFinding `json:"findings"`
+	GuideMD     string          `json:"guideMd"`
+	ContentHash string          `json:"contentHash"`
+	Round       int             `json:"round"`
+	CreatedAt   time.Time       `json:"createdAt"`
+}
+
+// ReviewFinding is one thing a reviewer found. Blocking findings stop the
+// ticket (ticket review) or go back to the builder (code review).
+type ReviewFinding struct {
+	Severity string `json:"severity"` // blocking | minor
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Issue    string `json:"issue"`
+	Fix      string `json:"fix,omitempty"`
+}
