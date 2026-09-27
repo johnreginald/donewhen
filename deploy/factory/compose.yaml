@@ -1,0 +1,33 @@
+# The PC factory. Runs next to Raenil (host network, so localhost reaches
+# Raenil, OpenCode and each project's own test database) with its own state
+# in ./state and its secrets in ./secrets.
+name: raenil-factory
+services:
+  factory:
+    build:
+      context: ../..
+      dockerfile: deploy/factory/Dockerfile
+      args:
+        UID: "${FACTORY_UID:-1000}"
+        GID: "${FACTORY_GID:-1000}"
+    image: raenil-factory
+    restart: unless-stopped
+    network_mode: host
+    stop_grace_period: 16m
+    group_add:
+      - "${DOCKER_GID:-973}"
+    env_file: ./factory.env
+    environment:
+      ORCHESTRATOR_ENV: /secrets/orchestrator.env
+      FACTORY_WORK: "${FACTORY_WORK}"
+    volumes:
+      # The same path inside and out: a project's own docker compose, run
+      # from a worktree, hands the daemon paths that must exist on the host.
+      - "${FACTORY_WORK:?set FACTORY_WORK to an absolute path}:${FACTORY_WORK}"
+      - ./state/home/.raenil:/home/factory/.raenil
+      - ./state/home/.codex:/home/factory/.codex
+      - ./state/home/.gemini:/home/factory/.gemini
+      - ./state/home/.local-share-opencode:/home/factory/.local/share/opencode
+      - ./state/home/.config-opencode:/home/factory/.config/opencode
+      - ./secrets:/secrets:ro
+      - /var/run/docker.sock:/var/run/docker.sock

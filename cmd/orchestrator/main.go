@@ -163,6 +163,7 @@ Environment:
                      that spans several: the workspace is then taken from the
                      ticket key, so API-42 finds its own project.
   ORCHESTRATOR_REPOS default --repos routing
+  RAENIL_SKIP_WORKSPACES  host: workspaces left to another host, comma-separated
   ORCHESTRATOR_ENV   settings file read on start (default ~/.config/raenil/orchestrator.env);
                      a variable already set in the shell wins over the file
   OPENCODE_URL       running 'opencode serve', e.g. http://127.0.0.1:4096
@@ -998,7 +999,18 @@ func cmdHost(ctx context.Context, args []string) error {
 		if err != nil {
 			return fmt.Errorf("list workspaces: %w", err)
 		}
+		// RAENIL_SKIP_WORKSPACES leaves workspaces to another host — the PC
+		// factory takes some, this machine the rest.
+		skip := map[string]bool{}
+		for _, w := range strings.Split(os.Getenv("RAENIL_SKIP_WORKSPACES"), ",") {
+			if w = strings.TrimSpace(w); w != "" {
+				skip[w] = true
+			}
+		}
 		for _, w := range spaces {
+			if skip[w.Slug] {
+				continue
+			}
 			serve = append(serve, &orchestrator.RaenilClient{BaseURL: rc.BaseURL, Token: rc.Token, Workspace: w.Slug})
 		}
 	}
