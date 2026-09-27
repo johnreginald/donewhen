@@ -34,3 +34,24 @@ services:
       - ./state/home/.config-opencode:/home/factory/.config/opencode
       - ./secrets:/secrets:ro
       - /var/run/docker.sock:/var/run/docker.sock
+
+  # A GitHub Actions runner on the PC, so pull requests run their checks
+  # here: labels self-hosted, linux, pc. It registers itself to CI_REPO_URL
+  # with the token in secrets/ci.env (ACCESS_TOKEN=...).
+  ci-runner:
+    image: myoung34/github-runner:latest
+    restart: unless-stopped
+    network_mode: host
+    env_file: ./secrets/ci.env
+    environment:
+      RUNNER_SCOPE: repo
+      REPO_URL: "${CI_REPO_URL:-https://github.com/johnreginald/myinfluencer}"
+      RUNNER_NAME: "${CI_RUNNER_NAME:-pc-ci}"
+      LABELS: self-hosted,linux,pc
+      RUNNER_WORKDIR: "${FACTORY_WORK}/ci"
+      CONFIGURED_ACTIONS_RUNNER_FILES_DIR: /runner/data
+      DISABLE_AUTO_UPDATE: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "${FACTORY_WORK}/ci:${FACTORY_WORK}/ci"
+      - ./state/ci-runner:/runner/data
