@@ -93,7 +93,7 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 		if in.AgentID == "" {
 			return models.Job{}, invalid("a test needs an agent")
 		}
-	case "run_ticket", "chat", "verify", "finish":
+	case "run_ticket", "chat", "verify", "finish", "merge":
 		if in.AgentID == "" || in.IssueID == "" {
 			return models.Job{}, invalid("a %s job needs an agent and a ticket", in.Kind)
 		}
@@ -124,13 +124,13 @@ func (s *Store) EnqueueJob(ctx context.Context, wsID string, in JobInput) (model
 			return models.Job{}, err
 		}
 	}
-	if in.Kind == "run_ticket" || in.Kind == "verify" || in.Kind == "finish" {
+	if in.Kind == "run_ticket" || in.Kind == "verify" || in.Kind == "finish" || in.Kind == "merge" {
 		// One piece of work on a ticket's worktree at a time: two would cut two
 		// worktrees, or verify one while it is being finished, and race to commit.
 		var busy bool
 		if err := s.pool.QueryRow(ctx, `
 			SELECT EXISTS(SELECT 1 FROM jobs WHERE workspace_id = $1 AND issue_id::text = $2
-			              AND kind IN ('run_ticket', 'verify', 'finish') AND status IN ('queued', 'claimed'))`,
+			              AND kind IN ('run_ticket', 'verify', 'finish', 'merge') AND status IN ('queued', 'claimed'))`,
 			wsID, in.IssueID).Scan(&busy); err != nil {
 			return models.Job{}, err
 		}

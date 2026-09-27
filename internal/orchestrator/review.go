@@ -160,6 +160,15 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 		o.logf("review commit %s", sha[:min(8, len(sha))])
 	}
 
+	// The work leaves the machine as a pull request, reviewed and merged from
+	// the ticket page.
+	branch := branchForWorktree(wtPath)
+	if pr, err := o.OpenPR(ctx, issue, wtPath, branch, o.prBody(issue, v)); err != nil {
+		o.logf("warning: could not open the pull request: %v", err)
+	} else if err := o.Raenil.SetDev(ctx, issue.ID, branch, pr); err != nil {
+		o.logf("warning: could not record the branch and pull request: %v", err)
+	}
+
 	if err := o.Raenil.SetState(ctx, issue.ID, cfg.StateInReview); err != nil {
 		return v, fmt.Errorf("could not move to %s: %w", cfg.StateInReview, err)
 	}
@@ -167,7 +176,7 @@ func (o *Orchestrator) Finish(ctx context.Context, ref string, attempt int) (Ver
 	// Release the checkout but keep the branch. A worktree left behind holds the
 	// branch checked out, and git refuses to merge a branch that is checked out
 	// somewhere else — so the reviewer's own worktree would block the merge.
-	wt := &Worktree{Repo: cfg.Repo, Path: wtPath, Branch: branchForWorktree(wtPath)}
+	wt := &Worktree{Repo: cfg.Repo, Path: wtPath, Branch: branch}
 	if err := wt.Detach(context.WithoutCancel(ctx)); err != nil {
 		o.logf("warning: could not release the worktree at %s: %v", wtPath, err)
 	} else {

@@ -29,6 +29,8 @@ type Host struct {
 	// Review verifies (finish=false) or finishes a handed-back ticket, as
 	// `orchestrator verify` / `finish` do. Nil refuses those jobs.
 	Review func(ctx context.Context, c *RaenilClient, job ClaimedJob, finish bool) (any, error)
+	// Merge lands an approved ticket's pull request. Nil means merge jobs fail.
+	Merge func(ctx context.Context, c *RaenilClient, job ClaimedJob) (any, error)
 	// RunnerFor builds the runner an agent asked for, with its settings.
 	// Empty means the host's runner for the agent's harness.
 	RunnerFor func(models.Agent) (Runner, error)
@@ -262,6 +264,12 @@ func (h *Host) handle(parent context.Context, c *RaenilClient, job ClaimedJob) {
 			err = errors.New("this host cannot review tickets")
 		} else {
 			result, err = h.Review(ctx, c, job, job.Kind == "finish")
+		}
+	case "merge":
+		if h.Merge == nil {
+			err = errors.New("this host cannot merge tickets")
+		} else {
+			result, err = h.Merge(ctx, c, job)
 		}
 	case "run_ticket":
 		if h.RunTicket == nil {

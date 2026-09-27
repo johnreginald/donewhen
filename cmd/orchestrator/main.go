@@ -1073,6 +1073,17 @@ func cmdHost(ctx context.Context, args []string) error {
 		return result{Verdict: v, Diff: orchestrator.Redact(diff)}, nil
 	}
 
+	// Approve and merge from the ticket page: the pull request is squashed
+	// onto the base branch and the ticket moves to Done.
+	merge := func(ctx context.Context, c *orchestrator.RaenilClient, job orchestrator.ClaimedJob) (any, error) {
+		o, _, err := agentOrch(c, job)
+		if err != nil {
+			return nil, err
+		}
+		pr, err := o.Merge(ctx, job.IssueKey)
+		return map[string]string{"pr": pr}, err
+	}
+
 	h := &orchestrator.Host{
 		Name:      *name,
 		Version:   "orchestrator",
@@ -1080,6 +1091,7 @@ func cmdHost(ctx context.Context, args []string) error {
 		Runners:   runners,
 		RunTicket: runTicket,
 		Review:    review,
+		Merge:     merge,
 		RunnerFor: func(a models.Agent) (orchestrator.Runner, error) { return agentRunner(a, oc) },
 		Repos:     repos,
 		Repo:      *repo,

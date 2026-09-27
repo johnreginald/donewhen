@@ -7,7 +7,7 @@
 	import { api } from '$lib/api.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
-	import { ShieldCheck, Flag, LoaderCircle, Check, X, GitBranch } from '@lucide/svelte';
+	import { ShieldCheck, Flag, LoaderCircle, Check, X, GitBranch, GitMerge, ExternalLink } from '@lucide/svelte';
 
 	let { issue, stateName } = $props();
 
@@ -19,18 +19,19 @@
 		const runs = (await api.issueRuns(issue.id).catch(() => [])) || [];
 		const last = runs.find((r) => (r.kind || 'work') === 'work' && r.finishedAt && r.verdict);
 		run = last ? await api.run(last.id).catch(() => last) : null;
-		const [v, f] = await Promise.all([
+		const [v, f, m] = await Promise.all([
 			api.jobs({ issue: issue.key, kind: 'verify', limit: 1 }).catch(() => []),
-			api.jobs({ issue: issue.key, kind: 'finish', limit: 1 }).catch(() => [])
+			api.jobs({ issue: issue.key, kind: 'finish', limit: 1 }).catch(() => []),
+			api.jobs({ issue: issue.key, kind: 'merge', limit: 1 }).catch(() => [])
 		]);
-		job = [v?.[0], f?.[0]].filter(Boolean).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
+		job = [v?.[0], f?.[0], m?.[0]].filter(Boolean).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0] || null;
 		loaded = true;
 	}
 	onMount(() => {
 		load();
 		return onLive((ev) => {
 			if (ev.issueId !== issue.id) return;
-			if (ev.job && (ev.job.kind === 'verify' || ev.job.kind === 'finish')) job = ev.job;
+			if (ev.job && ['verify', 'finish', 'merge'].includes(ev.job.kind)) job = ev.job;
 			if (ev.type === 'run.finished') load();
 		});
 	});
@@ -38,7 +39,11 @@
 	const busy = $derived(job && (job.status === 'queued' || job.status === 'claimed'));
 	const diff = $derived(job?.kind === 'verify' && job.result?.diff ? job.result.diff : run?.diff || '');
 	const verdict = $derived(job?.result?.verdict?.status || run?.verdict);
-	const done = $derived(['In Review', 'Done', 'Canceled'].includes(stateName));
+	const inReview = $derived(stateName === 'In Review');
+	const done = $derived(['Done', 'Canceled'].includes(stateName));
+	const jobWord = { verify: 'Verifying', finish: 'Finishing', merge: 'Merging' };
+	const jobDone = (j) =>
+		j.kind === 'finish' ? 'Finished: moved to In Review' : j.kind === 'merge' ? 'Merged: moved to Done' : `Verified: criteria ${j.result?.verdict?.status}`;
 
 	async function go(kind) {
 		try {
@@ -62,19 +67,28 @@
 			<span class="t">Review</span>
 			<span class="v {verdict}">criteria {verdict || '—'}</span>
 			{#if issue.gitBranch}<span class="br"><GitBranch size={13} />{issue.gitBranch}</span>{/if}
+			{#if issue.prUrl}<a class="pr" href={issue.prUrl} target="_blank" rel="noopener">Pull request<ExternalLink size={12} /></a>{/if}
 			<span class="sp"></span>
-			<button class="btn sm" onclick={() => go('verify')} disabled={busy}><ShieldCheck size={13} />Verify</button>
-			<button class="btn primary sm" onclick={() => go('finish')} disabled={busy}><Flag size={13} />Finish → In Review</button>
+			{#if inReview}
+				<button class="btn primary sm" onclick={() => go('merge')} disabled={busy || !issue.prUrl} title={issue.prUrl ? 'Squash-merge the pull request and move the ticket to Done' : 'No pull request yet'}><GitMerge size={13} />Approve &amp; merge</button>
+			{:else}
+				<button class="btn sm" onclick={() => go('verify')} disabled={busy}><ShieldCheck size={13} />Verify</button>
+				<button class="btn primary sm" onclick={() => go('finish')} disabled={busy}><Flag size={13} />Finish → In Review</button>
+			{/if}
 		</header>
 		{#if job}
 			<div class="job {job.status}">
-				{#if busy}<LoaderCircle size={13} class="spin" />{job.kind === 'finish' ? 'Finishing' : 'Verifying'} on {job.host || 'a host'}…
+				{#if busy}<LoaderCircle size={13} class="spin" />{jobWord[job.kind] || 'Working'} on {job.host || 'a host'}…
 				{:else if job.status === 'succeeded'}<Check size={13} strokeWidth={2.4} />
-					{job.kind === 'finish' ? 'Finished: moved to In Review' : `Verified: criteria ${job.result?.verdict?.status}`} · {rel(job.finishedAt)}
+					{jobDone(job)} · {rel(job.finishedAt)}
 				{:else}<X size={13} strokeWidth={2.4} />{job.error}{/if}
 			</div>
 		{/if}
-		<p class="hint">Fix anything you want in the worktree on your Mac, then Verify. Finish commits your fixes, links the commit, saves the record and moves the ticket to In Review — only if every gating criterion passes.</p>
+		{#if inReview}
+			<p class="hint">Every gating check passed. Read the change, then Approve &amp; merge: the pull request is squashed onto the base branch and the ticket moves to Done. To ask for changes, say so in the conversation.</p>
+		{:else}
+			<p class="hint">Fix anything you want in the worktree, then Verify. Finish commits your fixes, opens the pull request and moves the ticket to In Review — only if every gating check passes.</p>
+		{/if}
 		{#if diff}
 			<pre class="diff">{#each diff.split('\n') as line}<span class={cls(line)}>{line}</span>
 {/each}</pre>
@@ -124,6 +138,13 @@
 	}
 	.sp {
 		flex: 1;
+	}
+	.pr {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 12px;
+		color: var(--text-dim);
 	}
 	.job {
 		display: flex;
