@@ -11,6 +11,13 @@ export const HARNESSES = [
 	},
 	{ id: 'codex', name: 'Codex', plan: 'ChatGPT', connect: 'orchestrator connect codex', models: ['default'] },
 	{
+		id: 'antigravity',
+		name: 'Antigravity',
+		plan: 'Google subscription',
+		connect: 'install the agy CLI and sign in on the host',
+		models: ['default']
+	},
+	{
 		id: 'opencode',
 		name: 'OpenCode',
 		plan: 'Keys kept in OpenCode',

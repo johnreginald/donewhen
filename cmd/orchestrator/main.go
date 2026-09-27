@@ -249,6 +249,10 @@ func runnerPool(ctx context.Context, oc *orchestrator.OpenCodeRunner) orchestrat
 	if err := cl.Available(ctx); err == nil {
 		set["claude"] = cl
 	}
+	ag := &orchestrator.AntigravityRunner{}
+	if err := ag.Available(ctx); err == nil {
+		set["antigravity"] = ag
+	}
 	return set
 }
 
@@ -987,7 +991,6 @@ func cmdHost(ctx context.Context, args []string) error {
 			AgentID:      a.ID,
 			HostName:     *name,
 			Instructions: a.InstructionsMD,
-			Terminal:     a.RunInTerminal,
 			Repos:        repos,
 			Cfg: orchestrator.Config{
 				RunRoot: *runRoot, Repo: *repo, BaseRef: *baseRef,
@@ -1107,6 +1110,8 @@ func agentRunner(a models.Agent, oc *orchestrator.OpenCodeRunner) (orchestrator.
 		return r, nil
 	case "codex":
 		return codexRunner(), nil
+	case "antigravity":
+		return &orchestrator.AntigravityRunner{}, nil
 	case "opencode":
 		if oc == nil || oc.BaseURL == "" {
 			return nil, errors.New("OpenCode is not set up on this host: set OPENCODE_URL")

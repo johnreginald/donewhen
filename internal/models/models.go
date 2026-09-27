@@ -282,9 +282,6 @@ type Agent struct {
 	InstructionsMD string   `json:"instructionsMd"`
 	AllowedTools   []string `json:"allowedTools"`
 	MaxTurns       int      `json:"maxTurns"`
-	// RunInTerminal works tickets in a live terminal session on the runner
-	// host, which the user can watch and answer, instead of headless.
-	RunInTerminal bool `json:"runInTerminal"`
 	// HeartbeatMinutes wakes the agent this often to answer what is waiting
 	// for it on its tickets. Zero is never.
 	HeartbeatMinutes int `json:"heartbeatMinutes"`
@@ -298,7 +295,7 @@ type Agent struct {
 }
 
 // Harnesses an agent can run on.
-var Harnesses = []string{"claude", "codex", "opencode"}
+var Harnesses = []string{"claude", "codex", "opencode", "antigravity"}
 
 // RunnerHost is a machine that runs agents, as it last reported itself.
 type RunnerHost struct {

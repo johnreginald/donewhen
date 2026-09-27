@@ -26,6 +26,9 @@ type Config struct {
 	Model string
 	// Timeout bounds one attempt.
 	Timeout time.Duration
+	// GoalTurns bounds the turns the goal loop gives one attempt. Zero is
+	// GoalMaxTurns; one runs the agent once and lets triage take it from there.
+	GoalTurns int
 	// StateInProgress and StateInReview name the workflow states to move through.
 	StateInProgress string
 	StateInReview   string
@@ -95,9 +98,6 @@ type Orchestrator struct {
 	// MCP gives a work run Raenil's tools — ask_user, so a worker that needs a
 	// decision asks for it instead of guessing.
 	MCP *MCPServer
-	// Terminal works tickets in a live terminal session the user can watch
-	// and answer, when the runner can.
-	Terminal bool
 	// HostName names this machine on run records; empty means its hostname.
 	// A runner host sets its own name, so its runs can be matched to it.
 	HostName string
@@ -377,15 +377,11 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		}
 	}
 	prompt += protectedPrompt
-	terminal := o.Terminal && runsInTerminal(runner)
-	if terminal {
-		prompt += "\n\n## You are in a terminal the user can see\n\nIf you cannot finish without a decision only the " +
-			"user can make, ask it here as your last line, ending with a question mark, and stop; the user is notified and " +
-			"answers here. Asking is rare: the ticket is the spec. When the ticket leaves a choice open, pick what fits the " +
-			"existing code best, say so in your summary, and carry on. When you finish a turn, Raenil runs the ticket's " +
-			"checks and types any failures back in here.\n"
-	}
-	if o.MCP != nil && !terminal {
+	prompt += "\n\n## How this ends\n\nWhen you finish, Raenil runs the ticket's checks. If any fail, you get the " +
+		"failures in this same session and carry on until they pass. If you believe a check itself is wrong — it " +
+		"could not pass with correct code — say so plainly with the fix you propose, and stop, instead of working " +
+		"around it.\n"
+	if o.MCP != nil {
 		prompt += "\n\n## When you need a decision\n\nIf you cannot finish without a decision only the user can make, " +
 			"call the Raenil tool ask_user on " + issue.Key + " with a few concrete options, then end your turn. " +
 			"Do not guess, and do not stop for anything you can decide yourself.\n\n" +
@@ -424,7 +420,6 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 
 	runStart := time.Now()
 	o.logf("running %s on %s", runner.Name(), effectiveModel(runner, model))
-	streamAs := runner.Name()
 	req := RunRequest{
 		Prompt:    prompt,
 		Cwd:       wtPath,
@@ -435,21 +430,8 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		MCP:       o.MCP,
 		Repo:      cfg.Repo,
 	}
-	if terminal {
-		// The terminal log is plain lines the host writes, not the harness's
-		// own transcript.
-		streamAs = "terminal"
-		req.Terminal, req.Title = true, issue.Key
-		req.Check = o.terminalCheck(issue.ID, wtPath, branch, runDir, criteria)
-		req.OnQuestion = func(msg string) {
-			notifyUser(issue.Key+" is waiting for you", firstLine(msg))
-			_ = o.Raenil.Comment(context.WithoutCancel(ctx), issue.ID, "The agent is waiting for you in the terminal "+
-				"(`tmux attach -t "+sessionName(issue.Key)+"`):\n\n> "+strings.ReplaceAll(strings.TrimSpace(msg), "\n", "\n> "))
-		}
-	}
-	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), streamAs)
+	stopStream := streamLog(ctx, o.Raenil, runRec.ID, runDir.File("worker.log"), runner.Name())
 	res, runErr = runner.Run(ctx, req)
-	stopStream()
 	if runErr != nil {
 		o.logf("runner error: %v", runErr)
 	}
@@ -458,6 +440,10 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 	if o.AgentID != "" {
 		res.Questions = append(res.Questions, o.questionsAskedSince(ctx, issue.ID, runStart)...)
 	}
+	// The goal loop: the checks decide whether the agent is done, and the
+	// harness's own session carries on with the failures until they pass.
+	res, runErr = o.goalLoop(ctx, runner, req, res, runErr, o.goalCheck(issue.ID, wtPath, branch, runDir, criteria), issue.ID)
+	stopStream()
 	if res.CostUnknown {
 		o.logf("worker finished: exit=%d aborted=%v cost=UNREPORTED (%s bills against a subscription) tokens=%d",
 			res.Exit, res.Aborted, runner.Name(), res.Tokens)
@@ -555,7 +541,7 @@ func (o *Orchestrator) RunAttempt(ctx context.Context, ref string, spec AttemptS
 		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", "worker timed out"
 	}
 	if res.Stuck && v.Status != StatusPassed {
-		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", errTerminalStuck.Error()
+		v.Status, v.Next, v.Blocked = StatusBlocked, "escalate", errGoalStuck.Error()
 	}
 
 	// 8. Record the outcome.
@@ -845,11 +831,11 @@ func onTicketBranch(ctx context.Context, dir, branch string) error {
 	return nil
 }
 
-// terminalCheck runs a ticket's gating deterministic and policy checks on the
-// worktree between turns of a terminal run, and words what failed for the
+// goalCheck runs a ticket's gating deterministic and policy checks on the
+// worktree between turns of the goal loop, and words what failed for the
 // agent. Model-judged checks wait for the full evaluation after the session:
 // they are slow, cost money, and never gate.
-func (o *Orchestrator) terminalCheck(issueID, wtPath, branch string, runDir *RunDir, criteria []ParsedCriterion) TerminalCheck {
+func (o *Orchestrator) goalCheck(issueID, wtPath, branch string, runDir *RunDir, criteria []ParsedCriterion) GoalCheck {
 	cfg := o.Cfg.withDefaults()
 	return func(ctx context.Context) CheckResult {
 		// Read the checklist fresh every round: a check fixed on the ticket

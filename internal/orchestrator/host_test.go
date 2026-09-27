@@ -90,8 +90,8 @@ func TestHostRunsATestEnvJob(t *testing.T) {
 		t.Fatal("no heartbeat was sent")
 	}
 	hs, _ := beats[0]["harnesses"].([]any)
-	if len(hs) != 3 {
-		t.Errorf("heartbeat reported %d harnesses, want all 3", len(hs))
+	if len(hs) != len(models.Harnesses) {
+		t.Errorf("heartbeat reported %d harnesses, want all %d", len(hs), len(models.Harnesses))
 	}
 	if finished == nil || finished["status"] != "succeeded" || finished["host"] != "mac" {
 		t.Fatalf("finish = %v, want succeeded from mac", finished)

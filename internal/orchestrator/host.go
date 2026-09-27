@@ -331,7 +331,7 @@ func (h *Host) testEnv(ctx context.Context, job ClaimedJob) (any, error) {
 func AgentModel(a models.Agent) string {
 	m := strings.TrimSpace(a.Model)
 	switch a.Harness {
-	case "claude", "codex":
+	case "claude", "codex", "antigravity":
 		if m == "" {
 			m = "default"
 		}
@@ -383,6 +383,17 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 			st.Detail = err.Error()
 			st.Fix = "orchestrator connect codex"
 		}
+	case *AntigravityRunner:
+		err := rr.Available(ctx)
+		st.Installed = err == nil
+		st.Ready = err == nil
+		st.Auth = "Google subscription · this machine's agy login"
+		if err == nil {
+			st.Models = AntigravityModels(ctx, rr)
+		} else {
+			st.Detail = err.Error()
+			st.Fix = "install Antigravity's CLI (agy) and sign in"
+		}
 	case *OpenCodeRunner:
 		// The keys are OpenCode's own (opencode auth login); Raenil only asks
 		// the server which providers it holds them for.
@@ -418,6 +429,8 @@ func probeHarness(ctx context.Context, harness string, r Runner) models.HarnessS
 			st.Fix = "install Codex, then: codex login"
 		case "opencode":
 			st.Fix = "opencode serve, and set OPENCODE_URL for the host"
+		case "antigravity":
+			st.Fix = "install Antigravity's CLI (agy) and sign in"
 		}
 	default:
 		st.Detail = "unknown runner"

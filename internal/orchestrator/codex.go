@@ -123,9 +123,6 @@ func (r *CodexRunner) env() []string {
 
 // Run implements Runner.
 func (r *CodexRunner) Run(ctx context.Context, req RunRequest) (RunResult, error) {
-	if req.Terminal && !req.DisableTools && !req.ReadOnlyTools {
-		return r.runTerminal(ctx, req)
-	}
 	timeout := req.Timeout
 	if timeout <= 0 {
 		timeout = DefaultRunTimeout
@@ -172,6 +169,19 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 		"--json",
 		"--color", "never",
 	}
+	// Continuing a session is Codex's own resume: the same thread, with its
+	// context, given the next message. It takes neither -C nor --sandbox, so
+	// the directory is the process's and the sandbox a config value.
+	if req.SessionID != "" {
+		args = []string{
+			"exec", "resume",
+			"--skip-git-repo-check",
+			"-c", "sandbox_mode=" + tomlString(sandbox),
+			"-c", "sandbox_workspace_write.network_access=true",
+			"--output-last-message", lastPath,
+			"--json",
+		}
+	}
 	// Only a model explicitly addressed to Codex is passed on, and "default"
 	// means its own configured choice rather than a model literally named that.
 	//
@@ -183,6 +193,9 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 	}
 	if req.MCP != nil && !req.DisableTools {
 		args = append(args, codexMCPArgs(*req.MCP, codexMCPTokenEnv)...)
+	}
+	if req.SessionID != "" {
+		args = append(args, req.SessionID)
 	}
 	args = append(args, req.Prompt)
 
@@ -210,7 +223,10 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 	} else {
 		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
 	}
-	logFile, err := os.Create(logPath)
+	// Appended, not truncated: a resumed turn adds to the same attempt's log.
+	// Tokens already in it belong to earlier calls.
+	tokensBefore := codexTokens(logPath)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return "", res, err
 	}
@@ -219,7 +235,11 @@ func (r *CodexRunner) run(ctx context.Context, req RunRequest, sandbox string, t
 
 	runErr := cmd.Run()
 	res.Duration = time.Since(start)
-	res.Tokens = codexTokens(logPath)
+	res.Tokens = codexTokens(logPath) - tokensBefore
+	res.SessionID = req.SessionID
+	if id := codexThreadID(logPath); id != "" {
+		res.SessionID = id
+	}
 
 	if b, rerr := os.ReadFile(lastPath); rerr == nil {
 		answerOut := strings.TrimSpace(string(b))
@@ -361,4 +381,40 @@ func codexAuthHint(msg string) string {
 	}
 	return "OpenAI refused Codex's sign-in on this Mac (401). Sign in again: codex logout && codex login. " +
 		"If it still fails, run codex in a terminal — failing there too means the problem is the OpenAI account, not Raenil."
+}
+
+// codexThreadID is the session a Codex run reported, for resuming it.
+func codexThreadID(logPath string) string {
+	b, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+	id := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		if !strings.Contains(line, `"thread.started"`) {
+			continue
+		}
+		var ev struct {
+			Type     string `json:"type"`
+			ThreadID string `json:"thread_id"`
+		}
+		if json.Unmarshal([]byte(line), &ev) == nil && ev.Type == "thread.started" && ev.ThreadID != "" {
+			id = ev.ThreadID
+		}
+	}
+	return id
+}
+
+// tomlString quotes s as a TOML basic string.
+func tomlString(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
+// tomlStrings is a TOML array of strings.
+func tomlStrings(ss ...string) string {
+	q := make([]string, len(ss))
+	for i, s := range ss {
+		q[i] = tomlString(s)
+	}
+	return "[" + strings.Join(q, ",") + "]"
 }

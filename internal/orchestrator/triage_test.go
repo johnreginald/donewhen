@@ -188,6 +188,7 @@ func TestWorkEscalatesModelOnSecondAttempt(t *testing.T) {
 	r := &flakyRunner{failFor: 2}
 	o := newOrch(t, f, r)
 	o.Cfg.Model = "cheap/model"
+	o.Cfg.GoalTurns = 1 // one call per attempt: this is about triage between attempts
 
 	if _, err := o.Work(context.Background(), "TST-1", WorkConfig{Triage: policy()}); err != nil {
 		t.Fatal(err)
@@ -244,6 +245,7 @@ func TestWorkStopsAtCostCeiling(t *testing.T) {
 	r := &flakyRunner{failFor: 99} // never succeeds
 	o := newOrch(t, f, r)
 	o.Cfg.Model = "cheap/model"
+	o.Cfg.GoalTurns = 1 // one call per attempt: the ceiling is counted per attempt
 
 	// Each attempt costs $0.01; a $0.005 ceiling must stop after the first.
 	v, err := o.Work(context.Background(), "TST-1",

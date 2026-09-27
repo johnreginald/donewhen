@@ -184,15 +184,18 @@ func readableLines(path, runner string) []string {
 	switch runner {
 	case "opencode":
 		return opencodeReadable(path)
-	case "claude", "codex":
+	case "claude", "codex", "antigravity":
 		f, err := os.Open(path)
 		if err != nil {
 			return nil
 		}
 		defer f.Close()
 		render := claudeLine
-		if runner == "codex" {
+		switch runner {
+		case "codex":
 			render = codexLine
+		case "antigravity":
+			render = agyLine
 		}
 		var out []string
 		sc := bufio.NewScanner(f)
@@ -201,6 +204,42 @@ func readableLines(path, runner string) []string {
 			out = append(out, render(sc.Bytes())...)
 		}
 		return out
+	}
+	return nil
+}
+
+// agyLine renders one Antigravity stream-json event: each finished tool call
+// and the final answer. Streamed text deltas are left for the final answer.
+func agyLine(line []byte) []string {
+	var ev struct {
+		Event string `json:"event"`
+		Step  struct {
+			State    string `json:"state"`
+			StepType string `json:"step_type"`
+			ToolName string `json:"tool_name"`
+			ToolInfo struct {
+				Parameters map[string]any `json:"parameters"`
+			} `json:"tool_info"`
+		} `json:"step_update"`
+		Result struct {
+			Response string `json:"response"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(line, &ev) != nil {
+		return nil
+	}
+	switch {
+	case ev.Event == "result" && strings.TrimSpace(ev.Result.Response) != "":
+		return []string{strings.TrimSpace(ev.Result.Response)}
+	case ev.Event == "step_update" && ev.Step.StepType == "tool" && ev.Step.State == "DONE":
+		arg := ""
+		for _, k := range []string{"CommandLine", "TargetFile", "AbsolutePath", "SearchPath", "Query", "DirectoryPath"} {
+			if v, ok := ev.Step.ToolInfo.Parameters[k].(string); ok && v != "" {
+				arg = v
+				break
+			}
+		}
+		return []string{"→ " + ev.Step.ToolName + " " + trunc(oneLine(arg), 200)}
 	}
 	return nil
 }

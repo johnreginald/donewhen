@@ -15,13 +15,13 @@ import (
 )
 
 const agentCols = `id, name, slug, role, harness, model, effort, instructions_md, allowed_tools,
-	max_turns, run_in_terminal, heartbeat_minutes, budget_tokens, budget_usd::float8, status, created_at, updated_at`
+	max_turns, heartbeat_minutes, budget_tokens, budget_usd::float8, status, created_at, updated_at`
 
 func scanAgent(row pgx.Row) (models.Agent, error) {
 	var a models.Agent
 	var allowed []byte
 	err := row.Scan(&a.ID, &a.Name, &a.Slug, &a.Role, &a.Harness, &a.Model, &a.Effort, &a.InstructionsMD,
-		&allowed, &a.MaxTurns, &a.RunInTerminal, &a.HeartbeatMinutes, &a.BudgetTokens, &a.BudgetUSD, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+		&allowed, &a.MaxTurns, &a.HeartbeatMinutes, &a.BudgetTokens, &a.BudgetUSD, &a.Status, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return a, err
 	}
@@ -42,7 +42,6 @@ type AgentInput struct {
 	AllowedTools   []string
 	SetAllowed     bool
 	MaxTurns       *int
-	RunInTerminal  *bool
 	Heartbeat      *int // minutes; 0 turns it off
 	BudgetTokens   *int64
 	BudgetUSD      *float64
@@ -164,9 +163,6 @@ func (s *Store) UpdateAgent(ctx context.Context, wsID, id string, in AgentInput)
 	}
 	if in.MaxTurns != nil {
 		set("max_turns", *in.MaxTurns)
-	}
-	if in.RunInTerminal != nil {
-		set("run_in_terminal", *in.RunInTerminal)
 	}
 	if in.Heartbeat != nil {
 		set("heartbeat_minutes", *in.Heartbeat)

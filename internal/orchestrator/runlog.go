@@ -75,7 +75,7 @@ func runLogTail(path, runner string) string {
 	switch runner {
 	case "claude":
 		text = claudeReadable(path)
-	case "codex", "opencode":
+	case "codex", "opencode", "antigravity":
 		if lines := readableLines(path, runner); len(lines) > 0 {
 			text = strings.Join(lines, "\n") + "\n"
 		}
@@ -263,6 +263,8 @@ func streamLog(ctx context.Context, c *RaenilClient, runID, path, runner string)
 					lines = append(lines, claudeLine(p)...)
 				case "codex":
 					lines = append(lines, codexLine(p)...)
+				case "antigravity":
+					lines = append(lines, agyLine(p)...)
 				default:
 					if t := strings.TrimRight(string(p), "\r"); t != "" {
 						lines = append(lines, t)

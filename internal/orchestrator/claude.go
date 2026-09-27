@@ -181,9 +181,6 @@ func (r *ClaudeRunner) Ready(ctx context.Context, model string) error {
 
 // Run implements Runner.
 func (r *ClaudeRunner) Run(ctx context.Context, req RunRequest) (RunResult, error) {
-	if req.Terminal && !req.DisableTools && !req.ReadOnlyTools {
-		return r.runTerminal(ctx, req)
-	}
 	answer, res, err := r.run(ctx, req)
 	res.Answer = answer
 	return res, err
@@ -304,7 +301,8 @@ func (r *ClaudeRunner) run(ctx context.Context, req RunRequest) (string, RunResu
 	} else {
 		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
 	}
-	logFile, err := os.Create(logPath)
+	// Appended: a resumed turn adds to the same attempt's log.
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return "", res, err
 	}

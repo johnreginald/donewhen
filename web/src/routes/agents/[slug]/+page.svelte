@@ -103,7 +103,6 @@
 		model: a.model,
 		effort: a.effort,
 		maxTurns: a.maxTurns,
-		runInTerminal: !!a.runInTerminal,
 		heartbeatMinutes: a.heartbeatMinutes || 0,
 		instructionsMd: a.instructionsMd,
 		allowedTools: (a.allowedTools || []).join('\n')
@@ -335,10 +334,6 @@
 									</select>
 								</label>
 							</div>
-							<label class="tog">
-								<input type="checkbox" bind:checked={form.runInTerminal} />
-								<span><b>Run in terminal</b> — work each ticket in a live terminal on the runner Mac (a cmux tab named after the ticket), where you can watch it and answer questions. Checks still decide when it is done.</span>
-							</label>
 						</section>
 						<section class="block">
 							<h3>Allowed commands</h3>
@@ -417,19 +412,6 @@
 {/if}
 
 <style>
-	.tog {
-		display: flex;
-		gap: 10px;
-		align-items: flex-start;
-		margin-top: 14px;
-		font-size: 13px;
-		color: var(--text-dim);
-		line-height: 1.45;
-		cursor: pointer;
-	}
-	.tog input {
-		margin-top: 3px;
-	}
 	.head {
 		display: flex;
 		align-items: center;

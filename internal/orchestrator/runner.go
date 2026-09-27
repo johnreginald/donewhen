@@ -51,27 +51,6 @@ type RunRequest struct {
 	// Repo is the repository the worktree belongs to. A worker may read it
 	// — untracked reference material lives there — without being asked.
 	Repo string
-	// Terminal works the run in a live terminal session the user can watch
-	// and answer, for runners that can; others run headless as always.
-	Terminal bool
-	// Title names the terminal window: the ticket key.
-	Title string
-	// Check runs the ticket's checks between turns of a terminal run.
-	Check TerminalCheck
-	// OnQuestion is told when a terminal run's agent stops to ask the user.
-	OnQuestion func(message string)
-}
-
-// terminalRunner is an optional Runner interface for backends that can work
-// in a live terminal.
-type terminalRunner interface {
-	CanRunInTerminal() bool
-}
-
-// runsInTerminal reports whether r can honour RunRequest.Terminal.
-func runsInTerminal(r Runner) bool {
-	t, ok := r.(terminalRunner)
-	return ok && t.CanRunInTerminal()
 }
 
 // readyChecker is an optional Runner interface for backends that can say
@@ -130,8 +109,8 @@ type RunResult struct {
 	Exit int
 	// Aborted is true when the attempt hit its timeout and was killed.
 	Aborted bool
-	// Stuck is true when a terminal session kept ending turns with the same
-	// checks failing on the same code.
+	// Stuck is true when the goal loop saw the same checks fail on the same
+	// code turn after turn.
 	Stuck bool
 	// AgentError is what the agent itself reported — a provider refusal, an
 	// entitlement problem, a context overflow. Distinct from a Go error, which
@@ -161,9 +140,6 @@ type RunResult struct {
 	// can see the agent was stopped rather than merely unlucky.
 	DeniedTools []string
 	Duration    time.Duration
-
-	// transcript is a terminal run's session file, read for its usage.
-	transcript string
 }
 
 // Environment variables that would switch a CLI from its subscription login to
