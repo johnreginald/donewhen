@@ -49,9 +49,6 @@ services:
       RUNNER_NAME: "${CI_RUNNER_NAME:-pc-ci}"
       LABELS: self-hosted,linux,pc
       RUNNER_WORKDIR: "${FACTORY_WORK}/ci"
-      CONFIGURED_ACTIONS_RUNNER_FILES_DIR: /runner/data
-      DISABLE_AUTO_UPDATE: "false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - "${FACTORY_WORK}/ci:${FACTORY_WORK}/ci"
-      - ./state/ci-runner:/runner/data
