@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -108,11 +109,14 @@ func askReviewer(ctx context.Context, reviewer Runner, model, cwd, prompt, logPa
 	return parseReviewAnswer(res.Answer)
 }
 
-// reviewerModel is the model a reviewer runs with: its own default.
+// reviewerModel is the model a reviewer runs with: its own default, or for
+// OpenCode — which has no default of its own — the configured worker model.
 func reviewerModel(name string) string {
 	switch name {
 	case "claude", "codex", "antigravity":
 		return name + "/default"
+	case "opencode":
+		return os.Getenv("ORCHESTRATOR_MODEL")
 	}
 	return ""
 }
