@@ -31,6 +31,7 @@ type Workspace struct {
 	Name      string    `json:"name"`
 	KeyPrefix string    `json:"keyPrefix"`
 	Position  int       `json:"position"`
+	AIName    string    `json:"aiName"` // what the AI actor is called here; default "Clanker"
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

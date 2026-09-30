@@ -56,18 +56,29 @@ func (n *Notifier) Run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if p, want := n.build(e); want {
+			if p, want := n.build(e, n.aiName(ctx, e.WorkspaceID)); want {
 				n.broadcast(ctx, e.WorkspaceID, p)
 			}
 		}
 	}
 }
 
+// aiName is what the workspace calls its AI actor; "Clanker" if unknown.
+func (n *Notifier) aiName(ctx context.Context, wsID string) string {
+	if wsID != "" {
+		if w, err := n.store.GetWorkspace(ctx, wsID); err == nil && w.AIName != "" {
+			return w.AIName
+		}
+	}
+	return "Clanker"
+}
+
 // build turns an event into a notification payload, or want=false to skip.
-func (n *Notifier) build(e events.Event) (payload, bool) {
+// aiName labels AI actions.
+func (n *Notifier) build(e events.Event, aiName string) (payload, bool) {
 	actor := "you"
 	if e.Actor == "ai" {
-		actor = "Clanker"
+		actor = aiName
 	}
 	switch e.Type {
 	case events.IssueStateChanged:

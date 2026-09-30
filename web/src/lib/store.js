@@ -3,6 +3,8 @@ import { api, getWorkspace, setWorkspace } from './api.js';
 
 export const workspaces = writable([]); // the caller's memberships
 export const activeWorkspace = writable(null); // the one everything is scoped to
+// What the active workspace calls its AI actor (Settings → Workspace).
+export const aiName = derived(activeWorkspace, (w) => w?.aiName || 'Clanker');
 export const states = writable([]);
 export const projects = writable([]);
 export const initiatives = writable([]);

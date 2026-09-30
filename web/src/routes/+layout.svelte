@@ -1,5 +1,5 @@
 <script>
-	import '@fontsource-variable/inter';
+	import { aiName } from '$lib/store.js';
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
@@ -86,7 +86,7 @@
 		applyEvent(ev);
 		if (ev.issue) flashIssue(ev.issue.id);
 		if (ev.type === 'issue.state_changed' && ev.issue && ev.to) {
-			const who = ev.actor === 'ai' ? 'Clanker' : 'you';
+			const who = ev.actor === 'ai' ? $aiName : 'you';
 			showToast(`${ev.issue.key} → ${ev.to.name} (by ${who})`);
 		}
 	}

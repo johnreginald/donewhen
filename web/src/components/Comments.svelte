@@ -1,4 +1,5 @@
 <script>
+	import { aiName } from '$lib/store.js';
 	// A ticket's comments, beside the task: read them, add one. Kept live, so a
 	// comment written elsewhere — another tab, an MCP client — appears here.
 	import { onMount, tick } from 'svelte';
@@ -54,7 +55,7 @@
 	<div class="list" bind:this={list}>
 		{#each comments as c (c.id)}
 			<div class="c" class:ai={c.actor === 'ai'}>
-				<div class="meta"><span class="who">{c.actor === 'ai' ? '✦ Clanker' : c.actor || 'someone'}</span><span class="when">{rel(c.createdAt)}</span></div>
+				<div class="meta"><span class="who">{c.actor === 'ai' ? `✦ ${$aiName}` : c.actor || 'someone'}</span><span class="when">{rel(c.createdAt)}</span></div>
 				<div class="body"><Markdown source={c.bodyMd} /></div>
 			</div>
 		{:else}

@@ -1,4 +1,5 @@
 <script>
+	import { aiName } from '$lib/store.js';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
@@ -287,7 +288,7 @@
 							<button class="doc-link" onclick={() => goto(`/artifacts?doc=${d.id}`)}>
 								<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
 								<span class="dl-t">{d.title}</span>
-								{#if d.author === 'ai'}<span class="dl-ai">✦ Clanker</span>{/if}
+								{#if d.author === 'ai'}<span class="dl-ai">✦ {$aiName}</span>{/if}
 							</button>
 						{/each}
 					</section>

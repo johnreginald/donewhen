@@ -75,6 +75,7 @@ func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		Name      *string `json:"name"`
 		Slug      *string `json:"slug"`
 		KeyPrefix *string `json:"keyPrefix"`
+		AIName    *string `json:"aiName"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
@@ -86,7 +87,7 @@ func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	updated, err := s.store.UpdateWorkspace(r.Context(), active, body.Name, body.Slug, body.KeyPrefix)
+	updated, err := s.store.UpdateWorkspace(r.Context(), active, body.Name, body.Slug, body.KeyPrefix, body.AIName)
 	if err != nil {
 		if isDuplicate(err) {
 			writeErr(w, http.StatusConflict, "a workspace with that slug or key prefix already exists")

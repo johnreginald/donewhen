@@ -486,6 +486,7 @@ func (d *deps) register(s *server.MCPServer) {
 		mcp.WithString("name", mcp.Description("Display name")),
 		mcp.WithString("slug", mcp.Description("URL-safe handle; derived from the name when omitted")),
 		mcp.WithString("keyPrefix", mcp.Description("Issue key prefix for NEW issues, e.g. 'GLX'")),
+		mcp.WithString("aiName", mcp.Description("What the AI actor is called in this workspace (1–24 chars, default 'Clanker'); owner/admin only")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user, ok := auth.UserFrom(ctx)
 		if !ok {
@@ -513,11 +514,16 @@ func (d *deps) register(s *server.MCPServer) {
 			}
 			return jsonResult(ws)
 		}
-		if _, err := d.store.RoleIn(ctx, id, user.ID); err != nil {
+		role, err := d.store.RoleIn(ctx, id, user.ID)
+		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		aiName := strp(req.GetString("aiName", ""))
+		if aiName != nil && !models.CanAdmin(role) {
+			return mcp.NewToolResultError("changing the AI name requires workspace owner or admin"), nil
+		}
 		ws, err := d.store.UpdateWorkspace(ctx, id,
-			strp(req.GetString("name", "")), strp(req.GetString("slug", "")), strp(prefix))
+			strp(req.GetString("name", "")), strp(req.GetString("slug", "")), strp(prefix), aiName)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

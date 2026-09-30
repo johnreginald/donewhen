@@ -4,6 +4,7 @@
 	import { api } from '$lib/api.js';
 	import { appConfig, workspaces, activeWorkspace, loadWorkspaces, switchWorkspace } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
+	import { theme, setTheme } from '$lib/theme.js';
 	import { pushSupported, enablePush, disablePush, currentSubscription } from '$lib/push.js';
 
 	let tokens = $state([]);
@@ -15,6 +16,7 @@
 	let wsPrefix = $state('');
 	let renameName = $state('');
 	let renamePrefix = $state('');
+	let renameAI = $state('');
 	let memberEmail = $state('');
 	let memberRole = $state('member');
 	const canAdmin = $derived(['owner', 'admin'].includes($activeWorkspace?.role));
@@ -39,6 +41,7 @@
 		await refreshMembers();
 		renameName = $activeWorkspace?.name || '';
 		renamePrefix = $activeWorkspace?.keyPrefix || '';
+		renameAI = $activeWorkspace?.aiName || 'Clanker';
 		pushOn = !!(await currentSubscription());
 		refreshPushState();
 	});
@@ -72,6 +75,17 @@
 			});
 			await loadWorkspaces();
 			showToast('Workspace updated');
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+
+	async function saveAIName() {
+		try {
+			await api.updateWorkspace($activeWorkspace.id, { aiName: renameAI });
+			await loadWorkspaces();
+			renameAI = $activeWorkspace?.aiName || renameAI;
+			showToast(`The AI is now called ${renameAI} in ${$activeWorkspace?.name}`);
 		} catch (e) {
 			showToast(e.message, 'error');
 		}
@@ -154,6 +168,25 @@
 	<h1>Settings</h1>
 
 	<section>
+		<h2>Appearance</h2>
+		<div class="row">
+			<span>Theme</span>
+			<div class="seg" role="radiogroup" aria-label="Theme">
+				{#each [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']] as [v, label] (v)}
+					<button
+						class="sg"
+						class:on={$theme === v}
+						role="radio"
+						aria-checked={$theme === v}
+						onclick={() => setTheme(v)}>{label}</button
+					>
+				{/each}
+			</div>
+		</div>
+		<p class="faint hint">Saved on this device. System follows your OS light or dark setting.</p>
+	</section>
+
+	<section>
 		<h2>Workspaces</h2>
 		<p class="faint">
 			A workspace is the boundary: issues, epics, labels, board columns, artifacts and the
@@ -184,6 +217,16 @@
 			</div>
 			<p class="faint hint">
 				The prefix applies to <b>new</b> issues only — existing keys never change.
+			</p>
+
+			<h3>AI name</h3>
+			<div class="row">
+				<input class="input" maxlength="24" placeholder="Clanker" bind:value={renameAI} />
+				<button class="btn" onclick={saveAIName} disabled={!renameAI.trim()}>Save</button>
+			</div>
+			<p class="faint hint">
+				What the AI is called in {$activeWorkspace?.name || 'this workspace'}: activity, comments,
+				inbox and push notifications. 1–24 characters.
 			</p>
 		{/if}
 
@@ -340,6 +383,31 @@
 	.mono {
 		font-family: var(--mono);
 		font-size: 11.5px;
+	}
+	.seg {
+		display: flex;
+		gap: 2px;
+		background: var(--sunken);
+		border: 1px solid var(--line);
+		border-radius: var(--r);
+		padding: 2px;
+	}
+	.sg {
+		padding: 4px 12px;
+		border-radius: var(--r-sm);
+		font-size: 13px;
+		color: var(--ink-2);
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+	.sg:hover {
+		color: var(--ink);
+	}
+	.sg.on {
+		background: var(--surface);
+		color: var(--ink);
+		box-shadow: var(--shadow-1);
 	}
 	.row {
 		display: flex;

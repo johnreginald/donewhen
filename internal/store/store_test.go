@@ -499,3 +499,45 @@ func TestBlockedByLinks(t *testing.T) {
 		t.Error("a blocking cycle was accepted")
 	}
 }
+
+func TestWorkspaceAIName(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	wsA, wsB := newWorkspace(t, s), newWorkspace(t, s)
+
+	w, err := s.GetWorkspace(ctx, wsA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.AIName != "Clanker" {
+		t.Fatalf("default AI name = %q, want Clanker", w.AIName)
+	}
+
+	name := "  Claude  "
+	w, err = s.UpdateWorkspace(ctx, wsA, nil, nil, nil, &name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.AIName != "Claude" {
+		t.Fatalf("AI name = %q, want trimmed Claude", w.AIName)
+	}
+
+	for _, bad := range []string{"", "   ", strings.Repeat("x", MaxAINameLen+1)} {
+		if _, err := s.UpdateWorkspace(ctx, wsA, nil, nil, nil, &bad); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("AI name %q: err = %v, want ErrInvalid", bad, err)
+		}
+	}
+	// Exactly the limit is fine, counted in characters, not bytes.
+	ok := strings.Repeat("ဗ", MaxAINameLen)
+	if _, err := s.UpdateWorkspace(ctx, wsA, nil, nil, nil, &ok); err != nil {
+		t.Fatalf("%d-char Burmese name rejected: %v", MaxAINameLen, err)
+	}
+
+	other, err := s.GetWorkspace(ctx, wsB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.AIName != "Clanker" {
+		t.Fatalf("other workspace AI name changed to %q", other.AIName)
+	}
+}

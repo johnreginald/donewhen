@@ -1,4 +1,5 @@
 <script>
+	import { aiName } from '$lib/store.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { api } from '$lib/api.js';
 	import { activeInitiative, initiatives } from '$lib/store.js';
@@ -38,7 +39,7 @@
 		<div class="seg">
 			<button class="sg" class:on={actor === ''} onclick={() => (actor = '')}>All</button>
 			<button class="sg" class:on={actor === 'human'} onclick={() => (actor = 'human')}>You</button>
-			<button class="sg" class:on={actor === 'ai'} onclick={() => (actor = 'ai')}>✦ Clanker</button>
+			<button class="sg" class:on={actor === 'ai'} onclick={() => (actor = 'ai')}>✦ {$aiName}</button>
 		</div>
 	</div>
 	<div class="log-body">

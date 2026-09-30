@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
@@ -17,11 +18,11 @@ import (
 // workspace that demonstrably exists.
 var ErrNotMember = errors.New("not a member of this workspace")
 
-const workspaceCols = `id, slug, name, key_prefix, position, created_at, updated_at`
+const workspaceCols = `id, slug, name, key_prefix, position, created_at, updated_at, ai_name`
 
 func scanWorkspace(row pgx.Row) (models.Workspace, error) {
 	var w models.Workspace
-	err := row.Scan(&w.ID, &w.Slug, &w.Name, &w.KeyPrefix, &w.Position, &w.CreatedAt, &w.UpdatedAt)
+	err := row.Scan(&w.ID, &w.Slug, &w.Name, &w.KeyPrefix, &w.Position, &w.CreatedAt, &w.UpdatedAt, &w.AIName)
 	return w, err
 }
 
@@ -77,7 +78,7 @@ func (s *Store) ListWorkspaces(ctx context.Context) ([]models.Workspace, error) 
 // This is the only workspace listing a request handler should use.
 func (s *Store) ListMemberships(ctx context.Context, userID string) ([]models.Membership, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT w.id, w.slug, w.name, w.key_prefix, w.position, w.created_at, w.updated_at, m.role
+		SELECT w.id, w.slug, w.name, w.key_prefix, w.position, w.created_at, w.updated_at, w.ai_name, m.role
 		FROM workspaces w
 		JOIN workspace_members m ON m.workspace_id = w.id
 		WHERE m.user_id = $1
@@ -90,7 +91,7 @@ func (s *Store) ListMemberships(ctx context.Context, userID string) ([]models.Me
 	for rows.Next() {
 		var m models.Membership
 		if err := rows.Scan(&m.ID, &m.Slug, &m.Name, &m.KeyPrefix, &m.Position,
-			&m.CreatedAt, &m.UpdatedAt, &m.Role); err != nil {
+			&m.CreatedAt, &m.UpdatedAt, &m.AIName, &m.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -291,7 +292,26 @@ func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, 
 
 // UpdateWorkspace renames a workspace and/or changes its key prefix. A prefix
 // change also lifts issue_seq past anything already using the new prefix.
-func (s *Store) UpdateWorkspace(ctx context.Context, id string, name, slug, prefix *string) (models.Workspace, error) {
+// MaxAINameLen caps the AI actor's display name, in characters.
+const MaxAINameLen = 24
+
+// ValidateAIName trims name and checks it is 1–MaxAINameLen characters.
+func ValidateAIName(name string) (string, error) {
+	n := strings.TrimSpace(name)
+	if l := utf8.RuneCountInString(n); l == 0 || l > MaxAINameLen {
+		return "", fmt.Errorf("%w: AI name must be 1–%d characters", ErrInvalid, MaxAINameLen)
+	}
+	return n, nil
+}
+
+func (s *Store) UpdateWorkspace(ctx context.Context, id string, name, slug, prefix, aiName *string) (models.Workspace, error) {
+	if aiName != nil {
+		n, err := ValidateAIName(*aiName)
+		if err != nil {
+			return models.Workspace{}, err
+		}
+		aiName = &n
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return models.Workspace{}, err
@@ -321,6 +341,12 @@ func (s *Store) UpdateWorkspace(ctx context.Context, id string, name, slug, pref
 			SELECT max(coalesce(nullif(regexp_replace(split_part(key,'-',2), '[^0-9]', '', 'g'), ''), '0')::bigint)
 			  FROM issues WHERE upper(split_part(key,'-',1)) = $%d), 0))`, n))
 		args = append(args, p)
+	}
+
+	if aiName != nil {
+		n++
+		sets = append(sets, fmt.Sprintf("ai_name=$%d", n))
+		args = append(args, *aiName)
 	}
 
 	ct, err := tx.Exec(ctx,

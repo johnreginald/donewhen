@@ -1,4 +1,5 @@
 <script>
+	import { aiName } from '$lib/store.js';
 	import { rel } from '$lib/format.js';
 	import { goto } from '$app/navigation';
 	import {
@@ -59,7 +60,7 @@
 					{#if showIssue && a.issueKey}
 						<button class="act-key" onclick={() => goto('/issue/' + a.issueKey)}>{a.issueKey}</button>
 					{/if}
-					<span class="act-actor" class:ai={a.actor === 'ai'}>{a.actor === 'ai' ? '✦ Clanker' : 'You'}</span>
+					<span class="act-actor" class:ai={a.actor === 'ai'}>{a.actor === 'ai' ? `✦ ${$aiName}` : 'You'}</span>
 					<span class="act-verb">{verb(a)}</span>
 				</div>
 				{#if showIssue && a.issueTitle}<span class="act-sub">{a.issueTitle}</span>{/if}

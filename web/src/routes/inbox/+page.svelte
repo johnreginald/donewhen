@@ -1,4 +1,5 @@
 <script>
+	import { aiName } from '$lib/store.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { get } from 'svelte/store';
 	import { api } from '$lib/api.js';
@@ -77,7 +78,7 @@
 <div class="inbox">
 	<div class="ib-head">
 		<span class="ib-title"><InboxIcon size={17} strokeWidth={2} /> Inbox</span>
-		<span class="ib-sub faint">What Clanker did while you were away</span>
+		<span class="ib-sub faint">What {$aiName} did while you were away</span>
 	</div>
 
 	<div class="ib-body">
@@ -128,21 +129,21 @@
 				</div>
 			{:else}
 				<div class="empty faint">
-					{loading ? 'Loading…' : 'Nothing waiting. Clanker hasn’t moved anything to In Review yet.'}
+					{loading ? 'Loading…' : `Nothing waiting. ${$aiName} hasn’t moved anything to In Review yet.`}
 				</div>
 			{/if}
 		</section>
 
-		<!-- Recent Clanker activity -->
+		<!-- Recent AI activity -->
 		<section>
 			<h2 class="sec">
-				Recent Clanker activity
+				Recent {$aiName} activity
 				{#if newCount}<span class="count new">{newCount} new</span>{/if}
 			</h2>
 			{#if recent.length}
 				<ActivityFeed items={recent} showIssue={true} />
 			{:else}
-				<div class="empty faint">{loading ? 'Loading…' : 'No Clanker activity yet.'}</div>
+				<div class="empty faint">{loading ? 'Loading…' : `No ${$aiName} activity yet.`}</div>
 			{/if}
 		</section>
 	</div>
