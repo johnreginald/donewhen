@@ -140,7 +140,25 @@ Usage:
 
 ```
 /raenil:tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
+/raenil:tasks workspaces
+/raenil:tasks use <workspace> [--project <text>]
 ```
+
+`workspaces` lists every workspace the token reaches, with open counts per
+project. `▸` marks the current default:
+
+```
+  Workspace                 Prefix  Open  Projects
+▸ platform          PP        70  Platform (62)
+  acme-engineering          ACM      139  Acme Engineering (101)
+  unsorted                  UNS        2  —
+```
+
+`use` switches the default. It writes `.claude/raenil.json` at the git root, or
+`~/.config/raenil/default.json` outside a repo, and then shows the new view.
+`--project` stores a default project too, and leaving it out clears one. An
+unknown workspace, or a project name that matches nothing or several, is
+refused and leaves the file untouched.
 
 | Glyph | State |
 |---|---|

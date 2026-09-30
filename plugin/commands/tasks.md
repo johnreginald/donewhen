@@ -1,6 +1,6 @@
 ---
-description: List a Raenil workspace's open issues grouped by epic
-argument-hint: "[workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]"
+description: List a Raenil workspace's open issues grouped by epic, list workspaces, or switch the default
+argument-hint: "[workspace] [--project <text>] [--all] [--epic <text>] [--state <name>] | workspaces | use <workspace> [--project <text>]"
 allowed-tools: Bash(node:*)
 ---
 

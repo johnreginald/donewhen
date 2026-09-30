@@ -4,7 +4,9 @@
 // bearer token (RAENIL_TOKEN) so the output is deterministic and costs no
 // model tokens to fetch.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,11 +16,14 @@ const MIN_WIDTH = 100;
 
 // ---- args ----
 
+// Subcommands: `workspaces` lists every reachable workspace; `use <ws>`
+// switches this repo's default. Anything else is the grouped task view.
 export function parseArgs(argv) {
-	const out = { workspace: '', project: '', epic: '', state: '', all: false };
+	const out = { cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
-		if (a === '--all') out.all = true;
+		if (i === 0 && (a === 'workspaces' || a === 'use')) out.cmd = a;
+		else if (a === '--all') out.all = true;
 		else if (a === '--project' || a === '--epic' || a === '--state') {
 			const v = argv[++i];
 			if (v === undefined || v.startsWith('--')) throw new UsageError(`${a} needs a value`);
@@ -27,6 +32,8 @@ export function parseArgs(argv) {
 		else if (!out.workspace) out.workspace = a;
 		else throw new UsageError(`Unexpected argument '${a}'`);
 	}
+	if (out.cmd === 'use' && !out.workspace) throw new UsageError('use needs a workspace');
+	if (out.cmd === 'workspaces' && out.workspace) throw new UsageError(`Unexpected argument '${out.workspace}'`);
 	return out;
 }
 
@@ -34,23 +41,63 @@ export class UsageError extends Error {}
 
 // ---- config ----
 
-// findConfig walks up from dir to the filesystem root looking for
-// .claude/raenil.json — the repo's default workspace and project.
-export function findConfig(dir) {
+// locateConfig walks up from dir looking for .claude/raenil.json (the repo's
+// default workspace and project), then falls back to the user-wide
+// ~/.config/raenil/default.json. Returns the file it used, or path null.
+export function locateConfig(dir, home = homedir()) {
+	const read = (p) => {
+		try {
+			return JSON.parse(readFileSync(p, 'utf8'));
+		} catch {
+			return {};
+		}
+	};
 	let d = resolve(dir);
 	for (;;) {
 		const p = join(d, '.claude', 'raenil.json');
-		if (existsSync(p)) {
-			try {
-				return JSON.parse(readFileSync(p, 'utf8'));
-			} catch {
-				return {};
-			}
-		}
+		if (existsSync(p)) return { path: p, data: read(p) };
 		const up = dirname(d);
-		if (up === d) return {};
+		if (up === d) break;
 		d = up;
 	}
+	const p = userConfigPath(home);
+	if (existsSync(p)) return { path: p, data: read(p) };
+	return { path: null, data: {} };
+}
+
+export const findConfig = (dir, home) => locateConfig(dir, home).data;
+
+const userConfigPath = (home) => join(home, '.config', 'raenil', 'default.json');
+
+// configTarget is where `use` writes: the git root's .claude/raenil.json, or
+// the user-wide default outside a repo.
+export function configTarget(cwd, home, gitRoot = findGitRoot) {
+	const root = gitRoot(cwd);
+	return root ? join(root, '.claude', 'raenil.json') : userConfigPath(home);
+}
+
+function findGitRoot(cwd) {
+	try {
+		return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] })
+			.toString()
+			.trim();
+	} catch {
+		return null;
+	}
+}
+
+// writeConfig sets workspace and project in the file, keeping every other key.
+// No project clears a stored one.
+export function writeConfig(path, workspace, project) {
+	let data = {};
+	try {
+		data = JSON.parse(readFileSync(path, 'utf8'));
+	} catch {}
+	data.workspace = workspace;
+	if (project) data.project = project;
+	else delete data.project;
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
 }
 
 // ---- glyphs ----
@@ -168,6 +215,46 @@ export function renderWorkspaces(list) {
 	return list.map((x) => `  ${x.slug.padEnd(w)}  ${x.keyPrefix.padEnd(5)}  ${x.name}`).join('\n');
 }
 
+// renderWorkspaceTable is `/tasks workspaces`: one row per workspace with its
+// open count and each project's open count; ▸ marks the current default.
+// rows: [{ ws, open, projects: [{ name, open }] }]
+export function renderWorkspaceTable(rows, currentId) {
+	if (!rows.length) return 'This token reaches no workspaces.';
+	const slugW = Math.max('Workspace'.length, ...rows.map((r) => r.ws.slug.length));
+	const preW = Math.max('Prefix'.length, ...rows.map((r) => r.ws.keyPrefix.length));
+	const openW = Math.max('Open'.length, ...rows.map((r) => String(r.open).length));
+	const line = (mark, slug, pre, open, projects) =>
+		`${mark} ${slug.padEnd(slugW)}  ${pre.padEnd(preW)}  ${open.padStart(openW)}  ${projects}`;
+	return [
+		line(' ', 'Workspace', 'Prefix', 'Open', 'Projects'),
+		...rows.map((r) =>
+			line(
+				r.ws.id === currentId ? '▸' : ' ',
+				r.ws.slug,
+				r.ws.keyPrefix,
+				String(r.open),
+				r.projects.length ? r.projects.map((p) => `${p.name} (${p.open})`).join(', ') : '—'
+			)
+		)
+	].join('\n');
+}
+
+// openCounts tallies open issues per workspace and per project (initiative).
+export function openCounts(states, initiatives, projects, issues) {
+	const closed = new Set(states.filter(isClosed).map((s) => s.id));
+	const iniOf = new Map(projects.map((p) => [p.id, p.initiativeId]));
+	const perIni = new Map(initiatives.map((i) => [i.id, 0]));
+	let open = 0;
+	for (const i of issues) {
+		if (closed.has(i.stateId)) continue;
+		open++;
+		const ini = i.projectId && iniOf.get(i.projectId);
+		if (ini && perIni.has(ini)) perIni.set(ini, perIni.get(ini) + 1);
+	}
+	const byPos = initiatives.slice().sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+	return { open, projects: byPos.map((i) => ({ name: i.name, open: perIni.get(i.id) })) };
+}
+
 // ---- api ----
 
 export class ApiError extends Error {
@@ -199,24 +286,96 @@ export function client(baseURL, token, fetchImpl = fetch) {
 	};
 }
 
+const USAGE = `Usage: /tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
+       /tasks workspaces
+       /tasks use <workspace> [--project <text>]`;
+
 // run is the whole command; returns the text to print. Every failure becomes
-// a one-line message — never a stack trace.
-export async function run(argv, env, cwd, fetchImpl = fetch) {
+// a one-line message — never a stack trace. ctx lets tests stub the home dir
+// and git root.
+export async function run(argv, env, cwd, fetchImpl = fetch, ctx = {}) {
+	const home = ctx.home ?? homedir();
 	let opts;
 	try {
 		opts = parseArgs(argv);
 	} catch (e) {
-		if (e instanceof UsageError) return `${e.message}\nUsage: /tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]`;
+		if (e instanceof UsageError) return `${e.message}\n${USAGE}`;
 		throw e;
 	}
 	const token = env.RAENIL_TOKEN;
 	if (!token) return 'Set RAENIL_TOKEN (mint one: raenil token <name> [workspace])';
 	const url = env.RAENIL_URL || DEFAULT_URL;
-	const cfg = findConfig(cwd);
-	const workspace = opts.workspace || cfg.workspace || '';
-	if (!opts.project && !opts.workspace && cfg.project) opts.project = cfg.project;
-
+	const cfg = findConfig(cwd, home);
 	const get = client(url, token, fetchImpl);
+
+	try {
+		if (opts.cmd === 'workspaces') return await workspacesView(get, cfg.workspace);
+		if (opts.cmd === 'use') return await useWorkspace(get, opts, configTarget(cwd, home, ctx.gitRoot), env);
+		const workspace = opts.workspace || cfg.workspace || '';
+		if (!opts.project && !opts.workspace && cfg.project) opts.project = cfg.project;
+		return await tasksView(get, workspace, opts, env);
+	} catch (e) {
+		return explain(e, url, opts.workspace || cfg.workspace || '', get);
+	}
+}
+
+async function tasksView(get, workspace, opts, env) {
+	const [states, initiatives, projects, issues, blockers, memberships] = await Promise.all([
+		get('/api/states', workspace),
+		get('/api/initiatives', workspace),
+		get('/api/projects', workspace),
+		get('/api/issues', workspace),
+		get('/api/blockers', workspace),
+		get('/api/workspaces')
+	]);
+	const wsId = issues[0]?.workspaceId;
+	const w = memberships.find((m) => m.id === wsId) || findWorkspace(memberships, workspace) || (memberships.length === 1 ? memberships[0] : null);
+	const workspaceName = w?.name || workspace || 'Workspace';
+	return render({ workspaceName, states, initiatives, projects, issues, blockers }, opts, width(env));
+}
+
+async function workspacesView(get, currentRef) {
+	const memberships = await get('/api/workspaces');
+	const rows = await Promise.all(
+		memberships.map(async (ws) => {
+			const [states, initiatives, projects, issues] = await Promise.all([
+				get('/api/states', ws.id),
+				get('/api/initiatives', ws.id),
+				get('/api/projects', ws.id),
+				get('/api/issues', ws.id)
+			]);
+			return { ws, ...openCounts(states, initiatives, projects, issues) };
+		})
+	);
+	const current = findWorkspace(memberships, currentRef) || (memberships.length === 1 ? memberships[0] : null);
+	return renderWorkspaceTable(rows, current?.id);
+}
+
+async function useWorkspace(get, opts, target, env) {
+	const memberships = await get('/api/workspaces');
+	const ws = findWorkspace(memberships, opts.workspace);
+	if (!ws) return `No access to workspace '${opts.workspace}'\n${renderWorkspaces(memberships)}`.trimEnd();
+
+	let project = '';
+	if (opts.project) {
+		const initiatives = await get('/api/initiatives', ws.id);
+		const exact = initiatives.filter((i) => i.name.toLowerCase() === opts.project.toLowerCase());
+		const hits = exact.length ? exact : initiatives.filter((i) => contains(i.name, opts.project));
+		const names = (list) => list.map((i) => `  ${i.name}`).join('\n');
+		if (hits.length === 0) {
+			const all = initiatives.length ? names(initiatives) : '  (no projects)';
+			return `No project matching '${opts.project}' in ${ws.slug}\n${all}`;
+		}
+		if (hits.length > 1) return `Several projects match '${opts.project}' in ${ws.slug} — be more specific:\n${names(hits)}`;
+		project = hits[0].name;
+	}
+
+	writeConfig(target, ws.slug, project);
+	const view = await tasksView(get, ws.id, { ...opts, cmd: 'tasks', workspace: ws.slug, project }, env);
+	return `Default for ${target} → ${ws.name}${project ? ` › ${project}` : ''}\n\n${view}`;
+}
+
+async function explain(e, url, workspace, get) {
 	const listWorkspaces = async () => {
 		try {
 			return renderWorkspaces(await get('/api/workspaces'));
@@ -224,34 +383,18 @@ export async function run(argv, env, cwd, fetchImpl = fetch) {
 			return '';
 		}
 	};
-
-	try {
-		const [states, initiatives, projects, issues, blockers, memberships] = await Promise.all([
-			get('/api/states', workspace),
-			get('/api/initiatives', workspace),
-			get('/api/projects', workspace),
-			get('/api/issues', workspace),
-			get('/api/blockers', workspace),
-			get('/api/workspaces')
-		]);
-		const wsId = issues[0]?.workspaceId;
-		const w = memberships.find((m) => m.id === wsId) || findWorkspace(memberships, workspace) || (memberships.length === 1 ? memberships[0] : null);
-		const workspaceName = w?.name || workspace || 'Workspace';
-		return render({ workspaceName, states, initiatives, projects, issues, blockers }, opts, width(env));
-	} catch (e) {
-		if (e instanceof Unreachable) return `Raenil unreachable at ${url} — is Tailscale on?`;
-		if (e instanceof ApiError) {
-			if (e.status === 401) return 'Token rejected — mint a new one';
-			if (e.status === 400 && /workspace/i.test(e.message)) {
-				return `Several workspaces — pass one: /tasks <workspace>\n${await listWorkspaces()}`.trimEnd();
-			}
-			if (e.status === 403 || e.status === 404) {
-				return `No access to workspace '${workspace}'\n${await listWorkspaces()}`.trimEnd();
-			}
-			return `Raenil error ${e.status}${e.message ? `: ${e.message}` : ''}`;
+	if (e instanceof Unreachable) return `Raenil unreachable at ${url} — is Tailscale on?`;
+	if (e instanceof ApiError) {
+		if (e.status === 401) return 'Token rejected — mint a new one';
+		if (e.status === 400 && /workspace/i.test(e.message)) {
+			return `Several workspaces — pass one: /tasks <workspace>\n${await listWorkspaces()}`.trimEnd();
 		}
-		return `Unexpected error: ${e?.message || e}`;
+		if (e.status === 403 || e.status === 404) {
+			return `No access to workspace '${workspace}'\n${await listWorkspaces()}`.trimEnd();
+		}
+		return `Raenil error ${e.status}${e.message ? `: ${e.message}` : ''}`;
 	}
+	return `Unexpected error: ${e?.message || e}`;
 }
 
 function findWorkspace(list, ref) {

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseArgs, render, run, truncate, findConfig, glyph } from './tasks.mjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { parseArgs, render, run, truncate, findConfig, glyph, renderWorkspaceTable, openCounts } from './tasks.mjs';
 
 const states = [
 	{ id: 's-tri', name: 'Triage', category: 'triage', position: 0 },
@@ -49,7 +50,7 @@ const blockers = [
 	{ issueId: 'id-185', blockerId: 'id-187', done: true }
 ];
 const data = { workspaceName: 'Platform', states, initiatives, projects, issues, blockers };
-const opts = (o = {}) => ({ workspace: '', project: '', epic: '', state: '', all: false, ...o });
+const opts = (o = {}) => ({ cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false, ...o });
 
 test('groups open issues by epic, initiative order then epic name, No epic last', () => {
 	const out = render(data, opts());
@@ -207,4 +208,112 @@ test('run: ambiguous workspace asks for one', async () => {
 
 test('run: bad args give usage, not a stack trace', async () => {
 	assert.match(await run(['--bogus'], env, noCfg), /^Unknown option --bogus\nUsage:/);
+});
+
+// ---- PP-217: workspaces and use ----
+
+test('parseArgs subcommands', () => {
+	assert.equal(parseArgs(['workspaces']).cmd, 'workspaces');
+	assert.deepEqual(parseArgs(['use', 'globex', '--project', 'x']), opts({ cmd: 'use', workspace: 'globex', project: 'x' }));
+	assert.throws(() => parseArgs(['use']), /use needs a workspace/);
+	assert.throws(() => parseArgs(['workspaces', 'globex']), /Unexpected argument/);
+});
+
+test('openCounts per workspace and project', () => {
+	const c = openCounts(states, initiatives, projects, issues);
+	assert.equal(c.open, 6);
+	assert.deepEqual(c.projects, [
+		{ name: 'Platform', open: 4 },
+		{ name: 'Zeta', open: 1 }
+	]);
+});
+
+test('renderWorkspaceTable marks the default and shows — for no projects', () => {
+	const out = renderWorkspaceTable(
+		[
+			{ ws: { id: 'a', slug: 'platform', keyPrefix: 'PP' }, open: 29, projects: [{ name: 'Platform', open: 29 }] },
+			{ ws: { id: 'b', slug: 'unsorted', keyPrefix: 'UNS' }, open: 3, projects: [] }
+		],
+		'a'
+	);
+	const lines = out.split('\n');
+	assert.match(lines[0], /^  Workspace\s+Prefix\s+Open\s+Projects$/);
+	assert.match(lines[1], /^▸ platform\s+PP\s+29  Platform \(29\)$/);
+	assert.match(lines[2], /^  unsorted\s+UNS\s+3  —$/);
+});
+
+const two = [
+	{ id: 'ws-pp', slug: 'platform', keyPrefix: 'PP', name: 'Platform' },
+	{ id: 'ws-glx', slug: 'globex', keyPrefix: 'GLX', name: 'Globex' }
+];
+// Per-workspace fake: the X-Workspace header picks the data set.
+const multiFetch = (byWs) => async (url, init) => {
+	const path = new URL(url).pathname;
+	if (path === '/api/workspaces') return json(200, two);
+	const ws = init.headers['X-Workspace'];
+	const key = two.find((w) => w.id === ws || w.slug === ws)?.id;
+	const d = byWs[key];
+	if (!d) return json(403, { error: 'not a member of this workspace' });
+	return json(200, d[path.slice(5)] ?? []);
+};
+const ppData = { states, initiatives, projects, issues, blockers };
+const lumData = {
+	states,
+	initiatives: [{ id: 'li', name: 'Globex', position: 0 }, { id: 'lj', name: 'Globex Labs', position: 1 }],
+	projects: [{ id: 'lp', name: 'Kernel', initiativeId: 'li' }],
+	issues: [{ ...issue(7, 's-rdy', 'lp', 'Kernel thing'), key: 'GLX-7', workspaceId: 'ws-glx' }],
+	blockers: []
+};
+const byWs = { 'ws-pp': ppData, 'ws-glx': lumData };
+const repo = () => {
+	const root = mkdtempSync(join(tmpdir(), 'raenil-repo-'));
+	return { root, home: mkdtempSync(join(tmpdir(), 'raenil-home-')), gitRoot: () => root };
+};
+
+test('run workspaces: every workspace, default marked', async () => {
+	const r = repo();
+	mkdirSync(join(r.root, '.claude'));
+	writeFileSync(join(r.root, '.claude', 'raenil.json'), '{"workspace":"globex"}');
+	const out = await run(['workspaces'], env, r.root, multiFetch(byWs), r);
+	assert.match(out, /^  platform\s+PP\s+6  Platform \(4\), Zeta \(1\)$/m);
+	assert.match(out, /^▸ globex\s+GLX\s+1  Globex \(1\), Globex Labs \(0\)$/m);
+});
+
+test('run use: writes the git root config, keeps other keys, prints the view', async () => {
+	const r = repo();
+	mkdirSync(join(r.root, '.claude'));
+	writeFileSync(join(r.root, '.claude', 'raenil.json'), '{"workspace":"platform","project":"Zeta","keep":1}');
+	const out = await run(['use', 'GLX'], env, r.root, multiFetch(byWs), r);
+	const cfg = JSON.parse(readFileSync(join(r.root, '.claude', 'raenil.json'), 'utf8'));
+	assert.deepEqual(cfg, { workspace: 'globex', keep: 1 }); // project cleared
+	assert.match(out, /→ Globex\n\nGlobex · 1 open/);
+	// next plain /tasks uses the new default
+	assert.match(await run([], env, r.root, multiFetch(byWs), r), /^Globex · 1 open/);
+});
+
+test('run use --project: exact name wins, stored, view scoped', async () => {
+	const r = repo();
+	const out = await run(['use', 'globex', '--project', 'globex'], env, r.root, multiFetch(byWs), r);
+	const cfg = JSON.parse(readFileSync(join(r.root, '.claude', 'raenil.json'), 'utf8'));
+	assert.deepEqual(cfg, { workspace: 'globex', project: 'Globex' });
+	assert.match(out, /→ Globex › Globex/);
+	assert.match(out, /Kernel/);
+});
+
+test('run use: refusals leave the file untouched', async () => {
+	const r = repo();
+	const f = join(r.root, '.claude', 'raenil.json');
+	assert.match(await run(['use', 'nope'], env, r.root, multiFetch(byWs), r), /^No access to workspace 'nope'\n  platform/);
+	assert.match(await run(['use', 'globex', '--project', 'xyz'], env, r.root, multiFetch(byWs), r), /^No project matching 'xyz' in globex\n  Globex\n  Globex Labs/);
+	assert.match(await run(['use', 'platform', '--project', 'e'], env, r.root, multiFetch(byWs), r), /^Several projects match 'e'/);
+	assert.equal(existsSync(f), false);
+});
+
+test('run use outside a git repo writes the user-wide default', async () => {
+	const r = repo();
+	await run(['use', 'globex'], env, r.root, multiFetch(byWs), { home: r.home, gitRoot: () => null });
+	const cfg = JSON.parse(readFileSync(join(r.home, '.config', 'raenil', 'default.json'), 'utf8'));
+	assert.equal(cfg.workspace, 'globex');
+	// and a plain /tasks anywhere picks it up
+	assert.match(await run([], env, r.root, multiFetch(byWs), { home: r.home }), /^Globex · 1 open/);
 });
