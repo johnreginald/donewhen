@@ -1,0 +1,14 @@
+{
+  "name": "raenil",
+  "description": "Raenil tracker helpers for Claude Code",
+  "owner": {
+    "name": "Htet Wai Yan Soe"
+  },
+  "plugins": [
+    {
+      "name": "raenil",
+      "source": "./plugin",
+      "description": "Raenil tracker helpers: /tasks lists open issues grouped by epic."
+    }
+  ]
+}

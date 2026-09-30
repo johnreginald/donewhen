@@ -97,6 +97,65 @@ Backend-labeled issues should include a ```mermaid diagram in the description.
 The global `~/.claude/hooks/require-mermaid.py` hook enforces this on `save_issue`;
 add `mcp__raenil__save_issue` to its PreToolUse matcher (see `docs/DEPLOY.md`).
 
+## Claude Code plugin: `/tasks`
+
+`plugin/` is a Claude Code plugin. Its `/raenil:tasks` command prints a
+workspace's open issues grouped by epic. It reads the REST API directly, so it
+costs no model tokens to fetch.
+
+```
+Platform · 37 open
+
+Raenil — Data integrity                 0/7 done
+  ○ PP-181  Backlog      save_project and save_initiative update only the fields sent
+  ◐ PP-185  In Progress  Issue page updates live and refuses to overwrite a newer edit
+
+Raenil — Realtime & tests               0/6 done
+  ○ PP-197  Backlog      Web live stream sends its workspace and catches up…  ⊘ PP-196
+```
+
+Install it from this repo, which is its own marketplace:
+
+```bash
+claude plugin marketplace add /path/to/raenil
+claude plugin install raenil@raenil
+```
+
+Set a token. Any `raenil token` works, and a pinned token also picks the
+workspace for you:
+
+```bash
+export RAENIL_TOKEN=raenil_…                     # required
+export RAENIL_URL=https://tracker.example.com     # optional, this is the default
+```
+
+Give each repo a default workspace, and optionally a default project, in
+`.claude/raenil.json`:
+
+```json
+{ "workspace": "platform", "project": "Platform" }
+```
+
+Usage:
+
+```
+/raenil:tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
+```
+
+| Glyph | State |
+|---|---|
+| `◌` | Triage |
+| `○` | Backlog, Aligning, Ready |
+| `◐` | In Progress |
+| `⊘` | Blocked |
+| `◕` | In Review |
+| `●` | Done |
+| `×` | Canceled |
+
+A trailing `⊘ KEY` means the issue still waits on that blocker. Done and
+Canceled issues are hidden unless you pass `--all`. Run the tests with
+`node --test 'plugin/scripts/*.test.mjs'`.
+
 ## Commands
 
 | Command | Purpose |
