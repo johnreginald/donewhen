@@ -15,9 +15,7 @@ type Blocker struct {
 	Title    string `json:"title"`
 	State    string `json:"state"`
 	Category string `json:"category"`
-	// Done: no longer in the way — Done, Canceled, or In Review. A
-	// dependent of an In Review blocker starts from the blocker's branch, so
-	// it builds on that work before it is merged.
+	// Done: no longer in the way — Done or Canceled.
 	Done bool `json:"done"`
 }
 
@@ -30,7 +28,7 @@ type BlockLink struct {
 }
 
 const blockerSelect = `
-	SELECT b.id, b.key, b.title, st.name, st.category, (st.category IN ('completed', 'canceled') OR st.name = 'In Review')
+	SELECT b.id, b.key, b.title, st.name, st.category, st.category IN ('completed', 'canceled')
 	FROM issue_blockers ib
 	JOIN issues b ON b.id = ib.%s
 	JOIN workflow_states st ON st.id = b.state_id
@@ -67,7 +65,7 @@ func (s *Store) ListBlocking(ctx context.Context, wsID, issueID string) ([]Block
 // ListBlockLinks lists every "blocked by" edge in a workspace.
 func (s *Store) ListBlockLinks(ctx context.Context, wsID string) ([]BlockLink, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT ib.issue_id, ib.blocker_id, (st.category IN ('completed', 'canceled') OR st.name = 'In Review')
+		SELECT ib.issue_id, ib.blocker_id, st.category IN ('completed', 'canceled')
 		FROM issue_blockers ib
 		JOIN issues b ON b.id = ib.blocker_id
 		JOIN workflow_states st ON st.id = b.state_id

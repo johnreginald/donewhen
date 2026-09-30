@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { states, projects, labels as allLabels, PRIORITIES, priorityAgents, taskAgentId, blockLinks } from '$lib/store.js';
+	import { states, projects, labels as allLabels, PRIORITIES, blockLinks } from '$lib/store.js';
 	import { showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
@@ -12,20 +12,14 @@
 	import EpicMenu from '$components/EpicMenu.svelte';
 	import LabelPicker from '$components/LabelPicker.svelte';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
-	import RunTicket from '$components/RunTicket.svelte';
-	import Conversation from '$components/Conversation.svelte';
+	import Comments from '$components/Comments.svelte';
 	import Blockers from '$components/Blockers.svelte';
-	import ReviewBlock from '$components/ReviewBlock.svelte';
-	import EvidencePanel from '$components/EvidencePanel.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
-	import { agents } from '$lib/store.js';
-	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal, Bot } from '@lucide/svelte';
+	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
 
 	let issue = $state(null);
 	let pane = $state('task'); // which half a narrow window shows
-	// Who works this task when nobody chose an agent: the default for its priority.
 	const blocksCount = $derived(issue ? $blockLinks.filter((l) => l.blockerId === issue.id).length : 0);
-	const defaultAgent = $derived(issue && $agents.find((a) => a.id === $priorityAgents[issue.priority ?? 0]));
 	let docs = $state([]);
 	let children = $state([]);
 	let parent = $state(null);
@@ -155,14 +149,13 @@
 				{ label: issue.key, upper: false }
 			]}
 		>
-			{#key issue.id}<RunTicket {issue} />{/key}
 			<button class="btn danger sm" onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
 		</PageHeader>
 
 		<div class="panes" role="tablist">
 			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
 			<button role="tab" aria-selected={pane === 'chat'} class:on={pane === 'chat'} onclick={() => (pane = 'chat')}>
-				{taskAgentId(issue, $priorityAgents) ? 'Conversation' : 'Comments'}
+				Comments
 			</button>
 		</div>
 
@@ -189,8 +182,6 @@
 					<dd><StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} /></dd>
 					<dt>Priority</dt>
 					<dd><PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} /></dd>
-					<dt>Agent</dt>
-					<dd><EpicMenu value={issue.agentId || ''} options={$agents} icon={Bot} none={defaultAgent ? `Default · ${defaultAgent.name}` : 'No agent'} onchange={(v) => patch({ agentId: v })} /></dd>
 					<dt>Epic</dt>
 					<dd><EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} /></dd>
 					<dt>Labels</dt>
@@ -302,8 +293,6 @@
 					</section>
 				{/if}
 
-				{#key issue.id}<ReviewBlock {issue} stateName={stOf(issue)?.name} />{/key}
-				{#key issue.id}<EvidencePanel {issue} stateName={stOf(issue)?.name} />{/key}
 
 				{#if activity.length}
 					<section class="block">
@@ -315,7 +304,7 @@
 			</main>
 
 			<aside class="chat">
-				{#key issue.id}<Conversation {issue} />{/key}
+				{#key issue.id}<Comments {issue} />{/key}
 			</aside>
 		</div>
 	</div>
@@ -349,7 +338,7 @@
 		flex-direction: column;
 		gap: 20px;
 	}
-	/* The conversation, side by side with the task, as Paperclip lays it out. */
+	/* Comments, side by side with the task. */
 	.chat {
 		flex: 0 0 min(460px, 42%);
 		min-width: 0;
@@ -706,7 +695,7 @@
 		display: none;
 	}
 	/* Too narrow for both side by side: show one at a time, switched by tabs,
-	   so the conversation is never buried under the whole task. */
+	   so the comments are never buried under the whole task. */
 	@media (max-width: 900px) {
 		.panes {
 			display: flex;

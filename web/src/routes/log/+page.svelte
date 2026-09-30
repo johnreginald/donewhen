@@ -1,6 +1,5 @@
 <script>
 	import PageHeader from '$components/PageHeader.svelte';
-	import AuditTabs from '$components/AuditTabs.svelte';
 	import { api } from '$lib/api.js';
 	import { activeInitiative, initiatives } from '$lib/store.js';
 	import ActivityFeed from '$components/ActivityFeed.svelte';
@@ -28,8 +27,7 @@
 </script>
 
 <div class="pg">
-	<PageHeader crumbs={[{ label: 'Audit' }, { label: 'Activity' }]} />
-	<AuditTabs />
+	<PageHeader crumbs={[{ label: 'Log' }]} />
 	<div class="pg-body">
 <div class="log">
 	<div class="log-head">

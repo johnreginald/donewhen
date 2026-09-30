@@ -2,7 +2,7 @@
 	import { ChevronDown, Box } from '@lucide/svelte';
 
 	// A single-choice menu over { id, name } options. Named for its first use;
-	// icon and none let it pick other things too (an agent, for one).
+	// icon and none let it pick other things too.
 	let { value = '', options = [], onchange, icon = Box, none = '— None —' } = $props();
 	const Icon = $derived(icon);
 	let open = $state(false);

@@ -12,14 +12,13 @@
 		inboxCount,
 		workspaces,
 		activeWorkspace,
-		switchWorkspace,
-		activeJobs
+		switchWorkspace
 	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
 	import { me } from '$lib/store.js';
 	import {
 		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
-		ChevronsUpDown, Settings, CircleCheckBig, LogOut, LayoutDashboard, Bot, Plug, ChevronRight, Activity, Gauge } from '@lucide/svelte';
+		ChevronsUpDown, Settings, CircleCheckBig, LogOut, ChevronRight } from '@lucide/svelte';
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
 	// issues, labels, the inbox badge) belongs to the selected workspace only.
@@ -95,9 +94,6 @@
 		}
 	}
 
-	// How many tickets an agent is working on or about to.
-	const runningCount = $derived(new Set($activeJobs.map((j) => j.issueId)).size);
-
 	const ISSUE_VIEWS = ['/tasks', '/list', '/board', '/links'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
 
@@ -139,9 +135,6 @@
 		<button class="nav-item" onclick={() => paletteOpen.set(true)}>
 			<span class="icon"><Search size={16} strokeWidth={2} /></span>Search<kbd class="kbd">⌘K</kbd>
 		</button>
-		<a href="/dashboard" class="nav-item" class:active={$page.url.pathname === '/dashboard'} onclick={onnavigate}>
-			<span class="icon"><LayoutDashboard size={16} strokeWidth={2} /></span>Dashboard
-		</a>
 		<a href="/inbox" class="nav-item" class:active={$page.url.pathname === '/inbox'} onclick={onnavigate}>
 			<span class="icon"><Inbox size={16} strokeWidth={2} /></span>Inbox
 			{#if $inboxCount > 0}<span class="badge">{$inboxCount}</span>{/if}
@@ -158,24 +151,11 @@
 		>
 			<span class="icon"><CircleCheckBig size={16} strokeWidth={2} /></span>Tasks
 		</a>
-		<a href="/running" class="nav-item" class:active={$page.url.pathname === '/running'} onclick={onnavigate}>
-			<span class="icon"><Activity size={16} strokeWidth={2} /></span>Running
-			{#if runningCount}<span class="badge live">{runningCount}</span>{/if}
-		</a>
-		<a href="/flow" class="nav-item" class:active={$page.url.pathname === '/flow'} onclick={onnavigate}>
-			<span class="icon"><Gauge size={16} strokeWidth={2} /></span>Flow
-		</a>
 		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
 			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts
 		</a>
-		<a href="/agents" class="nav-item" class:active={$page.url.pathname.startsWith('/agents')} onclick={onnavigate}>
-			<span class="icon"><Bot size={16} strokeWidth={2} /></span>Agents
-		</a>
-		<a href="/connectors" class="nav-item" class:active={$page.url.pathname === '/connectors'} onclick={onnavigate}>
-			<span class="icon"><Plug size={16} strokeWidth={2} /></span>Connectors
-		</a>
-		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log' || $page.url.pathname.startsWith('/audit')} onclick={onnavigate}>
-			<span class="icon"><History size={16} strokeWidth={2} /></span>Audit
+		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log'} onclick={onnavigate}>
+			<span class="icon"><History size={16} strokeWidth={2} /></span>Log
 		</a>
 	</div>
 
@@ -192,7 +172,6 @@
 			<div class="epic-row">
 				<button class="nav-item epic-sub" class:active={$activeProject === p.id} onclick={() => pickEpic(p.id)}>
 					<span class="icon epic-ic"><Box size={13} strokeWidth={2} /></span><span class="pname">{p.name}</span>
-					{#if p.autorun}<span class="epic-run" title="Epic running"></span>{/if}
 					<span class="ini-count">{p.count}</span>
 				</button>
 				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
@@ -237,13 +216,6 @@
 	}
 	.section-toggle .chev.open {
 		transform: rotate(90deg);
-	}
-	.epic-run {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--st-progress);
-		flex: none;
 	}
 	.menu-backdrop {
 		position: fixed;
@@ -568,9 +540,6 @@
 		border-radius: 9px;
 		padding: 1px 6px;
 		line-height: 1.4;
-	}
-	.badge.live {
-		background: color-mix(in srgb, var(--st-progress) 80%, #000);
 	}
 	.icon {
 		width: 16px;

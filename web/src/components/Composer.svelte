@@ -9,8 +9,7 @@
 	import { composer, closeComposer, showToast } from '$lib/ui.js';
 
 	// Creates and edits Projects and Epics. Tasks are not created here: they
-	// arrive from planning (RePPIT) through the MCP tools, or from an agent's
-	// accepted proposal.
+	// arrive from planning (RePPIT) through the MCP tools.
 	let kind = $state('project');
 	let name = $state('');
 	let desc = $state('');

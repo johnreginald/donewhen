@@ -1,6 +1,6 @@
 <script>
-	// The front door is the dashboard, as in Paperclip.
+	// The front door is the board.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	onMount(() => goto('/dashboard', { replaceState: true }));
+	onMount(() => goto('/board', { replaceState: true }));
 </script>

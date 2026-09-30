@@ -1,6 +1,6 @@
 <script>
-	// "Blocked by" on a ticket: the tickets that must be Done before it may
-	// run, each with its state, removable on hover, and a picker to add one.
+	// "Blocked by" on a ticket: the tickets it waits on, each with its state,
+	// removable on hover, and a picker to add one.
 	// Also lists, read-only, the tickets this one blocks.
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -70,7 +70,7 @@
 
 <div class="bl">
 	{#each list as b (b.id)}
-		<span class="chip" class:done={b.done && b.state !== 'In Review'} class:review={b.state === 'In Review'} title="{b.key} · {b.title} — {b.state}{b.state === 'In Review' ? ' (work builds on its branch)' : ''}">
+		<span class="chip" class:done={b.done} class:review={b.state === 'In Review'} title="{b.key} · {b.title} — {b.state}">
 			<button class="go" onclick={() => goto('/issue/' + b.key)}>
 				<StateIcon category={stateOf(b)?.category || b.category} color={stateOf(b)?.color} />
 				<span class="k">{b.key}</span>

@@ -9,19 +9,17 @@
 	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { get } from 'svelte/store';
-	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, agents, issues, inboxCount } from '$lib/store.js';
+	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount } from '$lib/store.js';
 	import { paletteOpen, toast, showToast, flashIssue, liveEvent, navOpen } from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
-	import { CircleCheckBig, Inbox, History, LayoutDashboard, Activity } from '@lucide/svelte';
+	import { CircleCheckBig, Inbox, History, FileText } from '@lucide/svelte';
 
 	// Mobile bottom-tab nav — surfaces the record surfaces (review / work / history / artifacts).
 	const tabs = [
-		{ label: 'Home', href: '/dashboard', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
-		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
 		{ label: 'Tasks', href: '/board', icon: CircleCheckBig, match: (p) => ['/tasks', '/list', '/board', '/links'].includes(p) },
-		{ label: 'Running', href: '/running', icon: Activity, match: (p) => p === '/running' },
-		{ label: 'Audit', href: '/log', icon: History, match: (p) => p === '/log' || p.startsWith('/audit') },
+		{ label: 'Inbox', href: '/inbox', icon: Inbox, match: (p) => p === '/inbox' },
+		{ label: 'Artifacts', href: '/artifacts', icon: FileText, match: (p) => p.startsWith('/artifacts') },
+		{ label: 'Log', href: '/log', icon: History, match: (p) => p === '/log' },
 	];
 
 	let { children } = $props();
@@ -87,14 +85,6 @@
 		liveEvent.set(ev);
 		applyEvent(ev);
 		if (ev.issue) flashIssue(ev.issue.id);
-		// Paperclip's "Agent is asking a question": say so wherever you are.
-		if (ev.type === 'interaction.created' && ev.interaction) {
-			const who = get(agents).find((a) => a.id === ev.interaction.agentId)?.name || 'An agent';
-			const key = get(issues).find((i) => i.id === ev.interaction.issueId)?.key || 'a ticket';
-			showToast(ev.interaction.kind === 'questions' ? `${who} is asking you something on ${key}` : `${who} proposes tickets on ${key}`);
-			inboxCount.update((n) => n + 1);
-		}
-		if (ev.type === 'interaction.updated') inboxCount.update((n) => Math.max(0, n - 1));
 		if (ev.type === 'issue.state_changed' && ev.issue && ev.to) {
 			const who = ev.actor === 'ai' ? 'Clanker' : 'you';
 			showToast(`${ev.issue.key} → ${ev.to.name} (by ${who})`);

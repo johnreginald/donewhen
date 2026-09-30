@@ -7,10 +7,10 @@
 	// double-click to open it.
 	import { onMount, tick } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { visibleIssues, states, blockLinks, activeJobs, agents, projects, priorityAgents, taskAgentId } from '$lib/store.js';
+	import { visibleIssues, states, blockLinks, projects } from '$lib/store.js';
 	import { openIssue } from '$lib/ui.js';
 	import StateIcon from './StateIcon.svelte';
-	import { LoaderCircle, Lock, GitFork, Plus, Minus, Maximize, X, ArrowRight, Box } from '@lucide/svelte';
+	import { Lock, GitFork, Plus, Minus, Maximize, X, ArrowRight, Box } from '@lucide/svelte';
 
 	let allIssues = $state([]); // for blockers outside the current view
 	let showUnlinked = $state(false);
@@ -178,8 +178,6 @@
 
 	// ── what a ticket shows ─────────────────────────────────────────────
 	const stOf = (n) => $states.find((s) => s.id === n.stateId);
-	const jobOf = (n) => $activeJobs.find((j) => j.issueId === n.id);
-	const agentOf = (n) => $agents.find((a) => a.id === (jobOf(n)?.agentId || taskAgentId(n, $priorityAgents)));
 	const epicOf = (n) => $projects.find((p) => p.id === n.projectId);
 	const openCount = (n) => $blockLinks.filter((l) => l.issueId === n.id && !l.done).length;
 	const nodeById = (id) => graph.nodes.find((n) => n.id === id);
@@ -257,14 +255,11 @@
 				{#each graph.nodes as n (n.id)}
 					{@const p = graph.pos.get(n.id)}
 					{@const st = stOf(n)}
-					{@const job = jobOf(n)}
-					{@const a = agentOf(n)}
 					{@const waits = openCount(n)}
 					{@const ep = epicOf(n)}
 					<button
 						class="node"
 						class:outside={!graph.inView.has(n.id)}
-						class:running={job?.status === 'claimed'}
 						class:dim={!inChain(n.id)}
 						class:focus={n.id === focus}
 						class:up={chain?.up.has(n.id)}
@@ -289,10 +284,6 @@
 						</span>
 						<span class="tt">{n.title}</span>
 						<span class="ft">
-							{#if job}
-								<span class="doing" class:q={job.status === 'queued'}><LoaderCircle size={11} strokeWidth={2.4} />{job.status === 'queued' ? 'Queued' : 'Working'}</span>
-							{/if}
-							{#if a}<span class="ag">{a.name}</span>{/if}
 							{#if graph.manyEpics && ep}<span class="ep"><Box size={10} strokeWidth={2.2} />{ep.name}</span>{/if}
 						</span>
 					</button>
@@ -496,9 +487,6 @@
 	.node.down {
 		box-shadow: 0 0 0 1px color-mix(in srgb, #60a5fa 60%, transparent);
 	}
-	.node.running {
-		background: color-mix(in srgb, var(--st-progress) 7%, var(--bg-elev));
-	}
 	.node.outside {
 		border-style: dashed;
 		border-left-style: solid;
@@ -557,28 +545,6 @@
 		min-width: 0;
 		margin-top: auto;
 	}
-	.doing {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		color: var(--st-progress);
-		flex: none;
-	}
-	.doing :global(svg) {
-		animation: dg-spin 1.2s linear infinite;
-	}
-	.doing.q {
-		color: var(--text-faint);
-	}
-	.doing.q :global(svg) {
-		animation: none;
-	}
-	@keyframes dg-spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-	.ag,
 	.ep {
 		overflow: hidden;
 		text-overflow: ellipsis;
