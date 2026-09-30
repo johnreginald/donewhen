@@ -67,15 +67,6 @@ func (d *deps) reachable(ctx context.Context) ([]models.Membership, error) {
 		}
 		all = kept
 	}
-	if w, _ := ctx.Value(workspaceHeaderKey{}).(string); w != "" {
-		kept := all[:0]
-		for _, m := range all {
-			if m.ID == w || strings.EqualFold(m.Slug, w) {
-				kept = append(kept, m)
-			}
-		}
-		all = kept
-	}
 	return all, nil
 }
 
@@ -190,20 +181,11 @@ func (d *deps) scopeOne(ctx context.Context, req mcp.CallToolRequest, refs ...re
 	}
 }
 
-// agentTools are the tools an agent running a ticket gets. Every tool's
-// definition sits in the agent's context on every turn — the full set measured
-// about 7,000 tokens a turn — so an agent is given only what its work uses.
-var agentTools = map[string]bool{
-	"ask_user": true, "propose_tickets": true, "add_blocker": true,
-	"get_issue": true, "list_comments": true, "get_criteria": true,
-	"list_issues": true, "get_document": true, "list_documents": true,
-}
-
 // ticketFormat is how every ticket is written, so a product owner and the
 // agent that builds it can both read it. It travels with the server, so any
 // client writing tickets here gets it without its own setup.
 const ticketFormat = "Ticket format — a ticket is an execution spec the reader scans, not an essay; readers are the " +
-	"agent that builds it and the product owner. Size: one ticket per feature end to end (database + API + tests " +
+	"engineer or agent who builds it and the product owner. Size: one ticket per feature end to end (database + API + tests " +
 	"together); every UI screen is its own ticket. Sections, in order: '# Title', then '**Epic:** … · **Priority:** … · " +
 	"**Blocked by:** …'; '## Goal' (one or two sentences, then 'This ticket adds:' bullets; no requirements here); " +
 	"'## 1. <Part>', '## 2. <Part>' … one per capability (endpoint, guard, command, screen): one line on what it is " +
@@ -214,9 +196,8 @@ const ticketFormat = "Ticket format — a ticket is an execution spec the reader
 	"bullet; no semicolon-chained rules or long comma lists; conditions as 'condition → result'; exact codes and " +
 	"names in backticks; plain verbs (add, return, reject, allow); no 'facilitate', 'in order to', 'what this gives " +
 	"us'. Research and reasoning stay out; the ticket holds the decision and the contract. No 'Done when' section: " +
-	"the done-when checklist (criteria) is the one place for it. A ```mermaid diagram helps for backend flows. " +
-	"Criteria: 3–6 — package tests as the gate, paths_within/no_secrets/tests_not_weakened/no_new_deps policies, and " +
-	"at most one model-judged check marked \"advisory\": true."
+	"the done-when checklist (criteria) is the one place for it: 3–6 items, derived from the ticket. A ```mermaid " +
+	"diagram helps for backend flows."
 
 func buildServer(d *deps) *server.MCPServer {
 	s := server.NewMCPServer("raenil", version,
@@ -239,52 +220,11 @@ func buildServer(d *deps) *server.MCPServer {
 	return s
 }
 
-// buildAgentServer is the same server narrowed to agentTools, with a short
-// preamble: an agent reads it every turn too.
-func buildAgentServer(d *deps) *server.MCPServer {
-	s := server.NewMCPServer("raenil", version,
-		server.WithToolCapabilities(true),
-		server.WithInstructions("Raenil, the issue tracker your ticket lives in. Use ask_user when you need "+
-			"a decision only the user can make, and propose_tickets to split work into tickets."),
-	)
-	d.register(s)
-	var drop []string
-	for name := range s.ListTools() {
-		if !agentTools[name] {
-			drop = append(drop, name)
-		}
-	}
-	s.DeleteTools(drop...)
-	return s
-}
-
 // NewHandler builds the bearer-authed MCP HTTP handler mounted at /mcp.
 func NewHandler(svc *service.Service, st *store.Store, cfg config.Config) http.Handler {
 	d := &deps{svc: svc, store: st, cfg: cfg, mgr: auth.NewManager(st, cfg.SecureCookies())}
-	// A runner host names the agent it is running in this header, so what
-	// the agent writes through these tools is attributed to it.
-	withAgent := server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-		if a := strings.TrimSpace(r.Header.Get("X-Raenil-Agent")); a != "" {
-			ctx = context.WithValue(ctx, agentKey{}, a)
-		}
-		// A runner host narrows an agent to the workspace its ticket is
-		// in. It can only narrow: membership is still checked below.
-		if w := strings.TrimSpace(r.Header.Get("X-Raenil-Workspace")); w != "" {
-			ctx = context.WithValue(ctx, workspaceHeaderKey{}, w)
-		}
-		return ctx
-	})
-	full := server.NewStreamableHTTPServer(buildServer(d), withAgent)
-	agent := server.NewStreamableHTTPServer(buildAgentServer(d), withAgent)
-	// X-Raenil-Tools: agent picks the narrow set. A session stays on the
-	// server that created it, since every request of a run carries the header.
-	return requireBearer(st, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Raenil-Tools")), "agent") {
-			agent.ServeHTTP(w, r)
-			return
-		}
-		full.ServeHTTP(w, r)
-	}))
+	httpSrv := server.NewStreamableHTTPServer(buildServer(d))
+	return requireBearer(st, httpSrv)
 }
 
 // ServeStdio runs the MCP server over stdio (local fallback transport).
@@ -310,16 +250,6 @@ func requireBearer(st *store.Store, next http.Handler) http.Handler {
 		// context; tools read them through d.ws.
 		next.ServeHTTP(w, r)
 	})
-}
-
-type agentKey struct{}
-
-type workspaceHeaderKey struct{}
-
-// agentFrom is the agent id a runner host named for this call, or "".
-func agentFrom(ctx context.Context) string {
-	a, _ := ctx.Value(agentKey{}).(string)
-	return a
 }
 
 func jsonResult(v any) (*mcp.CallToolResult, error) {
@@ -508,8 +438,7 @@ func (d *deps) register(s *server.MCPServer) {
 		mcp.WithNumber("priority", mcp.Description("0 none, 1 urgent, 2 high, 3 medium, 4 low")),
 		mcp.WithArray("labels", mcp.Description("Label names (exclusive groups enforced)"),
 			mcp.Items(map[string]any{"type": "string"})),
-		mcp.WithArray("blockedBy", mcp.Description("Keys of the tickets that must be Done before this one may run; "+
-			"replaces the list. A ticket is not run while any of them is open."),
+		mcp.WithArray("blockedBy", mcp.Description("Keys of the tickets this one waits on (blocked by); replaces the list."),
 			mcp.Items(map[string]any{"type": "string"})),
 		wsArg(),
 	), d.handleSaveIssue)
@@ -598,8 +527,6 @@ func (d *deps) register(s *server.MCPServer) {
 	d.registerMeta(s)
 	d.registerContent(s)
 	d.registerDev(s)
-	d.registerAgents(s)
-	d.registerProposals(s)
 }
 
 func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

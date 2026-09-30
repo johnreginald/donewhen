@@ -56,7 +56,7 @@ func (n *Notifier) Run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if p, want := n.build(e); want || n.waitingOnYou(ctx, e, &p) {
+			if p, want := n.build(e); want {
 				n.broadcast(ctx, e.WorkspaceID, p)
 			}
 		}
@@ -102,36 +102,6 @@ func (n *Notifier) build(e events.Event) (payload, bool) {
 		}, true
 	}
 	return payload{}, false
-}
-
-// waitingOnYou is an agent stopping to ask you something — questions, or a
-// proposal to approve. It notifies even though nothing else about the ticket
-// changed, because the agent cannot go on until you answer.
-func (n *Notifier) waitingOnYou(ctx context.Context, e events.Event, p *payload) bool {
-	if e.Type != "interaction.created" || e.Interaction == nil {
-		return false
-	}
-	is, err := n.store.GetIssue(ctx, e.WorkspaceID, e.Interaction.IssueID)
-	if err != nil {
-		return false
-	}
-	who := "An agent"
-	if e.Interaction.AgentID != nil {
-		if a, err := n.store.GetAgent(ctx, e.WorkspaceID, *e.Interaction.AgentID); err == nil {
-			who = a.Name
-		}
-	}
-	what := "has a question"
-	if e.Interaction.Kind == "proposal" {
-		what = "proposes tickets"
-	}
-	*p = payload{
-		Title: fmt.Sprintf("%s %s on %s", who, what, is.Key),
-		Body:  is.Title,
-		URL:   n.issueURL(&is),
-		Tag:   e.Interaction.ID,
-	}
-	return true
 }
 
 func (n *Notifier) issueURL(is *models.Issue) string {

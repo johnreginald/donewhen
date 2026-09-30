@@ -168,8 +168,8 @@ func (s *Service) DeleteIssue(ctx context.Context, wsID, id string, actor string
 }
 
 // AddComment stores a comment and publishes comment.added.
-func (s *Service) AddComment(ctx context.Context, wsID, issueID, body, actor, agentID string) (models.Comment, error) {
-	c, err := s.Store.CreateComment(ctx, wsID, issueID, body, actor, agentID)
+func (s *Service) AddComment(ctx context.Context, wsID, issueID, body, actor string) (models.Comment, error) {
+	c, err := s.Store.CreateComment(ctx, wsID, issueID, body, actor)
 	if err != nil {
 		return c, err
 	}

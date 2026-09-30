@@ -29,16 +29,7 @@ type Event struct {
 	From        *models.WorkflowState `json:"from,omitempty"`
 	To          *models.WorkflowState `json:"to,omitempty"`
 	Comment     *models.Comment       `json:"comment,omitempty"`
-	Run         *models.Run           `json:"run,omitempty"`
-	Job         *models.Job           `json:"job,omitempty"`
-	Host        *models.RunnerHost    `json:"host,omitempty"`
-	Agent       *models.Agent         `json:"agent,omitempty"`
-	Interaction *models.Interaction   `json:"interaction,omitempty"`
-	// RunID and Lines carry a run's live transcript.
-	RunID string    `json:"runId,omitempty"`
-	Lines []string  `json:"lines,omitempty"`
-	Seq   int       `json:"seq,omitempty"` // of the first line
-	At    time.Time `json:"at"`
+	At          time.Time             `json:"at"`
 }
 
 type subscriber struct {

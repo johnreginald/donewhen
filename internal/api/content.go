@@ -24,8 +24,7 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		BodyMd  string `json:"bodyMd"`
-		AgentID string `json:"agentId"` // set by a runner host posting an agent's reply
+		BodyMd string `json:"bodyMd"`
 	}
 	if err := readJSON(r, &body); err != nil || body.BodyMd == "" {
 		writeErr(w, http.StatusBadRequest, "bodyMd required")
@@ -35,7 +34,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
-	c, err := s.svc.AddComment(r.Context(), ws(r), id, body.BodyMd, auth.ActorFrom(r.Context()), body.AgentID)
+	c, err := s.svc.AddComment(r.Context(), ws(r), id, body.BodyMd, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}

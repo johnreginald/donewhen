@@ -71,18 +71,15 @@ type Initiative struct {
 }
 
 type Project struct {
-	ID            string  `json:"id"`
-	InitiativeID  *string `json:"initiativeId"`
-	Name          string  `json:"name"`
-	DescriptionMD string  `json:"descriptionMd"`
-	Status        string  `json:"status"`
-	Position      int     `json:"position"`
-	RepoURL       *string `json:"repoUrl"`
-	// Autorun: the epic is running — each Ready ticket starts once nothing
-	// blocks it, until it is stopped.
-	Autorun   bool      `json:"autorun"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID            string    `json:"id"`
+	InitiativeID  *string   `json:"initiativeId"`
+	Name          string    `json:"name"`
+	DescriptionMD string    `json:"descriptionMd"`
+	Status        string    `json:"status"`
+	Position      int       `json:"position"`
+	RepoURL       *string   `json:"repoUrl"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 type WorkflowState struct {
@@ -116,7 +113,6 @@ type Issue struct {
 	StateID       string    `json:"stateId"`
 	ProjectID     *string   `json:"projectId"`
 	AssigneeID    *string   `json:"assigneeId"`
-	AgentID       *string   `json:"agentId"`  // the agent this ticket is for, if any
 	Priority      int       `json:"priority"` // 0 none,1 urgent,2 high,3 medium,4 low
 	Position      float64   `json:"position"` // ordering within a state column
 	Labels        []Label   `json:"labels"`
@@ -181,8 +177,7 @@ type Comment struct {
 	ID        string    `json:"id"`
 	IssueID   string    `json:"issueId"`
 	BodyMD    string    `json:"bodyMd"`
-	Actor     string    `json:"actor"`   // human | ai
-	AgentID   *string   `json:"agentId"` // the agent that wrote it, when one did
+	Actor     string    `json:"actor"` // human | ai
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -221,191 +216,4 @@ type Activity struct {
 	ToVal      string    `json:"to,omitempty"`
 	Detail     string    `json:"detail,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
-}
-
-// Run is one agent attempt at a ticket, recorded by whichever machine ran it.
-type Run struct {
-	ID          string     `json:"id"`
-	WorkspaceID string     `json:"-"` // internal: which stream to announce on
-	IssueID     *string    `json:"issueId"`
-	IssueKey    string     `json:"issueKey,omitempty"`
-	IssueTitle  string     `json:"issueTitle,omitempty"`
-	AgentID     *string    `json:"agentId"`
-	Kind        string     `json:"kind"` // work | chat
-	Runner      string     `json:"runner"`
-	Model       string     `json:"model"`
-	Attempt     int        `json:"attempt"`
-	Status      string     `json:"status"` // queued | running | succeeded | failed | aborted
-	Verdict     string     `json:"verdict,omitempty"`
-	SessionID   string     `json:"sessionId,omitempty"`
-	ExitCode    *int       `json:"exitCode"`
-	AgentError  string     `json:"agentError,omitempty"`
-	Tokens      RunTokens  `json:"tokens"`
-	CostUSD     float64    `json:"costUsd"`
-	NotionalUSD float64    `json:"notionalCostUsd"`
-	Billing     string     `json:"billing"` // subscription | api | unknown
-	DeniedTools []string   `json:"deniedTools"`
-	LogTail     string     `json:"logTail,omitempty"`
-	Diff        string     `json:"diff,omitempty"` // what the run changed, for review
-	Host        string     `json:"host,omitempty"`
-	StartedAt   time.Time  `json:"startedAt"`
-	FinishedAt  *time.Time `json:"finishedAt"`
-}
-
-// RunTokens is a run's token usage by kind.
-type RunTokens struct {
-	Input         int `json:"input"`
-	CacheRead     int `json:"cacheRead"`
-	CacheCreation int `json:"cacheCreation"`
-	Output        int `json:"output"`
-	Total         int `json:"total"`
-}
-
-// Run statuses.
-const (
-	RunQueued    = "queued"
-	RunRunning   = "running"
-	RunSucceeded = "succeeded"
-	RunFailed    = "failed"
-	RunAborted   = "aborted"
-)
-
-// Agent is a configured worker: a harness, a model, and how it should behave.
-type Agent struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Slug           string   `json:"slug"`
-	Role           string   `json:"role"`
-	Harness        string   `json:"harness"` // claude | codex | opencode
-	Model          string   `json:"model"`
-	Effort         string   `json:"effort"`
-	InstructionsMD string   `json:"instructionsMd"`
-	AllowedTools   []string `json:"allowedTools"`
-	MaxTurns       int      `json:"maxTurns"`
-	// HeartbeatMinutes wakes the agent this often to answer what is waiting
-	// for it on its tickets. Zero is never.
-	HeartbeatMinutes int `json:"heartbeatMinutes"`
-	// Monthly caps: tokens on any billing, dollars of metered spend. Zero is
-	// no cap. Reaching one pauses the agent.
-	BudgetTokens int64     `json:"budgetTokens"`
-	BudgetUSD    float64   `json:"budgetUsd"`
-	Status       string    `json:"status"` // active | paused
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
-}
-
-// Harnesses an agent can run on.
-var Harnesses = []string{"claude", "codex", "opencode", "antigravity"}
-
-// RunnerHost is a machine that runs agents, as it last reported itself.
-type RunnerHost struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Harnesses  []HarnessStatus `json:"harnesses"`
-	Version    string          `json:"version"`
-	LastSeenAt time.Time       `json:"lastSeenAt"`
-}
-
-// HarnessStatus is what a host proved about one harness: installed, signed
-// in, on which kind of plan, and what to do when it is not.
-type HarnessStatus struct {
-	Harness   string   `json:"harness"`
-	Installed bool     `json:"installed"`
-	Ready     bool     `json:"ready"`
-	Auth      string   `json:"auth,omitempty"` // e.g. "claude.ai subscription", "ChatGPT", "API key"
-	Detail    string   `json:"detail,omitempty"`
-	Fix       string   `json:"fix,omitempty"` // the command that would make it ready
-	Models    []string `json:"models,omitempty"`
-	// AlwaysAllowed are the commands this harness runs without asking on
-	// every agent, before the agent's own rules are added.
-	AlwaysAllowed []string  `json:"alwaysAllowed,omitempty"`
-	CheckedAt     time.Time `json:"checkedAt"`
-}
-
-// Job is work Raenil has queued for a runner host.
-type Job struct {
-	ID          string          `json:"id"`
-	WorkspaceID string          `json:"-"`    // internal: which stream to announce on
-	Kind        string          `json:"kind"` // test_env | run_ticket | chat
-	AgentID     *string         `json:"agentId"`
-	Input       json.RawMessage `json:"input"`
-	IssueID     *string         `json:"issueId"`
-	IssueKey    string          `json:"issueKey,omitempty"`
-	Status      string          `json:"status"` // queued | claimed | succeeded | failed | canceled
-	Host        string          `json:"host,omitempty"`
-	Result      json.RawMessage `json:"result"`
-	Error       string          `json:"error,omitempty"`
-	CreatedAt   time.Time       `json:"createdAt"`
-	ClaimedAt   *time.Time      `json:"claimedAt"`
-	FinishedAt  *time.Time      `json:"finishedAt"`
-	// StopRequested: a person asked to stop it while a host works on it.
-	StopRequested bool `json:"stopRequested"`
-}
-
-// Interaction is something an agent asked of a human on a ticket.
-type Interaction struct {
-	ID         string          `json:"id"`
-	IssueID    string          `json:"issueId"`
-	AgentID    *string         `json:"agentId"`
-	Kind       string          `json:"kind"`    // questions | proposal
-	Payload    json.RawMessage `json:"payload"` // Questions or Proposal
-	Status     string          `json:"status"`  // open | answered | approved | rejected | canceled
-	Response   json.RawMessage `json:"response"`
-	CreatedAt  time.Time       `json:"createdAt"`
-	ResolvedAt *time.Time      `json:"resolvedAt"`
-}
-
-// Question is one structured question an agent asks.
-type Question struct {
-	ID         string   `json:"id"`
-	Text       string   `json:"text"`
-	Options    []string `json:"options,omitempty"`
-	Multi      bool     `json:"multi,omitempty"`      // choose several
-	AllowOther bool     `json:"allowOther,omitempty"` // free text besides the options
-}
-
-// Answer is a human's answer to one Question.
-type Answer struct {
-	QuestionID string   `json:"questionId"`
-	Choices    []string `json:"choices,omitempty"`
-	Other      string   `json:"other,omitempty"`
-}
-
-// AgentSession is an agent's resumable session on one ticket's conversation.
-type AgentSession struct {
-	AgentID     string    `json:"agentId"`
-	IssueID     string    `json:"issueId"`
-	SessionID   string    `json:"sessionId"`
-	Cwd         string    `json:"cwd"`
-	Fingerprint string    `json:"fingerprint"`
-	Turns       int       `json:"turns"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-}
-
-// Review is an agent's review of a ticket (before it is built) or of a
-// change (after its checks pass, by a different vendor than the builder).
-type Review struct {
-	ID          string          `json:"id"`
-	IssueID     string          `json:"issueId"`
-	Kind        string          `json:"kind"` // ticket | code
-	Reviewer    string          `json:"reviewer"`
-	Builder     string          `json:"builder"`
-	Verdict     string          `json:"verdict"` // pass | changes
-	Summary     string          `json:"summary"`
-	Findings    []ReviewFinding `json:"findings"`
-	GuideMD     string          `json:"guideMd"`
-	ContentHash string          `json:"contentHash"`
-	Round       int             `json:"round"`
-	CreatedAt   time.Time       `json:"createdAt"`
-}
-
-// ReviewFinding is one thing a reviewer found. Blocking findings stop the
-// ticket (ticket review) or go back to the builder (code review).
-type ReviewFinding struct {
-	Severity string `json:"severity"` // blocking | minor
-	File     string `json:"file,omitempty"`
-	Line     int    `json:"line,omitempty"`
-	Issue    string `json:"issue"`
-	Fix      string `json:"fix,omitempty"`
 }

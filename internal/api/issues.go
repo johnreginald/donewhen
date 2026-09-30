@@ -59,7 +59,6 @@ type issueCreateReq struct {
 	StateName     string   `json:"stateName"`
 	ProjectId     string   `json:"projectId"`
 	AssigneeId    string   `json:"assigneeId"`
-	AgentId       string   `json:"agentId"`
 	Priority      int      `json:"priority"`
 	ParentKey     string   `json:"parentKey"`
 	LabelIds      []string `json:"labelIds"`
@@ -83,7 +82,6 @@ func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		StateName:     req.StateName,
 		ProjectID:     strPtr(req.ProjectId),
 		AssigneeID:    strPtr(req.AssigneeId),
-		AgentID:       strPtr(req.AgentId),
 		Priority:      req.Priority,
 		ParentKey:     strPtr(req.ParentKey),
 		LabelIDs:      req.LabelIds,
@@ -103,7 +101,6 @@ type issueUpdateReq struct {
 	StateName     *string  `json:"stateName"`
 	ProjectId     *string  `json:"projectId"`
 	AssigneeId    *string  `json:"assigneeId"`
-	AgentId       *string  `json:"agentId"`
 	Priority      *int     `json:"priority"`
 	Position      *float64 `json:"position"`
 	ParentKey     *string  `json:"parentKey"`
@@ -129,10 +126,6 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 	if req.ProjectId != nil {
 		p.SetProject = true
 		p.ProjectID = strPtr(*req.ProjectId)
-	}
-	if req.AgentId != nil {
-		p.SetAgent = true
-		p.AgentID = strPtr(*req.AgentId)
 	}
 	if req.AssigneeId != nil {
 		p.SetAssignee = true

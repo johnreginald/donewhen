@@ -119,25 +119,6 @@ func runServe() {
 	mcpHandler := appmcp.NewHandler(svc, st, cfg)
 
 	srv := api.NewServer(cfg, st, svc, bus, mcpHandler)
-	go srv.WatchEpics(ctx)
-
-	// Each minute: fire agents' heartbeats, and close work
-	// whose machine went away — a claimed job or an open run from a host that
-	// stopped reporting would otherwise block its ticket forever.
-	go func() {
-		t := time.NewTicker(time.Minute)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				srv.Tick(ctx)
-				srv.Reap(ctx)
-			}
-		}
-	}()
-
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
