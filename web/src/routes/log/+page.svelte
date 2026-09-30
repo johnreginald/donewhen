@@ -64,7 +64,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 14px 20px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 		flex: none;
 	}
 	.lh-left {
@@ -78,13 +78,13 @@
 	}
 	.lh-scope {
 		font-size: 12.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.seg {
 		display: flex;
 		gap: 2px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 2px;
 	}
@@ -92,16 +92,16 @@
 		padding: 4px 12px;
 		border-radius: 6px;
 		font-size: 13px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		background: none;
 		border: none;
 	}
 	.sg:hover {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.sg.on {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.log-body {
 		flex: 1;

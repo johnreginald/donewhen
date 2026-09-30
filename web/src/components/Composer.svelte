@@ -174,10 +174,10 @@
 		transform: translateX(-50%);
 		width: min(760px, 94vw);
 		max-height: min(680px, 84vh);
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 14px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		z-index: 71;
 		display: flex;
 		flex-direction: column;
@@ -192,10 +192,10 @@
 		width: 9px;
 		height: 9px;
 		border-radius: 3px;
-		background: var(--text-faint);
+		background: var(--ink-3);
 	}
 	.dot.project {
-		background: var(--accent2);
+		background: var(--accent);
 	}
 	.htitle {
 		font-weight: 600;
@@ -203,23 +203,23 @@
 	}
 	.head .htitle:not(:first-child) {
 		font-weight: 500;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.hclose {
 		margin-left: auto;
 		background: none;
 		border: none;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		display: inline-flex;
 		padding: 4px;
 		border-radius: 6px;
 	}
 	.hclose:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.faint {
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.body {
 		flex: 1;
@@ -234,13 +234,13 @@
 		background: transparent;
 		border: none;
 		outline: none;
-		color: var(--text);
+		color: var(--ink);
 		font-size: 19px;
 		font-weight: 500;
 		padding: 4px 0;
 	}
 	.big::placeholder {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-weight: 500;
 	}
 	.desc {
@@ -250,7 +250,7 @@
 		resize: none;
 		background: transparent;
 		border: none;
-		color: var(--text);
+		color: var(--ink);
 		padding: 2px 0;
 		font-size: 14.5px;
 		line-height: 1.55;
@@ -258,7 +258,7 @@
 		outline: none;
 	}
 	.desc::placeholder {
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.meta {
 		display: flex;
@@ -279,24 +279,24 @@
 		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.field select,
 	.rin {
-		background: var(--bg);
-		border: 1px solid var(--border);
+		background: var(--paper);
+		border: 1px solid var(--line);
 		border-radius: 7px;
-		color: var(--text);
+		color: var(--ink);
 		padding: 7px 9px;
 		font-size: 13px;
 		outline: none;
 		font-family: inherit;
 	}
 	.rin:focus {
-		border-color: var(--border-strong);
+		border-color: var(--line-strong);
 	}
 	.rin::placeholder {
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.labels {
 		display: flex;
@@ -310,9 +310,9 @@
 		font-size: 13px;
 		padding: 4px 11px;
 		border-radius: 7px;
-		border: 1px solid var(--border);
-		background: var(--bg-elev);
-		color: var(--text);
+		border: 1px solid var(--line);
+		background: var(--surface);
+		color: var(--ink);
 		font-weight: 500;
 		display: inline-flex;
 		align-items: center;
@@ -323,19 +323,19 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background: var(--lc, var(--text-faint));
+		background: var(--lc, var(--ink-3));
 	}
 	.chip.on {
 		border-color: var(--lc, var(--accent));
-		color: var(--text);
-		background: color-mix(in srgb, var(--lc, var(--accent)) 16%, var(--bg));
+		color: var(--ink);
+		background: color-mix(in srgb, var(--lc, var(--accent)) 16%, var(--paper));
 	}
 	.foot {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		padding: 12px 18px 14px;
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--line);
 	}
 	.hint {
 		font-size: 11px;

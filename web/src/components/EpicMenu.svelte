@@ -37,7 +37,7 @@
 
 <style>
 	:global(.dd-ic) {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		flex: none;
 	}
 	.dd-none {

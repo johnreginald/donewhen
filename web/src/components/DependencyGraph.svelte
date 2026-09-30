@@ -235,7 +235,7 @@
 
 				<svg width={graph.width} height={graph.height} aria-hidden="true">
 					<defs>
-						{#each [['open', '#fbbf24'], ['ok', '#6b7280'], ['up', '#fbbf24'], ['down', '#60a5fa']] as [k, c] (k)}
+						{#each [['open', 'var(--st-blocked)'], ['ok', 'var(--ink-3)'], ['up', 'var(--st-blocked)'], ['down', 'var(--st-ready)']] as [k, c] (k)}
 							<marker id="dg-{k}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto">
 								<path d="M0,0 L8,4 L0,8 z" fill={c} />
 							</marker>
@@ -269,7 +269,7 @@
 						style:top="{p.y}px"
 						style:width="{W}px"
 						style:height="{H}px"
-						style:--st={st?.color || 'var(--border-strong)'}
+						style:--st={st?.color || 'var(--line-strong)'}
 						onclick={() => select(n)}
 						ondblclick={() => openIssue(n.key)}
 						onmouseenter={() => (hover = n.id)}
@@ -354,8 +354,8 @@
 		gap: 16px;
 		padding: 8px 20px;
 		font-size: 12px;
-		color: var(--text-faint);
-		border-bottom: 1px solid var(--border);
+		color: var(--ink-3);
+		border-bottom: 1px solid var(--line);
 		flex-wrap: wrap;
 	}
 	.legend {
@@ -364,16 +364,16 @@
 		gap: 6px;
 	}
 	.legend.hint {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		opacity: 0.8;
 	}
 	.ln {
 		width: 18px;
 		height: 0;
-		border-top: 2px solid #6b7280;
+		border-top: 2px solid var(--ink-3);
 	}
 	.ln.open {
-		border-top-color: #fbbf24;
+		border-top-color: var(--st-blocked);
 	}
 	.spacer {
 		flex: 1;
@@ -391,7 +391,7 @@
 		overflow: hidden;
 		cursor: grab;
 		outline: none;
-		background-image: radial-gradient(circle, color-mix(in srgb, var(--text-faint) 22%, transparent) 1px, transparent 1px);
+		background-image: radial-gradient(circle, color-mix(in srgb, var(--ink-3) 22%, transparent) 1px, transparent 1px);
 		background-size: 22px 22px;
 		user-select: none;
 	}
@@ -419,12 +419,12 @@
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
-		color: var(--text-faint);
-		border-bottom: 1px dashed var(--border);
+		color: var(--ink-3);
+		border-bottom: 1px dashed var(--line);
 		padding-bottom: 6px;
 	}
 	.ct.now {
-		color: #4ade80;
+		color: var(--st-done);
 	}
 	.cn {
 		font-weight: 500;
@@ -432,22 +432,22 @@
 	}
 	.edge {
 		fill: none;
-		stroke: #6b7280;
+		stroke: var(--ink-3);
 		stroke-width: 1.6;
 		opacity: 0.6;
 		transition: opacity 0.12s, stroke 0.12s;
 	}
 	.edge.open {
-		stroke: #fbbf24;
+		stroke: var(--st-blocked);
 		opacity: 0.8;
 	}
 	.edge.up {
-		stroke: #fbbf24;
+		stroke: var(--st-blocked);
 		stroke-width: 2.4;
 		opacity: 1;
 	}
 	.edge.down {
-		stroke: #60a5fa;
+		stroke: var(--st-ready);
 		stroke-width: 2.4;
 		opacity: 1;
 	}
@@ -460,12 +460,12 @@
 		flex-direction: column;
 		gap: 5px;
 		text-align: left;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-left: 3px solid var(--st);
 		border-radius: 9px;
 		padding: 9px 11px;
-		color: var(--text);
+		color: var(--ink);
 		transition: opacity 0.12s, border-color 0.12s, box-shadow 0.12s;
 		overflow: hidden;
 		cursor: pointer;
@@ -474,18 +474,18 @@
 		cursor: grabbing;
 	}
 	.node:hover {
-		border-top-color: var(--border-strong);
-		border-right-color: var(--border-strong);
-		border-bottom-color: var(--border-strong);
+		border-top-color: var(--line-strong);
+		border-right-color: var(--line-strong);
+		border-bottom-color: var(--line-strong);
 	}
 	.node.focus {
-		box-shadow: 0 0 0 2px var(--accent2);
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 	.node.up {
-		box-shadow: 0 0 0 1px color-mix(in srgb, #fbbf24 60%, transparent);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--st-blocked) 60%, transparent);
 	}
 	.node.down {
-		box-shadow: 0 0 0 1px color-mix(in srgb, #60a5fa 60%, transparent);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--st-ready) 60%, transparent);
 	}
 	.node.outside {
 		border-style: dashed;
@@ -493,7 +493,7 @@
 		opacity: 0.75;
 	}
 	.node.done .tt {
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.node.dim {
 		opacity: 0.18;
@@ -507,12 +507,12 @@
 	}
 	.key {
 		font-family: var(--mono);
-		color: var(--text-dim);
+		color: var(--ink-2);
 		font-size: 11.5px;
 		flex: none;
 	}
 	.stn {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -523,7 +523,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 2px;
-		color: #fbbf24;
+		color: var(--st-blocked);
 		font-size: 11px;
 	}
 	.tt {
@@ -541,7 +541,7 @@
 		align-items: center;
 		gap: 8px;
 		font-size: 11px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		min-width: 0;
 		margin-top: auto;
 	}
@@ -555,7 +555,7 @@
 		align-items: center;
 		gap: 3px;
 		margin-left: auto;
-		color: var(--accent2);
+		color: var(--accent);
 	}
 	.zoom {
 		position: absolute;
@@ -564,11 +564,11 @@
 		display: flex;
 		align-items: center;
 		gap: 2px;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 9px;
 		padding: 3px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		cursor: default;
 	}
 	.zoom button {
@@ -579,17 +579,17 @@
 		background: none;
 		border: none;
 		border-radius: 6px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.zoom button:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.zv {
 		min-width: 42px;
 		text-align: center;
 		font-size: 11.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-variant-numeric: tabular-nums;
 	}
 	.panel {
@@ -599,10 +599,10 @@
 		width: 300px;
 		max-height: calc(100% - 80px);
 		overflow-y: auto;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 12px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		padding: 12px 14px;
 		display: flex;
 		flex-direction: column;
@@ -621,13 +621,13 @@
 		display: inline-flex;
 		background: none;
 		border: none;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 2px;
 		border-radius: 5px;
 	}
 	.x:hover {
-		color: var(--text);
-		background: var(--bg-hover);
+		color: var(--ink);
+		background: var(--hover);
 	}
 	.pt {
 		font-size: 14px;
@@ -648,14 +648,14 @@
 	}
 	.sh span {
 		font-weight: 500;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		margin-left: 4px;
 	}
 	.sh.up {
-		color: #fbbf24;
+		color: var(--st-blocked);
 	}
 	.sh.down {
-		color: #60a5fa;
+		color: var(--st-ready);
 	}
 	.rel {
 		display: flex;
@@ -666,12 +666,12 @@
 		text-align: left;
 		padding: 4px 6px;
 		border-radius: 6px;
-		color: var(--text);
+		color: var(--ink);
 		font-size: 12.5px;
 		min-width: 0;
 	}
 	.rel:hover {
-		background: var(--bg-hover);
+		background: var(--hover);
 	}
 	.rt {
 		overflow: hidden;
@@ -680,12 +680,12 @@
 	}
 	.none {
 		font-size: 12px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 2px 6px;
 	}
 	.chainsum {
 		font-size: 11.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.open {
 		align-self: flex-start;
@@ -694,7 +694,7 @@
 		margin: 60px auto;
 		max-width: 420px;
 		text-align: center;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 13px;
 		display: flex;
 		flex-direction: column;

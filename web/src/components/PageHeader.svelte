@@ -35,15 +35,15 @@
 		min-height: 48px;
 		padding: 8px 20px;
 		padding-top: calc(8px + env(safe-area-inset-top, 0px));
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
+		border-bottom: 1px solid var(--line);
+		background: var(--paper);
 		flex-shrink: 0;
 	}
 	.menu {
 		display: none;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		padding: 4px;
 		margin-left: -6px;
 		border-radius: 6px;
@@ -53,7 +53,7 @@
 		align-items: center;
 		gap: 6px;
 		min-width: 0;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.crumbs :global(.sep) {
 		flex-shrink: 0;
@@ -61,7 +61,7 @@
 	.crumb {
 		font-size: 12px;
 		letter-spacing: 0.06em;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -75,14 +75,14 @@
 		letter-spacing: 0;
 	}
 	.crumb.here {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.crumb.link {
 		text-transform: uppercase;
 		font-weight: 500;
 	}
 	.crumb.link:hover {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.right {
 		margin-left: auto;

@@ -153,8 +153,8 @@
 		flex-direction: column;
 		min-height: 0;
 		/* neutral lane (Linear-style) — status color lives only on the icon + header */
-		background: color-mix(in srgb, var(--bg-elev) 30%, var(--bg));
-		border: 1px solid var(--border);
+		background: color-mix(in srgb, var(--surface) 30%, var(--paper));
+		border: 1px solid var(--line);
 		border-radius: 12px;
 		padding: 8px 8px 4px;
 	}
@@ -167,12 +167,12 @@
 		font-weight: 500;
 	}
 	.col-name {
-		color: var(--text);
+		color: var(--ink);
 		font-size: 14px;
 		font-weight: 500;
 	}
 	.count {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 12.5px;
 	}
 	.col-head .spacer {
@@ -185,7 +185,7 @@
 		place-items: center;
 		background: none;
 		border: none;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		border-radius: 5px;
 		font-size: 14px;
 		line-height: 1;
@@ -196,8 +196,8 @@
 		opacity: 1;
 	}
 	.ch-btn:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.col-body {
 		display: flex;
@@ -222,16 +222,16 @@
 	.column:hover .col-body,
 	.col-body:hover,
 	.col-body:focus-within {
-		scrollbar-color: var(--border-strong) transparent;
+		scrollbar-color: var(--line-strong) transparent;
 	}
 	.column:hover .col-body::-webkit-scrollbar-thumb,
 	.col-body:hover::-webkit-scrollbar-thumb,
 	.col-body:focus-within::-webkit-scrollbar-thumb {
-		background: var(--border-strong);
+		background: var(--line-strong);
 		background-clip: padding-box;
 	}
 	.col-body::-webkit-scrollbar-thumb:hover {
-		background: var(--text-faint);
+		background: var(--ink-3);
 		background-clip: padding-box;
 	}
 	.card-wrap {
@@ -247,7 +247,7 @@
 		gap: 6px;
 		overflow-x: auto;
 		padding: 10px 12px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 		scrollbar-width: none;
 	}
 	.mtabs::-webkit-scrollbar {
@@ -258,21 +258,21 @@
 		align-items: center;
 		gap: 6px;
 		white-space: nowrap;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 20px;
 		padding: 6px 12px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		font-size: 13px;
 		font-weight: 500;
 	}
 	.mtab.on {
-		background: var(--bg-hover);
-		color: var(--text);
-		border-color: var(--border-strong);
+		background: var(--hover);
+		color: var(--ink);
+		border-color: var(--line-strong);
 	}
 	.mcount {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 12px;
 	}
 	.mlist {

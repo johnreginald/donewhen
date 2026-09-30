@@ -4,13 +4,21 @@ import { marked } from 'marked';
 let mermaidPromise;
 let mermaidCounter = 0;
 
+// The app is light-first; dark comes from an explicit data-theme on <html> or
+// the OS preference (see app.css). Mermaid is themed once, at first use.
+function prefersDark() {
+	const t = document.documentElement.dataset.theme;
+	if (t) return t === 'dark';
+	return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+}
+
 async function getMermaid() {
 	if (!mermaidPromise) {
 		mermaidPromise = import('mermaid')
 			.then((m) => {
 				m.default.initialize({
 					startOnLoad: false,
-					theme: 'dark',
+					theme: prefersDark() ? 'dark' : 'neutral',
 					securityLevel: 'strict',
 					fontFamily: 'inherit'
 				});

@@ -211,7 +211,7 @@
 	}
 	.section-toggle .chev {
 		display: inline-flex;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		transition: transform 0.15s;
 	}
 	.section-toggle .chev.open {
@@ -225,8 +225,8 @@
 	.sidebar {
 		width: 240px;
 		height: 100%;
-		background: var(--bg-elev);
-		border-right: 1px solid var(--border);
+		background: var(--surface);
+		border-right: 1px solid var(--line);
 		display: flex;
 		flex-direction: column;
 		padding: 12px 10px;
@@ -245,11 +245,11 @@
 		border: none;
 		background: none;
 		border-radius: 8px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		text-align: left;
 	}
 	.ws-btn:hover {
-		background: var(--bg-hover);
+		background: var(--hover);
 	}
 	.ws-text {
 		flex: 1;
@@ -261,7 +261,7 @@
 	.ws-name {
 		font-weight: 600;
 		font-size: 14px;
-		color: var(--text);
+		color: var(--ink);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -269,7 +269,7 @@
 	.ws-key {
 		font-family: var(--mono);
 		font-size: 10.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		letter-spacing: 0.04em;
 	}
 	.ws-menu {
@@ -278,10 +278,10 @@
 		left: 4px;
 		right: 4px;
 		z-index: 31;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 9px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;
 		flex-direction: column;
@@ -293,7 +293,7 @@
 		gap: 8px;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		text-align: left;
 		padding: 7px 8px;
 		border-radius: 6px;
@@ -302,17 +302,17 @@
 		text-decoration: none;
 	}
 	.ws-item:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.ws-item.on {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.ws-item-key {
 		font-family: var(--mono);
 		font-size: 10px;
-		color: var(--text-faint);
-		background: var(--bg);
+		color: var(--ink-3);
+		background: var(--paper);
 		border-radius: 4px;
 		padding: 2px 5px;
 		flex: none;
@@ -327,11 +327,11 @@
 		white-space: nowrap;
 	}
 	.ws-item.manage {
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--line);
 		margin-top: 3px;
 		padding-top: 8px;
 		font-size: 12.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.brand {
 		display: flex;
@@ -343,11 +343,11 @@
 		width: 26px;
 		height: 26px;
 		border-radius: 8px;
-		background: var(--accent-grad);
+		background: var(--accent);
 		color: white;
 		display: grid;
 		place-items: center;
-		font-family: var(--disp);
+		font-family: var(--font);
 		font-weight: 800;
 		box-shadow: 0 4px 14px var(--accent-soft);
 	}
@@ -358,7 +358,7 @@
 	kbd {
 		font-family: var(--mono);
 		font-size: 11px;
-		background: var(--bg-elev2);
+		background: var(--surface);
 		padding: 1px 5px;
 		border-radius: 4px;
 	}
@@ -372,7 +372,7 @@
 		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 6px 8px 2px;
 	}
 	.section-head {
@@ -388,20 +388,20 @@
 		border-radius: 5px;
 		border: none;
 		background: none;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 15px;
 		line-height: 1;
 		display: grid;
 		place-items: center;
 	}
 	.add-btn:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.ini {
 		text-transform: none;
 		font-size: 11px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		padding-top: 8px;
 	}
 	.ini-head {
@@ -418,18 +418,18 @@
 		background: none;
 		border: none;
 		text-align: left;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		font-size: 11.5px;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
 		padding: 9px 8px 4px;
 	}
 	.ini-toggle:hover {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.chev {
 		font-size: 9px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		transition: transform 0.15s ease;
 		flex: none;
 	}
@@ -447,15 +447,15 @@
 		margin-left: auto;
 		min-width: 18px;
 		text-align: center;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		font-size: 11px;
 		font-variant-numeric: tabular-nums;
-		background: var(--bg-elev2);
+		background: var(--surface);
 		border-radius: 9px;
 		padding: 1px 6px;
 	}
 	.ini-head:hover .ini-count {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.epic-row {
 		display: flex;
@@ -474,18 +474,18 @@
 	}
 	.epic-sub {
 		font-size: 13px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.epic-sub .epic-ic {
-		color: var(--accent2);
+		color: var(--accent);
 		opacity: 0.85;
 	}
 	.epic-sub:hover {
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.epic-sub.active {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.row-edit {
 		opacity: 0;
@@ -494,7 +494,7 @@
 		justify-content: center;
 		background: none;
 		border: none;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 4px 6px;
 		border-radius: 5px;
 		flex: none;
@@ -504,8 +504,8 @@
 		opacity: 1;
 	}
 	.row-edit:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.nav-item {
 		display: flex;
@@ -514,19 +514,19 @@
 		padding: 7px 8px;
 		border-radius: 6px;
 		font-size: 14.5px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		background: none;
 		border: none;
 		text-align: left;
 		width: 100%;
 	}
 	.nav-item:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.nav-item.active {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.badge {
 		margin-left: auto;
@@ -535,7 +535,7 @@
 		font-size: 11px;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
-		color: #fff;
+		color: var(--accent-ink);
 		background: var(--accent);
 		border-radius: 9px;
 		padding: 1px 6px;
@@ -546,18 +546,18 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		flex: none;
 	}
 	.nav-item.active .icon {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.kbd {
 		margin-left: auto;
 		font-family: var(--mono);
 		font-size: 10.5px;
-		color: var(--text-faint);
-		border: 1px solid var(--border-strong);
+		color: var(--ink-3);
+		border: 1px solid var(--line-strong);
 		border-radius: 4px;
 		padding: 0 4px;
 	}
@@ -565,7 +565,7 @@
 		margin-top: auto;
 		position: relative;
 		padding-top: 8px;
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--line);
 	}
 	.user {
 		display: flex;
@@ -574,22 +574,22 @@
 		width: 100%;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		padding: 5px 6px;
 		border-radius: 8px;
 		text-align: left;
 		font-size: 13px;
 	}
 	.user:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.avatar {
 		width: 24px;
 		height: 24px;
 		border-radius: 50%;
-		background: var(--accent-grad);
-		color: #fff;
+		background: var(--accent);
+		color: var(--accent-ink);
 		font-size: 10px;
 		font-weight: 600;
 		display: grid;
@@ -608,16 +608,16 @@
 		left: 0;
 		right: 0;
 		z-index: 31;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 9px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
 	}
 	.ws-item.danger {
-		color: #f87171;
+		color: var(--danger);
 	}
 </style>

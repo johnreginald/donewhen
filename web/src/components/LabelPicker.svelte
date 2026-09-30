@@ -90,14 +90,14 @@
 	}
 	/* The remove mark shows only on the label being pointed at. */
 	.lp-chip :global(.lp-x) {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		opacity: 0;
 		margin-left: -2px;
 	}
 	.lp-chip:hover :global(.lp-x),
 	.lp-chip:focus-visible :global(.lp-x) {
 		opacity: 1;
-		color: #f87171;
+		color: var(--danger);
 	}
 	.lp-add {
 		position: relative;
@@ -107,15 +107,15 @@
 		align-items: center;
 		gap: 5px;
 		background: none;
-		border: 1px dashed var(--border);
+		border: 1px dashed var(--line);
 		border-radius: 6px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 2px 8px;
 		font-size: 12.5px;
 	}
 	.lp-addbtn:hover {
-		color: var(--text);
-		border-color: var(--text-faint);
+		color: var(--ink);
+		border-color: var(--ink-3);
 	}
 	.lp-bd {
 		position: fixed;
@@ -128,10 +128,10 @@
 		left: 0;
 		z-index: 31;
 		width: 240px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 9px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		padding: 5px;
 		display: flex;
 		flex-direction: column;
@@ -142,10 +142,10 @@
 		align-items: center;
 		gap: 7px;
 		padding: 5px 8px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 	}
 	:global(.lp-tagic) {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		flex: none;
 	}
 	.lp-input {
@@ -153,7 +153,7 @@
 		background: transparent;
 		border: none;
 		outline: none;
-		color: var(--text);
+		color: var(--ink);
 		font-size: 13px;
 	}
 	.lp-list {
@@ -168,15 +168,15 @@
 		gap: 8px;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		text-align: left;
 		padding: 7px 8px;
 		border-radius: 6px;
 		font-size: 13px;
 	}
 	.lp-item:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.lp-dot {
 		width: 8px;
@@ -186,7 +186,7 @@
 	}
 	.lp-empty {
 		padding: 10px 8px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 12.5px;
 	}
 </style>

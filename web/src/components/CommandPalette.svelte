@@ -119,10 +119,10 @@
 		left: 50%;
 		transform: translateX(-50%);
 		width: min(560px, 92vw);
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 12px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		z-index: 61;
 		overflow: hidden;
 	}
@@ -130,7 +130,7 @@
 		width: 100%;
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 		padding: 16px 18px;
 		font-size: 16px;
 		outline: none;
@@ -148,18 +148,18 @@
 		text-align: left;
 		background: none;
 		border: none;
-		color: var(--text);
+		color: var(--ink);
 		padding: 9px 12px;
 		border-radius: 6px;
 		font-size: 13.5px;
 	}
 	.result.sel {
-		background: var(--bg-hover);
+		background: var(--hover);
 	}
 	.kind {
 		font-size: 10px;
 		text-transform: uppercase;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		width: 46px;
 		flex-shrink: 0;
 	}

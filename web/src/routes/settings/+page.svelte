@@ -311,9 +311,9 @@
 		margin-bottom: 20px;
 	}
 	section {
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: var(--r);
 		padding: 16px 18px;
 		margin-bottom: 16px;
 	}
@@ -325,7 +325,7 @@
 		font-size: 12px;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		margin: 18px 0 8px;
 		font-weight: 600;
 	}
@@ -346,8 +346,8 @@
 		gap: 8px;
 	}
 	.code {
-		background: var(--bg);
-		border: 1px solid var(--border);
+		background: var(--paper);
+		border: 1px solid var(--line);
 		border-radius: 6px;
 		padding: 10px;
 		font-family: var(--mono);
@@ -358,9 +358,9 @@
 	}
 	.secret {
 		margin-top: 12px;
-		background: var(--bg);
-		border: 1px solid var(--accent-dim);
-		border-radius: var(--radius);
+		background: var(--paper);
+		border: 1px solid var(--accent-soft);
+		border-radius: var(--r);
 		padding: 12px;
 	}
 	.toggle {
@@ -378,11 +378,11 @@
 		font-family: var(--mono);
 	}
 	.diag b {
-		color: var(--text);
+		color: var(--ink);
 		font-weight: 600;
 	}
 	.diag .err b {
-		color: var(--danger, #ff6b6b);
+		color: var(--danger);
 		word-break: break-word;
 	}
 	.tokens {
@@ -395,7 +395,7 @@
 		align-items: center;
 		gap: 12px;
 		padding: 8px 0;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 	}
 	.tokens li span:first-child {
 		flex: 1;

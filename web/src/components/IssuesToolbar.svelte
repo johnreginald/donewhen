@@ -46,15 +46,15 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 7px;
 		padding: 5px 10px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		width: min(260px, 100%);
 	}
 	.search:focus-within {
-		border-color: var(--border-strong);
+		border-color: var(--line-strong);
 	}
 	.search input {
 		background: none;
@@ -64,7 +64,7 @@
 		width: 100%;
 	}
 	.search input::placeholder {
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.spacer {
 		flex: 1;
@@ -72,8 +72,8 @@
 	.vtoggle {
 		display: flex;
 		gap: 2px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 2px;
 	}
@@ -84,14 +84,14 @@
 		padding: 4px 10px;
 		border-radius: 6px;
 		font-size: 12.5px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.vt:hover {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.vt.on {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	@media (max-width: 720px) {
 		.bar {

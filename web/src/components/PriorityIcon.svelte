@@ -9,11 +9,11 @@
 		4: [5, 5, 5]
 	};
 	const colors = {
-		0: 'var(--text-dim)',
-		1: '#f87171', // urgent — red
-		2: '#fb923c', // high — orange
-		3: '#f2c94c', // medium — yellow
-		4: '#6ea8fe' // low — blue
+		0: 'var(--ink-2)',
+		1: 'var(--danger)', // urgent — red
+		2: 'var(--ink)', // high
+		3: 'var(--ink-2)', // medium
+		4: 'var(--ink-3)' // low
 	};
 	const bars = $derived(heights[priority] ?? heights[0]);
 	const col = $derived(colors[priority] ?? colors[0]);
@@ -38,7 +38,7 @@
 	}
 	.bar {
 		width: 3px;
-		background: var(--pc, var(--text-dim));
+		background: var(--pc, var(--ink-2));
 		border-radius: 1px;
 	}
 </style>

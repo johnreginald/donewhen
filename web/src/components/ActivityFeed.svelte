@@ -90,23 +90,23 @@
 		top: 27px;
 		bottom: -4px;
 		width: 1px;
-		background: var(--border);
+		background: var(--line);
 	}
 	.act-ic {
 		width: 21px;
 		height: 21px;
 		border-radius: 50%;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border);
-		color: var(--text-dim);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		color: var(--ink-2);
 		display: grid;
 		place-items: center;
 		flex: none;
 		z-index: 1;
 	}
 	.act-ic.art {
-		color: var(--accent2);
-		border-color: color-mix(in srgb, var(--accent2) 40%, var(--border));
+		color: var(--accent);
+		border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 	}
 	.act-body {
 		flex: 1;
@@ -126,36 +126,36 @@
 	.act-key {
 		font-family: var(--mono);
 		font-size: 12px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		background: none;
 		border: none;
 		padding: 0;
 	}
 	.act-key:hover {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.act-actor {
 		font-weight: 500;
-		color: var(--text);
+		color: var(--ink);
 	}
 	.act-actor.ai {
-		color: var(--accent2);
+		color: var(--accent);
 	}
 	.act-verb {
-		color: var(--text-dim);
+		color: var(--ink-2);
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.act-sub {
 		font-size: 12px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.act-time {
 		font-size: 11.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		flex: none;
 		padding-top: 4px;
 	}

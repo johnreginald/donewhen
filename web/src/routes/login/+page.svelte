@@ -71,14 +71,14 @@
 	}
 	.card {
 		width: min(360px, 100%);
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 12px;
 		padding: 26px;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 	}
 	.brand {
 		display: flex;
@@ -90,11 +90,11 @@
 		width: 26px;
 		height: 26px;
 		border-radius: 8px;
-		background: var(--accent-grad);
-		color: #fff;
+		background: var(--accent);
+		color: var(--accent-ink);
 		display: grid;
 		place-items: center;
-		font-family: var(--disp);
+		font-family: var(--font);
 		font-weight: 800;
 		box-shadow: 0 4px 14px var(--accent-soft);
 	}
@@ -104,11 +104,11 @@
 	}
 	label {
 		font-size: 12px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		margin-top: 8px;
 	}
 	.error {
-		color: #fca5a5;
+		color: var(--danger);
 		font-size: 13px;
 		margin-top: 4px;
 	}

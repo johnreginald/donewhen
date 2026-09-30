@@ -162,7 +162,7 @@
 		align-items: baseline;
 		gap: 12px;
 		padding: 14px 20px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--line);
 		flex: none;
 	}
 	.ib-title {
@@ -187,7 +187,7 @@
 		font-size: 12px;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-weight: 600;
 		margin: 18px 0 10px;
 		display: flex;
@@ -195,18 +195,18 @@
 		gap: 8px;
 	}
 	.count {
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		color: var(--text-dim);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		color: var(--ink-2);
 		border-radius: 20px;
 		padding: 1px 8px;
 		font-size: 11px;
 		letter-spacing: 0;
 	}
 	.count.new {
-		background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+		background: color-mix(in srgb, var(--accent) 22%, var(--paper));
 		border-color: var(--accent);
-		color: var(--text);
+		color: var(--ink);
 	}
 	.cards {
 		display: flex;
@@ -217,13 +217,13 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 10px;
 		padding: 10px 12px;
 	}
 	.card:hover {
-		border-color: var(--border-strong);
+		border-color: var(--line-strong);
 	}
 	.card-main {
 		flex: 1;
@@ -245,13 +245,13 @@
 	}
 	.key {
 		font-size: 12.5px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		font-variant-numeric: tabular-nums;
 		flex: none;
 	}
 	.ttl {
 		font-size: 14px;
-		color: var(--text);
+		color: var(--ink);
 		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;
@@ -285,21 +285,21 @@
 		font-weight: 500;
 		padding: 6px 10px;
 		border-radius: 7px;
-		border: 1px solid var(--border);
-		background: var(--bg);
-		color: var(--text-dim);
+		border: 1px solid var(--line);
+		background: var(--paper);
+		color: var(--ink-2);
 	}
 	.act:hover {
-		color: var(--text);
-		border-color: var(--border-strong);
+		color: var(--ink);
+		border-color: var(--line-strong);
 	}
 	.act.approve:hover {
-		border-color: #4ade80;
-		color: #4ade80;
+		border-color: var(--st-done);
+		color: var(--st-done);
 	}
 	.act.bounce:hover {
-		border-color: #fb923c;
-		color: #fb923c;
+		border-color: var(--st-review);
+		color: var(--st-review);
 	}
 	.act:disabled {
 		opacity: 0.5;

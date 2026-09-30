@@ -130,11 +130,11 @@
 		padding: 0 20px;
 		font-size: 13px;
 		font-weight: 600;
-		color: var(--text);
+		color: var(--ink);
 		position: sticky;
 		top: 0;
-		background: var(--bg);
-		border-bottom: 1px solid var(--border);
+		background: var(--paper);
+		border-bottom: 1px solid var(--line);
 		z-index: 4;
 	}
 	.epic-head {
@@ -143,22 +143,22 @@
 		gap: 8px;
 		width: 100%;
 		height: 32px;
-		background: var(--bg);
+		background: var(--paper);
 		border: none;
 		text-align: left;
 		padding: 0 20px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		font-size: 12.5px;
 		position: sticky;
 		top: 38px;
 		z-index: 3;
 	}
 	.epic-head:hover {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.chev {
 		font-size: 9px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		transition: transform 0.15s ease;
 	}
 	.chev.open {
@@ -168,7 +168,7 @@
 		font-weight: 500;
 	}
 	.c {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 11.5px;
 		font-family: var(--mono);
 	}
@@ -179,27 +179,27 @@
 		width: 100%;
 		background: none;
 		border: none;
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--line);
 		text-align: left;
 		padding: 8px 20px 8px 40px;
-		color: var(--text);
+		color: var(--ink);
 		font-size: 13.5px;
 	}
 	.row:hover {
-		background: var(--bg-elev);
+		background: var(--surface);
 	}
 	.rkey {
 		font-family: var(--mono);
 		font-size: 12px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		flex: none;
 		width: 62px;
 	}
 	.epic-badge {
 		font-size: 10.5px;
 		font-family: var(--mono);
-		color: var(--accent2);
-		background: color-mix(in srgb, var(--accent2) 15%, transparent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		padding: 1px 6px;
 		border-radius: 10px;
 		flex: none;

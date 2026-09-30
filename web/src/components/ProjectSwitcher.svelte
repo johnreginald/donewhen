@@ -91,7 +91,7 @@
 		gap: 6px;
 		background: none;
 		border: none;
-		color: var(--text);
+		color: var(--ink);
 		font-size: 15px;
 		font-weight: 600;
 		padding: 4px 2px;
@@ -103,11 +103,11 @@
 		white-space: nowrap;
 	}
 	.psw :global(svg:first-child) {
-		color: var(--text-dim);
+		color: var(--ink-2);
 		flex: none;
 	}
 	.psw :global(svg:last-child) {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		flex: none;
 	}
 
@@ -123,8 +123,8 @@
 		right: 0;
 		bottom: 0;
 		z-index: 61;
-		background: var(--bg-elev);
-		border-top: 1px solid var(--border-strong);
+		background: var(--surface);
+		border-top: 1px solid var(--line-strong);
 		border-radius: 16px 16px 0 0;
 		padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
 		box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
@@ -144,7 +144,7 @@
 		width: 36px;
 		height: 4px;
 		border-radius: 2px;
-		background: var(--border-strong);
+		background: var(--line-strong);
 		margin: 4px auto 8px;
 	}
 	.sheet-h {
@@ -152,7 +152,7 @@
 		font-weight: 600;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 4px 12px 6px;
 	}
 	.scroll {
@@ -166,7 +166,7 @@
 		width: 100%;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		text-align: left;
 		padding: 12px;
 		border-radius: 10px;
@@ -177,7 +177,7 @@
 		font-size: 14.5px;
 	}
 	.item.epic :global(svg:first-child) {
-		color: var(--accent2);
+		color: var(--accent);
 	}
 	.item .nm {
 		flex: 1;
@@ -190,16 +190,16 @@
 		flex: none;
 	}
 	.item:active {
-		background: var(--bg-hover);
+		background: var(--hover);
 	}
 	.item.on {
-		color: var(--text);
+		color: var(--ink);
 	}
 	.item.on :global(svg:first-child) {
 		color: var(--accent);
 	}
 	.item.epic.on :global(svg:first-child) {
-		color: var(--accent2);
+		color: var(--accent);
 	}
 	.row {
 		display: flex;
@@ -216,7 +216,7 @@
 		height: 44px;
 		background: none;
 		border: none;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		flex: none;
 	}
 	.cx :global(svg) {

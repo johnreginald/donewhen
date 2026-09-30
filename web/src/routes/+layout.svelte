@@ -152,16 +152,16 @@
 		margin: 18vh auto;
 		padding: 0 20px;
 		text-align: center;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.empty-shell h1 {
 		font-size: 20px;
-		color: var(--text);
+		color: var(--ink);
 		margin-bottom: 10px;
 	}
 	.empty-shell pre {
-		background: var(--bg-elev2);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 10px 12px;
 		font-family: var(--mono);
@@ -193,7 +193,7 @@
 		display: grid;
 		place-items: center;
 		height: 100%;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.nav-backdrop {
 		display: none;
@@ -203,18 +203,18 @@
 		bottom: 20px;
 		left: 50%;
 		transform: translateX(-50%);
-		background: var(--bg-elev2);
-		border: 1px solid var(--border-strong);
-		color: var(--text);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
+		color: var(--ink);
 		padding: 10px 16px;
-		border-radius: var(--radius);
-		box-shadow: var(--shadow);
+		border-radius: var(--r);
+		box-shadow: var(--shadow-2);
 		z-index: 80;
 		font-size: 13px;
 	}
 	.toast.error {
-		border-color: #f87171;
-		color: #fca5a5;
+		border-color: var(--danger);
+		color: var(--danger);
 	}
 	.btabs {
 		display: none;
@@ -232,9 +232,9 @@
 			right: 0;
 			bottom: 0;
 			z-index: 46;
-			background: color-mix(in srgb, var(--bg) 92%, transparent);
+			background: color-mix(in srgb, var(--paper) 92%, transparent);
 			backdrop-filter: saturate(1.4) blur(10px);
-			border-top: 1px solid var(--border);
+			border-top: 1px solid var(--line);
 			padding-bottom: env(safe-area-inset-bottom, 0px);
 		}
 		.btab {
@@ -244,7 +244,7 @@
 			align-items: center;
 			gap: 3px;
 			padding: 8px 0 7px;
-			color: var(--text-faint);
+			color: var(--ink-3);
 			font-size: 10.5px;
 			font-weight: 500;
 		}

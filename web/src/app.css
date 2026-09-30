@@ -1,37 +1,131 @@
-:root {
-	/* Colors copied from Linear's live dark theme (lch → rgb) */
-	--bg: #0f1010;
-	--bg-elev: #191a1c;
-	--bg-elev2: #1e1f23;
-	--bg-hover: #232428;
-	--border: #202123;
-	--border-strong: #2c2d30;
-	--text: #eff0f1;
-	--text-dim: #949496;
-	--text-faint: #6b6c70;
-	--accent: #5e6ad2;
-	--accent2: #7c85e8;
-	--accent-soft: rgba(94, 106, 210, 0.16);
-	--accent-dim: #363a5c;
-	--accent-grad: linear-gradient(145deg, var(--accent), var(--accent2));
-	--radius: 8px;
-	--radius-lg: 10px;
-	--shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
-	--font:
-		'Inter Variable', 'Inter', -apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
-	--disp:
-		'Inter Variable', 'Inter', -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
-	--mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+/* Raenil design tokens — light-first, calm (PP-208).
+   Source of truth: Claude Design project "Raenil Design System" → tokens.css.
+   Warm paper neutrals, one ink-blue accent, state hues at equal
+   lightness/chroma. Dark is the same roles, re-valued: explicit
+   [data-theme='dark'] on <html>, or the OS preference unless the user chose
+   light. */
 
-	/* workflow state + priority hues */
-	--st-triage: #9aa0ab;
-	--st-backlog: #858b98;
-	--st-aligning: #a78bfa;
-	--st-ready: #4ea7fc;
-	--st-progress: #f2c94c;
-	--st-review: #fb923c;
-	--st-done: #4cb782;
-	--st-canceled: #6b7280;
+:root {
+	color-scheme: light;
+
+	/* surfaces */
+	--paper: oklch(0.985 0.004 85); /* app background */
+	--surface: oklch(0.997 0.002 85); /* cards, panels, inputs, menus */
+	--sunken: oklch(0.963 0.005 85); /* sidebar, board columns, code */
+	--hover: oklch(0.945 0.006 85);
+	--line: oklch(0.915 0.006 85);
+	--line-strong: oklch(0.86 0.008 85);
+
+	/* ink */
+	--ink: oklch(0.25 0.01 70); /* primary text */
+	--ink-2: oklch(0.46 0.01 70); /* secondary text */
+	--ink-3: oklch(0.53 0.008 70); /* meta, placeholders */
+
+	/* accent — ink blue, used sparingly */
+	--accent: oklch(0.5 0.1 255);
+	--accent-ink: oklch(0.99 0.004 85);
+	--accent-soft: oklch(0.94 0.025 255);
+	--focus: oklch(0.5 0.1 255 / 0.35);
+
+	/* workflow states — same L/C, hue varies */
+	--st-triage: oklch(0.62 0.02 70);
+	--st-backlog: oklch(0.62 0.02 70);
+	--st-aligning: oklch(0.58 0.11 300);
+	--st-ready: oklch(0.58 0.11 245);
+	--st-progress: oklch(0.635 0.12 75);
+	--st-blocked: oklch(0.58 0.14 25);
+	--st-review: oklch(0.62 0.13 50);
+	--st-done: oklch(0.58 0.11 150);
+	--st-canceled: oklch(0.625 0.01 70);
+
+	/* feedback */
+	--danger: oklch(0.54 0.15 25);
+	--danger-soft: oklch(0.95 0.03 25);
+	--ok-soft: oklch(0.95 0.03 150);
+
+	/* type */
+	--font: 'IBM Plex Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
+	--mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+	--serif: 'Newsreader', Georgia, serif; /* the record: issue titles, documents, comments */
+	--t-xs: 11px;
+	--t-sm: 12.5px;
+	--t-base: 14px;
+	--t-md: 15.5px;
+	--t-lg: 19px;
+	--t-xl: 26px;
+	--t-2xl: 34px;
+
+	/* space (4px grid) */
+	--s1: 4px;
+	--s2: 8px;
+	--s3: 12px;
+	--s4: 16px;
+	--s5: 20px;
+	--s6: 24px;
+	--s8: 32px;
+	--s10: 40px;
+
+	/* shape */
+	--r-sm: 5px;
+	--r: 8px;
+	--r-lg: 12px;
+	--shadow-1: 0 1px 2px oklch(0.3 0.02 70 / 0.06);
+	--shadow-2: 0 8px 28px oklch(0.3 0.02 70 / 0.12), 0 1px 2px oklch(0.3 0.02 70 / 0.06);
+
+	/* motion */
+	--ease: cubic-bezier(0.2, 0, 0, 1);
+	--dur: 140ms;
+}
+
+/* Dark: same roles re-valued, for an explicit choice or the OS preference. */
+:root[data-theme='dark'],
+[data-theme='dark'] {
+	color-scheme: dark;
+	--paper: oklch(0.2 0.006 70);
+	--surface: oklch(0.235 0.006 70);
+	--sunken: oklch(0.18 0.006 70);
+	--hover: oklch(0.27 0.007 70);
+	--line: oklch(0.29 0.007 70);
+	--line-strong: oklch(0.36 0.008 70);
+	--ink: oklch(0.93 0.006 85);
+	--ink-2: oklch(0.74 0.008 85);
+	--ink-3: oklch(0.625 0.008 85);
+	--accent: oklch(0.72 0.1 255);
+	--accent-ink: oklch(0.2 0.006 70);
+	--accent-soft: oklch(0.32 0.04 255);
+	--focus: oklch(0.72 0.1 255 / 0.4);
+	--danger: oklch(0.7 0.15 25);
+	--danger-soft: oklch(0.3 0.05 25);
+	--ok-soft: oklch(0.3 0.04 150);
+	--shadow-1: none;
+	--shadow-2: 0 12px 36px oklch(0 0 0 / 0.45);
+	/* Re-resolve inherited colours at the element that flips the theme: a
+	   value computed on an ancestor would otherwise stay light-mode ink. */
+	background-color: var(--paper);
+	color: var(--ink);
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--paper: oklch(0.2 0.006 70);
+		--surface: oklch(0.235 0.006 70);
+		--sunken: oklch(0.18 0.006 70);
+		--hover: oklch(0.27 0.007 70);
+		--line: oklch(0.29 0.007 70);
+		--line-strong: oklch(0.36 0.008 70);
+		--ink: oklch(0.93 0.006 85);
+		--ink-2: oklch(0.74 0.008 85);
+		--ink-3: oklch(0.625 0.008 85);
+		--accent: oklch(0.72 0.1 255);
+		--accent-ink: oklch(0.2 0.006 70);
+		--accent-soft: oklch(0.32 0.04 255);
+		--focus: oklch(0.72 0.1 255 / 0.4);
+		--danger: oklch(0.7 0.15 25);
+		--danger-soft: oklch(0.3 0.05 25);
+		--ok-soft: oklch(0.3 0.04 150);
+		--shadow-1: none;
+		--shadow-2: 0 12px 36px oklch(0 0 0 / 0.45);
+	}
 }
 
 * {
@@ -43,12 +137,11 @@ body {
 	margin: 0;
 	padding: 0;
 	height: 100%;
-	background: var(--bg);
-	color: var(--text);
+	background: var(--paper);
+	color: var(--ink);
 	font-family: var(--font);
 	font-size: 14px;
 	line-height: 1.5;
-	letter-spacing: -0.01em;
 	-webkit-font-smoothing: antialiased;
 	text-rendering: optimizeLegibility;
 	/* only damp vertical bounce — keep horizontal so the macOS two-finger
@@ -85,7 +178,7 @@ input,
 textarea,
 select {
 	font-family: inherit;
-	color: var(--text);
+	color: var(--ink);
 }
 
 ::-webkit-scrollbar {
@@ -93,13 +186,13 @@ select {
 	height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-	background: var(--border-strong);
+	background: var(--line-strong);
 	border-radius: 8px;
 	border: 2px solid transparent;
 	background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-	background: var(--text-faint);
+	background: var(--ink-3);
 	background-clip: padding-box;
 }
 ::-webkit-scrollbar-track {
@@ -107,7 +200,7 @@ select {
 }
 * {
 	scrollbar-width: thin;
-	scrollbar-color: var(--border-strong) transparent;
+	scrollbar-color: var(--line-strong) transparent;
 }
 
 /* shared building blocks */
@@ -115,23 +208,22 @@ select {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	background: var(--bg-elev2);
-	border: 1px solid var(--border);
-	color: var(--text);
+	background: var(--surface);
+	border: 1px solid var(--line);
+	color: var(--ink);
 	padding: 6px 12px;
-	border-radius: var(--radius);
+	border-radius: var(--r);
 	font-size: 13px;
 	transition: background 0.12s, border-color 0.12s, filter 0.12s;
 }
 .btn:hover {
-	background: var(--bg-hover);
-	border-color: var(--border-strong);
+	background: var(--hover);
+	border-color: var(--line-strong);
 }
 .btn.primary {
-	background: var(--accent-grad);
+	background: var(--accent);
 	border-color: transparent;
-	color: #fff;
-	box-shadow: 0 4px 14px var(--accent-soft);
+	color: var(--accent-ink);
 }
 .btn.primary:hover {
 	filter: brightness(1.08);
@@ -139,19 +231,19 @@ select {
 .btn.ghost {
 	background: transparent;
 	border-color: transparent;
-	color: var(--text-dim);
+	color: var(--ink-2);
 }
 .btn.ghost:hover {
-	background: var(--bg-hover);
-	color: var(--text);
+	background: var(--hover);
+	color: var(--ink);
 }
 .btn.danger {
 	background: transparent;
 	border-color: transparent;
-	color: #f87171;
+	color: var(--danger);
 }
 .btn.danger:hover {
-	background: color-mix(in srgb, #f87171 16%, transparent);
+	background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
 
 /* shared custom-dropdown chrome (Priority / Status / Epic menus) */
@@ -163,16 +255,16 @@ select {
 	align-items: center;
 	gap: 8px;
 	width: 100%;
-	background: var(--bg);
-	border: 1px solid var(--border);
+	background: var(--paper);
+	border: 1px solid var(--line);
 	border-radius: 7px;
-	color: var(--text);
+	color: var(--ink);
 	padding: 7px 9px;
 	font-size: 13.5px;
 	text-align: left;
 }
 .dd-btn:hover {
-	border-color: var(--border-strong);
+	border-color: var(--line-strong);
 }
 .dd-label {
 	flex: 1;
@@ -181,7 +273,7 @@ select {
 	white-space: nowrap;
 }
 .dd-chev {
-	color: var(--text-faint);
+	color: var(--ink-3);
 	flex: none;
 }
 .dd-bd {
@@ -196,10 +288,10 @@ select {
 	right: 0;
 	z-index: 31;
 	min-width: 180px;
-	background: var(--bg-elev);
-	border: 1px solid var(--border-strong);
+	background: var(--surface);
+	border: 1px solid var(--line-strong);
 	border-radius: 8px;
-	box-shadow: var(--shadow);
+	box-shadow: var(--shadow-2);
 	padding: 4px;
 	display: flex;
 	flex-direction: column;
@@ -212,18 +304,18 @@ select {
 	gap: 9px;
 	background: none;
 	border: none;
-	color: var(--text-dim);
+	color: var(--ink-2);
 	text-align: left;
 	padding: 7px 9px;
 	border-radius: 6px;
 	font-size: 13.5px;
 }
 .dd-item:hover {
-	background: var(--bg-hover);
-	color: var(--text);
+	background: var(--hover);
+	color: var(--ink);
 }
 .dd-item.on {
-	color: var(--text);
+	color: var(--ink);
 }
 
 .pill {
@@ -234,9 +326,9 @@ select {
 	border-radius: 20px;
 	font-size: 11px;
 	font-weight: 500;
-	color: var(--text-dim);
-	background: var(--bg-elev2);
-	border: 1px solid var(--border);
+	color: var(--ink-2);
+	background: var(--surface);
+	border: 1px solid var(--line);
 	white-space: nowrap;
 }
 .dot {
@@ -247,9 +339,9 @@ select {
 }
 
 .input {
-	background: var(--bg);
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	background: var(--paper);
+	border: 1px solid var(--line);
+	border-radius: var(--r);
 	padding: 8px 10px;
 	font-size: 14px;
 	width: 100%;
@@ -261,23 +353,23 @@ select {
 }
 
 .muted {
-	color: var(--text-dim);
+	color: var(--ink-2);
 }
 .faint {
-	color: var(--text-faint);
+	color: var(--ink-3);
 }
 
 .priority-1 {
-	color: #f87171;
+	color: var(--danger);
 }
 .priority-2 {
-	color: #fb923c;
+	color: var(--ink);
 }
 .priority-3 {
-	color: #facc15;
+	color: var(--ink-2);
 }
 .priority-4 {
-	color: #94a3b8;
+	color: var(--ink-3);
 }
 
 /* A page: its header bar, then a body that fills the rest and scrolls. */

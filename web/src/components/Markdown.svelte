@@ -37,16 +37,16 @@
 		line-height: 1.6;
 	}
 	.markdown :global(code) {
-		background: var(--bg-elev2);
+		background: var(--surface);
 		padding: 1px 5px;
 		border-radius: 4px;
 		font-family: var(--mono);
 		font-size: 0.9em;
 	}
 	.markdown :global(pre) {
-		background: var(--bg-elev2);
+		background: var(--surface);
 		padding: 12px;
-		border-radius: var(--radius);
+		border-radius: var(--r);
 		overflow-x: auto;
 	}
 	.markdown :global(pre code) {
@@ -57,16 +57,16 @@
 		color: var(--accent);
 	}
 	.markdown :global(blockquote) {
-		border-left: 3px solid var(--border-strong);
+		border-left: 3px solid var(--line-strong);
 		margin: 0.5em 0;
 		padding-left: 1em;
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.markdown :global(.mermaid-container) {
 		position: relative;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
-		border-radius: var(--radius);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: var(--r);
 		padding: 12px;
 		margin: 0.8em 0;
 	}
@@ -74,9 +74,9 @@
 		position: absolute;
 		top: 8px;
 		right: 8px;
-		background: var(--bg-elev2);
-		border: 1px solid var(--border);
-		color: var(--text-dim);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		color: var(--ink-2);
 		border-radius: 5px;
 		font-size: 11px;
 		padding: 2px 8px;
@@ -97,7 +97,7 @@
 	}
 	.markdown :global(th),
 	.markdown :global(td) {
-		border: 1px solid var(--border);
+		border: 1px solid var(--line);
 		padding: 5px 10px;
 	}
 </style>

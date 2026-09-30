@@ -86,7 +86,7 @@
 		align-items: center;
 		gap: 12px;
 		margin: 14px 0 4px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 11px;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
@@ -96,7 +96,7 @@
 		content: '';
 		flex: 1;
 		height: 1px;
-		background: var(--border);
+		background: var(--line);
 	}
 	.row {
 		display: flex;
@@ -105,14 +105,14 @@
 		width: 100%;
 		background: none;
 		border: none;
-		color: var(--text);
+		color: var(--ink);
 		padding: 7px 10px;
 		border-radius: 7px;
 		text-align: left;
 		font-size: 13.5px;
 	}
 	.row:hover {
-		background: var(--bg-hover);
+		background: var(--hover);
 	}
 	.title {
 		min-width: 0;
@@ -122,8 +122,8 @@
 	}
 	.epic {
 		font-size: 12px;
-		color: var(--text-faint);
-		border: 1px solid var(--border);
+		color: var(--ink-3);
+		border: 1px solid var(--line);
 		border-radius: 999px;
 		padding: 0 8px;
 		white-space: nowrap;
@@ -135,7 +135,7 @@
 		align-items: center;
 		gap: 12px;
 		flex-shrink: 0;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 12px;
 	}
 	.key {
@@ -147,7 +147,7 @@
 		text-align: right;
 	}
 	.empty {
-		color: var(--text-faint);
+		color: var(--ink-3);
 		padding: 40px 0;
 		text-align: center;
 	}

@@ -61,20 +61,20 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 8px;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		padding: 5px 11px;
 		font-size: 13px;
 	}
 	.lf-btn:hover {
-		color: var(--text);
-		border-color: var(--border-strong);
+		color: var(--ink);
+		border-color: var(--line-strong);
 	}
 	.lf-chip {
-		color: var(--text);
-		border-color: var(--border-strong);
+		color: var(--ink);
+		border-color: var(--line-strong);
 	}
 	.lf-dot {
 		width: 8px;
@@ -93,18 +93,18 @@
 		left: 0;
 		z-index: 41;
 		width: 220px;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
 		border-radius: 9px;
-		box-shadow: var(--shadow);
+		box-shadow: var(--shadow-2);
 		padding: 5px;
 	}
 	.lf-input {
 		width: 100%;
-		background: var(--bg);
-		border: 1px solid var(--border);
+		background: var(--paper);
+		border: 1px solid var(--line);
 		border-radius: 6px;
-		color: var(--text);
+		color: var(--ink);
 		padding: 6px 9px;
 		font-size: 13px;
 		outline: none;
@@ -122,19 +122,19 @@
 		gap: 8px;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--ink-2);
 		text-align: left;
 		padding: 7px 8px;
 		border-radius: 6px;
 		font-size: 13px;
 	}
 	.lf-item:hover {
-		background: var(--bg-hover);
-		color: var(--text);
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.lf-empty {
 		padding: 10px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-size: 12.5px;
 	}
 
@@ -160,7 +160,7 @@
 			width: auto;
 			z-index: 61;
 			border: none;
-			border-top: 1px solid var(--border-strong);
+			border-top: 1px solid var(--line-strong);
 			border-radius: 16px 16px 0 0;
 			padding: 12px 12px calc(14px + env(safe-area-inset-bottom, 0px));
 			box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);

@@ -16,9 +16,9 @@
 		font-size: 12.5px;
 		font-weight: 500;
 		line-height: 1.3;
-		color: var(--text);
-		background: var(--bg-elev2);
-		border: 1px solid var(--border);
+		color: var(--ink);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		white-space: nowrap;
 	}
 	.tdot {

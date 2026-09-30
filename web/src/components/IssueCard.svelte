@@ -84,8 +84,8 @@
 
 <style>
 	.card {
-		background: var(--bg-elev);
-		border: 1px solid var(--border);
+		background: var(--surface);
+		border: 1px solid var(--line);
 		border-radius: 8px;
 		padding: 11px 12px 10px;
 		display: flex;
@@ -95,8 +95,8 @@
 		transition: border-color 0.12s, background 0.12s, box-shadow 0.3s;
 	}
 	.card:hover {
-		border-color: var(--border-strong);
-		background: var(--bg-elev2);
+		border-color: var(--line-strong);
+		background: var(--surface);
 	}
 	.card.live {
 		border-color: var(--accent);
@@ -109,20 +109,20 @@
 	}
 	.key {
 		font-size: 12.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		font-family: var(--mono);
 		letter-spacing: -0.02em;
 	}
 	.nodoc {
 		font-size: 10px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		opacity: 0.6;
 	}
 	.epic {
 		font-size: 10.5px;
 		font-family: var(--mono);
-		color: var(--accent2);
-		background: color-mix(in srgb, var(--accent2) 15%, transparent);
+		color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		padding: 1px 6px;
 		border-radius: 10px;
 		letter-spacing: -0.02em;
@@ -134,18 +134,18 @@
 		width: 18px;
 		height: 18px;
 		border-radius: 50%;
-		border: 1.4px dashed var(--border-strong);
+		border: 1.4px dashed var(--line-strong);
 		flex: none;
 	}
 	.assignee.on {
 		border-style: solid;
-		background: linear-gradient(145deg, #4a4f64, #2a2f3d);
+		background: var(--line-strong);
 	}
 	.title {
 		font-size: 14px;
 		line-height: 1.45;
 		font-weight: 500;
-		color: var(--text);
+		color: var(--ink);
 		letter-spacing: -0.011em;
 	}
 	.meta {
@@ -164,26 +164,26 @@
 		font-size: 12.5px;
 		font-weight: 500;
 		line-height: 1.3;
-		color: color-mix(in srgb, var(--accent2) 55%, var(--text));
-		background: color-mix(in srgb, var(--accent2) 13%, var(--bg-elev));
-		border: 1px solid color-mix(in srgb, var(--accent2) 32%, var(--border));
+		color: color-mix(in srgb, var(--accent) 55%, var(--ink));
+		background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+		border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
 		white-space: nowrap;
 		cursor: pointer;
 	}
 	.epictag :global(svg) {
-		color: var(--accent2);
+		color: var(--accent);
 		flex: none;
 	}
 	.epictag:hover {
-		background: color-mix(in srgb, var(--accent2) 22%, var(--bg-elev));
-		border-color: var(--accent2);
+		background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+		border-color: var(--accent);
 	}
 	.foot {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		font-size: 12px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 		margin-top: 1px;
 		min-width: 0;
 	}
@@ -196,8 +196,8 @@
 		align-items: center;
 		gap: 3px;
 		font-size: 11px;
-		color: #fbbf24;
-		background: color-mix(in srgb, #fbbf24 12%, transparent);
+		color: var(--st-blocked);
+		background: color-mix(in srgb, var(--st-blocked) 12%, transparent);
 		border-radius: 5px;
 		padding: 1px 5px;
 		font-variant-numeric: tabular-nums;

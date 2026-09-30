@@ -86,12 +86,12 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: var(--text-dim);
-		border-bottom: 1px solid var(--border);
+		color: var(--ink-2);
+		border-bottom: 1px solid var(--line);
 	}
 	.n {
 		font-weight: 500;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.list {
 		flex: 1;
@@ -103,10 +103,10 @@
 		gap: 12px;
 	}
 	.c {
-		border: 1px solid var(--border);
+		border: 1px solid var(--line);
 		border-radius: 10px;
 		padding: 10px 12px;
-		background: var(--bg-elev);
+		background: var(--surface);
 	}
 	.meta {
 		display: flex;
@@ -117,13 +117,13 @@
 	}
 	.who {
 		font-weight: 600;
-		color: var(--text);
+		color: var(--ink);
 	}
 	.c.ai .who {
-		color: var(--text-dim);
+		color: var(--ink-2);
 	}
 	.when {
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.body {
 		font-size: 13.5px;
@@ -132,10 +132,10 @@
 	}
 	.empty {
 		font-size: 13px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 	.add {
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--line);
 		padding: 10px 16px 14px;
 		display: flex;
 		flex-direction: column;
@@ -155,6 +155,6 @@
 	}
 	.hint {
 		font-size: 11.5px;
-		color: var(--text-faint);
+		color: var(--ink-3);
 	}
 </style>
