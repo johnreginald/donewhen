@@ -3,26 +3,108 @@ and the sound (audio.py) read, so they cannot drift apart."""
 import json
 
 T = {
-    "dur": 48, "fps": 30,
-    "cuts": [0, 7, 16, 24, 34, 40, 48],                  # six scenes
-    # 1  hook
-    "titleWords": [0.4, 1.2, 2.0], "shrink": 3.3,
-    "bubbles": [round(3.6 + 1.7 * (i / 11) ** 1.2, 3) for i in range(12)],
-    "bubbleStart": 3.6, "askQ": 5.3,
-    # 2  track
-    "h2": 7.7, "cardIn": 8.5, "note": 9.4, "rows": [10.1, 10.7, 11.3], "termIn": 12.0, "pillProg": 12.5,
-    "term": [12.6, 13.6, 14.6, 15.4], "tick": [13.8, 15.6],
-    # 3  understand
-    "h3": 16.7, "docIn": 17.5, "diagram": [18.3, 19.1, 19.9, 20.7, 21.5],
-    "activity": [18.1, 19.0, 19.9, 20.8, 21.7], "chips": [18.9, 20.1, 21.3],
-    # 4  gate
-    "h4": 24.5, "cardIn4": 24.7, "chipAppr": 25.4, "hit": 26.5, "notYet": 25.9,
-    "tick3": 28.8, "open": 29.3, "pillReview": 29.7, "split": 30.1, "inboxIn": 30.8,
-    "key": 32.5, "approve": 32.65, "pillDone": 33.0, "count": 33.1,
-    # 5  check again
-    "h5": 34.7, "scrubIn": 35.0, "scrubGo": 35.5, "scrubEnd": 37.4, "untick": 37.7, "badge": 38.1,
-    # 6  logo
-    "logo": 40.3, "trail": [40.7, 41.1, 41.5], "dDraw": 41.7, "pass": 42.8, "word": 44.3, "tag": [45.3, 46.0, 46.7],
+    "dur": 39,
+    "fps": 30,
+    "cuts": [
+        0,
+        5.0,
+        12.0,
+        19.0,
+        27.0,
+        32.0,
+        39.0
+    ],
+    "titleStart": 0.2,
+    "titleGap": 0.045,
+    "shrink": 1.9,
+    "bubbleStart": 2.0,
+    "bubbles": [round(2.0 + 1.5 * (i / 13) ** 1.2, 3) for i in range(14)],
+    "askQ": 3.4,
+    "h2": 5.4,
+    "cardIn": 5.8,
+    "parts": [
+        6.1,
+        6.3,
+        6.5,
+        6.7
+    ],
+    "rows": [
+        7.0,
+        7.3,
+        7.6
+    ],
+    "orbit": 6.9,
+    "termIn": 8.2,
+    "pillProg": 8.6,
+    "term": [
+        8.7,
+        9.4,
+        10.1,
+        10.7
+    ],
+    "tick": [
+        9.6,
+        11.0
+    ],
+    "h3": 12.4,
+    "docIn": 12.8,
+    "diagram": [
+        13.4,
+        13.9,
+        14.4,
+        14.9,
+        15.4
+    ],
+    "activity": [
+        13.3,
+        13.9,
+        14.5,
+        15.1,
+        15.7
+    ],
+    "tags": [
+        13.8,
+        15.2,
+        16.6
+    ],
+    "h4": 19.4,
+    "cardIn4": 19.6,
+    "gateIn": 20.1,
+    "chipAppr": 20.3,
+    "hit": 21.4,
+    "notYet": 20.7,
+    "tick3": 22.9,
+    "open": 23.3,
+    "passChip": 23.5,
+    "split": 24.1,
+    "pillReview": 24.2,
+    "inboxIn": 24.5,
+    "key": 25.9,
+    "approve": 26.05,
+    "pillDone": 26.4,
+    "count": 26.5,
+    "h5": 27.4,
+    "scrubIn": 27.6,
+    "scrubGo": 28.0,
+    "scrubEnd": 29.9,
+    "untick": 30.2,
+    "badge": 30.6,
+    "logo": 32.2,
+    "trail": [
+        32.6,
+        32.9,
+        33.2
+    ],
+    "dDraw": 33.4,
+    "pass": 34.3,
+    "bloom": 35.2,
+    "word": 35.5,
+    "tag": [
+        36.2,
+        36.7,
+        37.2
+    ],
+    "url": 37.5
 }
 open("timeline.js", "w").write("window.T = " + json.dumps(T, indent=1) + ";\n")
 print("ok")
