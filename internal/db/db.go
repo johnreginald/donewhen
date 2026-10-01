@@ -6,11 +6,13 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/johnreginald/donewhen/internal/config"
 )
@@ -26,6 +28,7 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
 	cfg.MaxConns = 10
+	cfg.ConnConfig.OnNotice = logMigrationNotice
 
 	var pool *pgxpool.Pool
 	deadline := time.Now().Add(30 * time.Second)
@@ -43,6 +46,15 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 			return nil, fmt.Errorf("connect postgres: %w", err)
 		}
 		time.Sleep(time.Second)
+	}
+}
+
+// logMigrationNotice prints what a data-fixing migration reports with RAISE
+// NOTICE. Only lines that start with "migration " are shown: Postgres also sends
+// notices such as "relation already exists, skipping", which would be noise.
+func logMigrationNotice(_ *pgconn.PgConn, n *pgconn.Notice) {
+	if n != nil && strings.HasPrefix(n.Message, "migration ") {
+		log.Print(n.Message)
 	}
 }
 
