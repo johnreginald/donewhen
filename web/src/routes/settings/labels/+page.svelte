@@ -109,7 +109,7 @@
 	<section class="settings-panel">
 		<div class="settings-panel-h">Add a label</div>
 		<div class="settings-inline">
-			<select class="input settings-input-short" bind:value={newGroup}>
+			<select class="select settings-input-short" bind:value={newGroup}>
 				<option value="">(no group)</option>
 				{#each groupNames as g (g)}
 					<option value={g}>{g}</option>

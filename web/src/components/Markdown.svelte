@@ -74,7 +74,7 @@
 	.markdown :global(code) {
 		background: var(--sunken);
 		padding: 1.5px 5px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		font-family: var(--mono);
 		font-size: 0.86em;
 		color: var(--ink);
@@ -123,8 +123,8 @@
 		background: var(--surface);
 		border: 1px solid var(--line);
 		color: var(--ink-2);
-		border-radius: 5px;
-		font-size: 11px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-xs);
 		padding: 2px 8px;
 		font-family: var(--font);
 		cursor: pointer;
@@ -143,14 +143,14 @@
 	}
 	.markdown :global(.mermaid-error-msg) {
 		font-family: var(--font);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		font-weight: 600;
 		color: var(--danger);
 	}
 	.markdown :global(.mermaid-error-details) {
 		margin-top: 6px;
 		font-family: var(--font);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 	}
 	.markdown :global(.mermaid-error-details summary) {
@@ -174,11 +174,11 @@
 	.markdown :global(.mermaid-source) {
 		white-space: pre-wrap;
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 	.markdown :global(table) {
 		font-family: var(--font);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		border-collapse: collapse;
 		margin: 0.6em 0 1em;
 	}
@@ -198,6 +198,6 @@
 	}
 	.markdown :global(td code),
 	.markdown :global(th code) {
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 </style>

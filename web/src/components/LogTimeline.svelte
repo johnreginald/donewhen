@@ -147,7 +147,7 @@
 		gap: 10px;
 		padding: 18px 0 8px;
 		font-family: var(--mono);
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -174,7 +174,7 @@
 	}
 	.newdiv .lab {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		color: var(--accent);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -206,7 +206,7 @@
 		align-items: center;
 		justify-content: center;
 		flex: none;
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-2);
 		box-sizing: border-box;
 		z-index: 1;
@@ -229,11 +229,11 @@
 		align-items: baseline;
 		gap: 7px;
 		flex-wrap: wrap;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 	}
 	.ekey {
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		background: none;
 		border: none;
@@ -254,17 +254,17 @@
 	}
 	.everb.mono {
 		font-family: var(--mono);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink);
 	}
 	.etime {
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		flex: none;
 		padding-top: 4px;
 	}
 	.empty {
 		padding: 30px 0;
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 </style>

@@ -108,7 +108,7 @@
 		gap: 12px;
 		margin: 14px 0 4px;
 		color: var(--ink-3);
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		font-family: var(--mono);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
@@ -130,9 +130,9 @@
 		border: none;
 		color: var(--ink);
 		padding: 7px 10px;
-		border-radius: 7px;
+		border-radius: var(--r);
 		text-align: left;
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	.row:hover {
 		background: var(--hover);
@@ -155,7 +155,7 @@
 		overflow: hidden;
 	}
 	.epic {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		border: 1px solid var(--line);
 		border-radius: 999px;
@@ -170,11 +170,11 @@
 		gap: 12px;
 		flex-shrink: 0;
 		color: var(--ink-3);
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 	.key {
 		font-family: var(--mono);
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 	}
 	.when {
 		min-width: 56px;
@@ -198,17 +198,17 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--ink-3);
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.etitle {
 		margin: 0;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		font-weight: 600;
 		color: var(--ink);
 	}
 	.esub {
 		margin: 0;
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		max-width: 260px;
 		line-height: 1.45;
@@ -219,7 +219,7 @@
 		background: linear-gradient(90deg, var(--sunken) 25%, var(--hover) 37%, var(--sunken) 63%);
 		background-size: 400% 100%;
 		animation: skshim 1.6s ease infinite;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		display: inline-block;
 	}
 	@keyframes skshim {

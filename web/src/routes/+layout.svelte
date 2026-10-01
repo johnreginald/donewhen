@@ -204,17 +204,17 @@
 		color: var(--ink-2);
 	}
 	.empty-shell h1 {
-		font-size: 20px;
+		font-size: var(--t-lg);
 		color: var(--ink);
 		margin-bottom: 10px;
 	}
 	.empty-shell pre {
 		background: var(--surface);
 		border: 1px solid var(--line);
-		border-radius: 8px;
+		border-radius: var(--r);
 		padding: 10px 12px;
 		font-family: var(--mono);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		margin: 14px 0 18px;
 		overflow-x: auto;
 		text-align: left;
@@ -276,7 +276,7 @@
 			gap: 3px;
 			padding: 8px 0 7px;
 			color: var(--ink-3);
-			font-size: 10.5px;
+			font-size: var(--t-xs);
 			font-weight: 500;
 		}
 		.btab.on {
@@ -298,7 +298,7 @@
 			display: block;
 			position: fixed;
 			inset: 0;
-			background: rgba(0, 0, 0, 0.5);
+			background: oklch(0 0 0 / 0.5);
 			z-index: 45;
 		}
 	}

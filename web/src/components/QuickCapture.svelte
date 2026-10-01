@@ -112,7 +112,7 @@
 			<input
 				bind:this={titleEl}
 				bind:value={title}
-				class="qc-input"
+				class="input qc-input"
 				placeholder="Issue title"
 				maxlength="200"
 			/>
@@ -202,17 +202,17 @@
 	.qc-dot {
 		width: 9px;
 		height: 9px;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		background: var(--st-triage);
 		flex: none;
 	}
 	.qc-title {
 		font-weight: 600;
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.qc-dest {
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.qc-close {
@@ -222,7 +222,7 @@
 		color: var(--ink-3);
 		width: 24px;
 		height: 24px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -238,18 +238,9 @@
 		gap: 16px;
 	}
 	.qc-input {
-		width: 100%;
-		border: none;
-		outline: none;
-		background: none;
-		font-size: 19px;
+		font-size: var(--t-lg);
 		font-weight: 500;
-		color: var(--ink);
-		padding: 4px 0;
-		font-family: var(--font);
-	}
-	.qc-input::placeholder {
-		color: var(--ink-3);
+		padding: 8px 10px;
 	}
 	.qc-row {
 		display: flex;
@@ -268,7 +259,7 @@
 	}
 	.qc-field > span {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--ink-3);
@@ -287,7 +278,7 @@
 		border-radius: var(--r-sm);
 		border: 1px solid var(--line);
 		background: var(--surface);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 	}
 	.qc-pri-opt.on {
@@ -309,7 +300,7 @@
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		background: var(--surface);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 	}
 	.chip .dot {
@@ -332,7 +323,7 @@
 		margin-top: 6px;
 	}
 	.qc-hint {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.spacer {

@@ -144,11 +144,11 @@
 	}
 	.lh-title {
 		font-family: var(--serif);
-		font-size: 19px;
+		font-size: var(--t-lg);
 		color: var(--ink);
 	}
 	.lh-scope {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 	}
 	.seg {
@@ -162,8 +162,8 @@
 	.sg {
 		height: 26px;
 		padding: 0 12px;
-		border-radius: 5px;
-		font-size: 13px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 		background: none;
 		border: none;
@@ -188,7 +188,7 @@
 	}
 	.rh {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--ink-3);
@@ -208,7 +208,7 @@
 		border-radius: 999px;
 		border: 1px solid var(--line);
 		background: var(--surface);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 		box-sizing: border-box;
 		white-space: nowrap;
@@ -245,7 +245,7 @@
 		border: 1px solid var(--danger);
 		border-radius: var(--r);
 		color: var(--danger);
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 	.sk {
 		padding-top: 14px;
@@ -259,7 +259,7 @@
 		gap: 12px;
 	}
 	.skb {
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		background: var(--line);
 	}
 	.skb.ic {

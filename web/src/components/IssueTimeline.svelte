@@ -178,7 +178,7 @@
 		{/each}
 	</div>
 	<div class="add">
-		<textarea bind:value={draft} onkeydown={keydown} placeholder="Leave a comment…" rows="3"></textarea>
+		<textarea class="textarea" bind:value={draft} onkeydown={keydown} placeholder="Leave a comment…" rows="3"></textarea>
 		<div class="row">
 			<span class="hint">⌘↵ to send</span>
 			<button class="btn primary sm" onclick={send} disabled={!draft.trim() || sending}>Comment</button>
@@ -220,7 +220,7 @@
 	.seg button {
 		background: none;
 		border: none;
-		border-radius: calc(var(--r) - 2px);
+		border-radius: var(--r-sm);
 		padding: 3px 9px;
 		font-size: var(--t-xs);
 		color: var(--ink-2);
@@ -245,7 +245,7 @@
 	}
 	.c {
 		border: 1px solid var(--line);
-		border-radius: 10px;
+		border-radius: var(--r-lg);
 		padding: 10px 12px;
 		background: var(--surface);
 	}
@@ -325,21 +325,7 @@
 		gap: 6px;
 	}
 	textarea {
-		width: 100%;
-		resize: vertical;
 		min-height: 64px;
-		font: inherit;
-		font-size: var(--t-base);
-		background: var(--surface);
-		color: var(--ink);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
-		padding: 8px 10px;
-		outline: none;
-	}
-	textarea:focus {
-		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--focus);
 	}
 	.row {
 		display: flex;

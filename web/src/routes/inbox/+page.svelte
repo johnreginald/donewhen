@@ -467,13 +467,13 @@
 	.pagehead h1 {
 		font-family: var(--serif);
 		font-weight: 400;
-		font-size: 24px;
+		font-size: var(--t-xl);
 		margin: 2px 0 0;
 		letter-spacing: -0.01em;
 		color: var(--ink);
 	}
 	.pagehead .sub {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		margin: 2px 0 0;
 	}
 
@@ -482,7 +482,7 @@
 		align-items: center;
 		gap: 8px;
 		margin: 14px 0 7px;
-		font-size: 11px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--ink-3);
@@ -492,9 +492,9 @@
 		background: var(--sunken);
 		border: 1px solid var(--line);
 		color: var(--ink-2);
-		border-radius: 20px;
+		border-radius: var(--r-lg);
 		padding: 1px 8px;
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		letter-spacing: 0;
 		font-weight: 600;
 	}
@@ -513,7 +513,7 @@
 
 	.empty {
 		padding: 16px 4px 28px;
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 
 	.kbdbar {
@@ -523,7 +523,7 @@
 		margin-top: 16px;
 		padding-top: 8px;
 		border-top: 1px solid var(--line);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.kbdbar .grp {
@@ -533,11 +533,11 @@
 	}
 	.kbd {
 		font-family: var(--mono);
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		padding: 1px 5px;
 		border: 1px solid var(--line-strong);
 		border-bottom-width: 2px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		color: var(--ink-2);
 		background: var(--surface);
 	}
@@ -581,16 +581,16 @@
 		color: var(--ink);
 	}
 	.empty-wrap .s {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		max-width: 34ch;
 	}
 	.error-wrap .h {
-		font-size: 14.5px;
+		font-size: var(--t-base);
 		font-weight: 600;
 		color: var(--ink);
 	}
 	.error-wrap .s {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		max-width: 30ch;
 	}
 	.error-wrap .btn {
@@ -614,7 +614,7 @@
 	}
 	.skel-bar {
 		background: var(--sunken);
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		height: 9px;
 		position: relative;
 		overflow: hidden;

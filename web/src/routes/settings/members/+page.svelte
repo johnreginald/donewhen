@@ -123,7 +123,7 @@
 			<div class="settings-panel-h">Add a member</div>
 			<div class="settings-inline">
 				<input class="input" style="width:240px" placeholder="existing account email" bind:value={email} />
-				<select class="input settings-input-short" bind:value={role}>
+				<select class="select settings-input-short" bind:value={role}>
 					<option value="member">member</option>
 					<option value="admin">admin</option>
 					<option value="owner">owner</option>

@@ -405,7 +405,7 @@
 					{/if}
 
 					<textarea
-						class="title-input"
+						class="textarea title-input"
 						bind:value={titleDraft}
 						rows="1"
 						onblur={saveTitle}
@@ -454,7 +454,7 @@
 						{/if}
 
 						{#if editingDesc}
-							<textarea class="desc-area editing" bind:value={descDraft} onkeydown={descKeydown} use:autofocus></textarea>
+							<textarea class="textarea desc-area editing" bind:value={descDraft} onkeydown={descKeydown} use:autofocus></textarea>
 							<div class="edithint"><span class="kbd">Esc</span> to cancel · <span class="kbd">⌘</span><span class="kbd">↵</span> to save</div>
 						{:else if issue.descriptionMd}
 							<div class="prose"><Markdown source={issue.descriptionMd} /></div>
@@ -482,7 +482,7 @@
 							</div>
 						{/each}
 						<input
-							class="crit-add"
+							class="input crit-add"
 							bind:value={newCrit}
 							placeholder="Add acceptance criterion…"
 							onkeydown={(e) => e.key === 'Enter' && addCrit()}
@@ -614,7 +614,7 @@
 	.plabel {
 		width: 92px;
 		flex: none;
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -641,7 +641,7 @@
 		background: none;
 		padding: 5px 7px;
 		margin-left: -7px;
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 	.panel :global(.dd-btn:hover) {
 		background: var(--hover);
@@ -650,7 +650,7 @@
 		display: inline-flex;
 		align-items: center;
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--danger);
 		background: var(--danger-soft);
 		border-radius: 999px;
@@ -665,7 +665,7 @@
 		padding: 4px 0;
 	}
 	.subhead {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink);
 	}
 
@@ -696,7 +696,7 @@
 			border: 1px dashed var(--line-strong);
 			background: var(--surface);
 			color: var(--ink-2);
-			font-size: 13.5px;
+			font-size: var(--t-base);
 		}
 		.propsbtn .chev {
 			color: var(--ink-3);
@@ -727,7 +727,7 @@
 	.handle {
 		width: 36px;
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: var(--line-strong);
 		margin: 2px auto 12px;
 	}
@@ -737,14 +737,14 @@
 		margin-bottom: 8px;
 	}
 	.sheethead b {
-		font-size: 14px;
+		font-size: var(--t-base);
 		font-weight: 600;
 	}
 	.sheethead button {
 		background: none;
 		border: none;
 		color: var(--accent);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 	}
 	.sheetrows {
@@ -760,7 +760,7 @@
 		background: none;
 		border: none;
 		color: var(--ink-2);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		padding: 0;
 		text-align: left;
 		width: fit-content;
@@ -776,22 +776,29 @@
 		color: var(--ink-3);
 	}
 	.title-input {
-		width: 100%;
-		background: transparent;
-		border: none;
-		outline: none;
-		color: var(--ink);
 		font-family: var(--serif);
 		font-weight: 500;
 		font-size: var(--t-xl);
 		line-height: 1.3;
 		resize: none;
 		letter-spacing: -0.005em;
-		padding: 0;
+		padding: 4px 8px;
+		margin-left: -9px;
+		width: calc(100% + 18px);
 		field-sizing: content;
+		/* always-on heading editor: reads as plain text at rest, full .textarea border + ring on hover/focus */
+		background: transparent;
+		border-color: transparent;
+	}
+	.title-input:hover {
+		border-color: var(--line-strong);
+	}
+	.title-input:focus {
+		border-color: var(--accent);
+		background: var(--surface);
 	}
 	.rh {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--ink-3);
@@ -817,14 +824,14 @@
 		flex: 1;
 	}
 	.saved {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--st-done);
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
 	}
 	.failed {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--danger);
 		display: inline-flex;
 		align-items: center;
@@ -832,7 +839,7 @@
 	}
 	.retry-link {
 		color: var(--accent);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 		background: none;
 		border: none;
@@ -845,11 +852,11 @@
 		background: var(--accent-soft);
 		border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--line));
 		border-radius: var(--r);
-		font-size: 13.5px;
+		font-size: var(--t-base);
 	}
 	.bic {
 		color: var(--accent);
-		font-size: 15px;
+		font-size: var(--t-md);
 		flex: none;
 	}
 	.btext {
@@ -861,35 +868,26 @@
 		gap: 10px;
 	}
 	.desc-area {
-		width: 100%;
 		min-height: 160px;
-		background: var(--sunken);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
-		color: var(--ink);
 		padding: 11px 13px;
-		font-size: 14px;
 		font-family: var(--serif);
 		line-height: 1.6;
-		outline: none;
-		resize: vertical;
-		box-sizing: border-box;
 	}
 	.edithint {
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.edithint .kbd {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		padding: 1px 4px;
 		border: 1px solid var(--line-strong);
 		border-bottom-width: 2px;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		margin: 0 2px;
 	}
 	.prose {
-		font-size: 14.5px;
+		font-size: var(--t-base);
 		line-height: 1.65;
 		color: var(--ink);
 	}
@@ -902,7 +900,7 @@
 	}
 	.sub-bar {
 		height: 4px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		background: var(--line);
 		overflow: hidden;
 	}
@@ -921,13 +919,13 @@
 	.crit-box {
 		width: 18px;
 		height: 18px;
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		border: 1.5px solid var(--line-strong);
 		background: var(--paper);
 		color: var(--accent-ink);
 		display: grid;
 		place-items: center;
-		font-size: 11px;
+		font-size: var(--t-xs);
 		flex: none;
 		margin-top: 1px;
 	}
@@ -937,7 +935,7 @@
 	}
 	.crit-kind {
 		flex: none;
-		font-size: 10px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
 		color: var(--ink-3);
@@ -957,12 +955,12 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.crit-text {
 		flex: 1;
-		font-size: 14px;
+		font-size: var(--t-base);
 		line-height: 1.45;
 	}
 	.crit-text.done {
@@ -974,7 +972,7 @@
 		background: none;
 		border: none;
 		color: var(--ink-3);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		flex: none;
 	}
 	.crit:hover .crit-del {
@@ -984,24 +982,13 @@
 		color: var(--danger);
 	}
 	.crit-add {
-		width: 100%;
-		background: transparent;
-		border: none;
-		border-top: 1px dashed var(--line);
-		color: var(--ink);
-		padding: 9px 0 2px;
-		font-size: 13.5px;
-		outline: none;
-		margin-top: 4px;
-	}
-	.crit-add::placeholder {
-		color: var(--ink-3);
+		margin-top: 8px;
 	}
 	.dev-row {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		color: var(--ink-2);
 		padding: 3px 0;
 	}
@@ -1010,7 +997,7 @@
 	}
 	.dev-row .mono {
 		font-family: var(--mono);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 	}
 	.cmsg {
@@ -1026,10 +1013,10 @@
 		gap: 9px;
 		background: var(--surface);
 		border: 1px solid var(--line);
-		border-radius: 8px;
+		border-radius: var(--r);
 		padding: 9px 12px;
 		color: var(--ink);
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		text-align: left;
 	}
 	.sub-link:hover,
@@ -1038,7 +1025,7 @@
 	}
 	.sub-key {
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		flex: none;
 	}
@@ -1057,12 +1044,12 @@
 		color: var(--accent);
 	}
 	.dl-ai {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--accent);
 	}
 	.btn.sm {
 		padding: 5px 10px;
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	/* Local "secondary" button (surface + line-strong border) — the design's
 	   "sd" variant. Scoped here rather than added to the shared app.css. */
@@ -1105,7 +1092,7 @@
 			border: none;
 			border-bottom: 2px solid transparent;
 			color: var(--ink-2);
-			font-size: 13px;
+			font-size: var(--t-sm);
 			padding: 6px 10px;
 		}
 		.panes button.on {
@@ -1139,18 +1126,18 @@
 	}
 	.nf-code {
 		font-family: var(--mono);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		letter-spacing: 0.05em;
 	}
 	.nf-title {
 		font-family: var(--serif);
-		font-size: 22px;
+		font-size: var(--t-xl);
 		color: var(--ink);
 		margin: 2px 0 2px;
 	}
 	.nf-body {
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		color: var(--ink-2);
 		margin-bottom: 10px;
 	}
@@ -1166,7 +1153,7 @@
 	}
 	.sk {
 		display: block;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		background: linear-gradient(90deg, var(--hover) 25%, var(--sunken) 50%, var(--hover) 75%);
 		background-size: 200% 100%;
 		animation: sk-sweep 1.6s ease-in-out infinite;

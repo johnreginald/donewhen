@@ -55,7 +55,7 @@
 						bind:this={inputEl}
 						bind:value={query}
 						onkeydown={onKey}
-						class="lp-input"
+						class="input lp-input"
 						placeholder="Filter labels…"
 					/>
 				</div>
@@ -108,10 +108,10 @@
 		gap: 5px;
 		background: none;
 		border: 1px dashed var(--line);
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		color: var(--ink-3);
 		padding: 2px 8px;
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	.lp-addbtn:hover {
 		color: var(--ink);
@@ -130,7 +130,7 @@
 		width: 240px;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 9px;
+		border-radius: var(--r);
 		box-shadow: var(--shadow-2);
 		padding: 5px;
 		display: flex;
@@ -150,11 +150,8 @@
 	}
 	.lp-input {
 		flex: 1;
-		background: transparent;
-		border: none;
-		outline: none;
-		color: var(--ink);
-		font-size: 13px;
+		min-width: 0;
+		padding: 4px 8px;
 	}
 	.lp-list {
 		display: flex;
@@ -171,8 +168,8 @@
 		color: var(--ink-2);
 		text-align: left;
 		padding: 7px 8px;
-		border-radius: 6px;
-		font-size: 13px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 	}
 	.lp-item:hover {
 		background: var(--hover);
@@ -187,6 +184,6 @@
 	.lp-empty {
 		padding: 10px 8px;
 		color: var(--ink-3);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 </style>

@@ -154,11 +154,11 @@
 		align-items: center;
 		gap: 6px;
 		flex-wrap: wrap;
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 	.act-key {
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		background: none;
 		border: none;
@@ -177,14 +177,14 @@
 		text-overflow: ellipsis;
 	}
 	.act-sub {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.act-time {
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		flex: none;
 		padding-top: 2px;
@@ -194,7 +194,7 @@
 		align-items: center;
 		gap: 8px;
 		margin: 6px 0 2px;
-		font: 600 10px var(--mono);
+		font: 600 var(--t-xs) var(--mono);
 		color: var(--accent);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -207,6 +207,6 @@
 	}
 	.act-empty {
 		padding: 12px 0;
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 </style>

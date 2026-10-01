@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "check:ds": "node scripts/check-ds.mjs",
+    "build": "npm run check:ds && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {

@@ -358,7 +358,7 @@
 	}
 	.ws-name {
 		font-weight: 600;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		color: var(--ink);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -366,7 +366,7 @@
 	}
 	.ws-key {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		letter-spacing: 0.04em;
 	}
@@ -393,7 +393,7 @@
 		text-align: left;
 		padding: 7px 8px;
 		border-radius: var(--r-sm);
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		width: 100%;
 		text-decoration: none;
 	}
@@ -404,19 +404,19 @@
 	.logo {
 		width: 24px;
 		height: 24px;
-		border-radius: 7px;
+		border-radius: var(--r);
 		background: var(--ink);
 		color: var(--paper);
-		font: 600 11px/24px var(--mono);
+		font: 600 var(--t-xs)/24px var(--mono);
 		text-align: center;
 		flex: none;
 	}
 	kbd {
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		background: var(--surface);
 		padding: 1px 5px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 	}
 	.section {
 		display: flex;
@@ -426,7 +426,7 @@
 	}
 	.section-title {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--ink-3);
@@ -446,11 +446,11 @@
 	.add-btn {
 		width: 18px;
 		height: 18px;
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		border: none;
 		background: none;
 		color: var(--ink-3);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		line-height: 1;
 		display: grid;
 		place-items: center;
@@ -475,7 +475,7 @@
 		white-space: nowrap;
 	}
 	.epic-sub {
-		font-size: 13px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 	}
 	.epic-sub .epic-ic {
@@ -504,7 +504,7 @@
 		border: none;
 		color: var(--ink-3);
 		padding: 4px 6px;
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		flex: none;
 	}
 	.epic-row:hover .row-edit {
@@ -555,7 +555,7 @@
 		margin-left: auto;
 		min-width: 18px;
 		text-align: center;
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		color: var(--accent-ink);
@@ -587,10 +587,10 @@
 	.kbd {
 		margin-left: auto;
 		font-family: var(--mono);
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		border: 1px solid var(--line-strong);
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		padding: 0 4px;
 	}
 	.foot {
@@ -611,7 +611,7 @@
 		padding: 5px 6px;
 		border-radius: var(--r-sm);
 		text-align: left;
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 	.sidebar.collapsed .user {
 		justify-content: center;
@@ -625,7 +625,7 @@
 		border-radius: 50%;
 		background: var(--accent-soft);
 		color: var(--accent);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		font-weight: 600;
 		display: grid;
 		place-items: center;

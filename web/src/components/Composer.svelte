@@ -125,16 +125,16 @@
 		</div>
 
 		<div class="body">
-				<input bind:this={firstInput} bind:value={name} class="big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
-				<textarea bind:value={desc} class="desc" placeholder="Description (optional)"></textarea>
+				<input bind:this={firstInput} bind:value={name} class="input big" placeholder="{kind === 'project' ? 'Epic' : 'Project'} name" />
+				<textarea bind:value={desc} class="textarea desc" placeholder="Description (optional)"></textarea>
 				<label class="field wide">
 					<span>Repository {kind === 'project' ? '(overrides Project)' : '(default for its Epics)'}</span>
-					<input class="rin" bind:value={repoUrl} placeholder="https://github.com/org/repo" />
+					<input class="input rin" bind:value={repoUrl} placeholder="https://github.com/org/repo" />
 				</label>
 				{#if kind === 'project'}
 					<label class="field wide">
 						<span>Project</span>
-						<select bind:value={initiativeId}>
+						<select class="select" bind:value={initiativeId}>
 							<option value="">— None —</option>
 							{#each $initiatives as i (i.id)}
 								<option value={i.id}>{i.name}</option>
@@ -164,7 +164,7 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.45);
+		background: oklch(0 0 0 / 0.45);
 		z-index: 70;
 	}
 	.modal {
@@ -176,7 +176,7 @@
 		max-height: min(680px, 84vh);
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 14px;
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		z-index: 71;
 		display: flex;
@@ -191,7 +191,7 @@
 	.dot {
 		width: 9px;
 		height: 9px;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		background: var(--ink-3);
 	}
 	.dot.project {
@@ -199,7 +199,7 @@
 	}
 	.htitle {
 		font-weight: 600;
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.head .htitle:not(:first-child) {
 		font-weight: 500;
@@ -212,7 +212,7 @@
 		color: var(--ink-3);
 		display: inline-flex;
 		padding: 4px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 	}
 	.hclose:hover {
 		background: var(--hover);
@@ -230,35 +230,13 @@
 		gap: 14px;
 	}
 	.big {
-		width: 100%;
-		background: transparent;
-		border: none;
-		outline: none;
-		color: var(--ink);
-		font-size: 19px;
-		font-weight: 500;
-		padding: 4px 0;
-	}
-	.big::placeholder {
-		color: var(--ink-3);
+		font-size: var(--t-lg);
 		font-weight: 500;
 	}
 	.desc {
-		width: 100%;
 		flex: 1;
 		min-height: 150px;
 		resize: none;
-		background: transparent;
-		border: none;
-		color: var(--ink);
-		padding: 2px 0;
-		font-size: 14.5px;
-		line-height: 1.55;
-		font-family: inherit;
-		outline: none;
-	}
-	.desc::placeholder {
-		color: var(--ink-3);
 	}
 	.meta {
 		display: flex;
@@ -276,26 +254,9 @@
 		min-width: 100%;
 	}
 	.field span {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		color: var(--ink-3);
-	}
-	.field select,
-	.rin {
-		background: var(--paper);
-		border: 1px solid var(--line);
-		border-radius: 7px;
-		color: var(--ink);
-		padding: 7px 9px;
-		font-size: 13px;
-		outline: none;
-		font-family: inherit;
-	}
-	.rin:focus {
-		border-color: var(--line-strong);
-	}
-	.rin::placeholder {
 		color: var(--ink-3);
 	}
 	.labels {
@@ -307,9 +268,9 @@
 		padding: 2px;
 	}
 	.chip {
-		font-size: 13px;
+		font-size: var(--t-sm);
 		padding: 4px 11px;
-		border-radius: 7px;
+		border-radius: var(--r);
 		border: 1px solid var(--line);
 		background: var(--surface);
 		color: var(--ink);
@@ -338,7 +299,7 @@
 		border-top: 1px solid var(--line);
 	}
 	.hint {
-		font-size: 11px;
+		font-size: var(--t-xs);
 	}
 	.spacer {
 		flex: 1;

@@ -287,13 +287,13 @@
 	.cname-v {
 		writing-mode: vertical-rl;
 		transform: rotate(180deg);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 		color: var(--ink-2);
 		letter-spacing: 0.01em;
 	}
 	.cn {
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		font-family: var(--mono);
 	}
@@ -302,17 +302,17 @@
 		align-items: center;
 		gap: 7px;
 		padding: 2px 4px 8px;
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 	}
 	.col-name {
 		color: var(--ink);
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		font-weight: 500;
 	}
 	.count {
 		color: var(--ink-3);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		font-weight: 400;
 	}
 	.col-head .spacer {
@@ -331,7 +331,7 @@
 		background: none;
 		border: none;
 		color: var(--ink-3);
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		flex: none;
 	}
 	.ch-btn:hover {
@@ -357,7 +357,7 @@
 	}
 	.col-body::-webkit-scrollbar-thumb {
 		background: transparent;
-		border-radius: 8px;
+		border-radius: var(--r);
 		border: 2px solid transparent;
 		background-clip: padding-box;
 		transition: background 0.2s ease;
@@ -389,7 +389,7 @@
 		padding: 26px 8px;
 		text-align: center;
 		color: var(--ink-3);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		pointer-events: none;
 	}
 
@@ -424,7 +424,7 @@
 	.skel {
 		display: block;
 		background: var(--hover);
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.skel {
@@ -498,10 +498,10 @@
 		white-space: nowrap;
 		background: var(--surface);
 		border: 1px solid var(--line);
-		border-radius: 20px;
+		border-radius: var(--r-lg);
 		padding: 6px 12px;
 		color: var(--ink-2);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 	}
 	.mtab.on {
@@ -511,7 +511,7 @@
 	}
 	.mcount {
 		color: var(--ink-3);
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 	.mlist {
 		flex: 1;

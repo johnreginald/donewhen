@@ -139,7 +139,7 @@
 		color: var(--ink-2);
 		padding: 4px;
 		margin-left: -6px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 	}
 	.crumbs {
 		display: flex;
@@ -161,13 +161,13 @@
 		gap: 4px;
 		background: none;
 		border: none;
-		font-size: 12px;
+		font-size: var(--t-sm);
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 		color: var(--ink-3);
 		padding: 3px 4px;
 		margin: -3px -4px;
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		font-family: inherit;
 	}
 	.crumbbtn:hover {
@@ -178,7 +178,7 @@
 		opacity: 0.7;
 	}
 	.crumb {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		letter-spacing: 0.06em;
 		color: var(--ink-2);
 		white-space: nowrap;
@@ -189,7 +189,7 @@
 		text-transform: uppercase;
 	}
 	.crumb:not(.upper) {
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		letter-spacing: 0;
 	}
 	.crumb.here {
@@ -218,7 +218,7 @@
 	}
 	.ddsectitle {
 		font-family: var(--mono);
-		font-size: 9.5px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--ink-3);
@@ -230,7 +230,7 @@
 		gap: 8px;
 		padding: 7px 8px;
 		border-radius: var(--r-sm);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 		background: none;
 		border: none;
@@ -271,10 +271,10 @@
 	}
 	.new-issue .kbd {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		padding: 0 4px;
 		border: 1px solid oklch(1 0 0 / 0.35);
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		opacity: 0.9;
 	}
 	:global(.plus-ic) {
@@ -289,7 +289,7 @@
 		background: var(--sunken);
 		border-bottom: 1px solid var(--line);
 		color: var(--ink-2);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		flex: none;
 	}
 	.cbdot {

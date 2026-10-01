@@ -46,7 +46,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 10px;
-		font-size: 13px;
+		font-size: var(--t-sm);
 		box-shadow: var(--shadow-2);
 	}
 	.msg {
@@ -56,10 +56,10 @@
 		background: none;
 		border: 1px solid oklch(1 0 0 / 0.3);
 		color: var(--paper);
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		height: 22px;
 		padding: 0 9px;
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		flex: none;
 	}
 	.retry:hover {

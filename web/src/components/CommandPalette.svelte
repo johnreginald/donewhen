@@ -164,7 +164,7 @@
 				bind:this={inputEl}
 				bind:value={query}
 				onkeydown={onKey}
-				class="pal-input"
+				class="input pal-input"
 				role="combobox"
 				aria-expanded="true"
 				aria-controls="palette-listbox"
@@ -229,16 +229,7 @@
 		flex: none;
 	}
 	.pal-input {
-		border: none;
-		outline: none;
-		background: none;
-		font-size: 16px;
-		width: 100%;
-		font-family: var(--font);
-		color: var(--ink);
-	}
-	.pal-input::placeholder {
-		color: var(--ink-3);
+		font-size: var(--t-md);
 	}
 	.presults {
 		max-height: 340px;
@@ -256,14 +247,14 @@
 		color: var(--ink);
 		padding: 9px 12px;
 		border-radius: var(--r-sm);
-		font-size: 13.5px;
+		font-size: var(--t-base);
 	}
 	.pres.sel {
 		background: var(--accent-soft);
 	}
 	.pkind {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		color: var(--ink-3);
 		width: 44px;
@@ -283,16 +274,16 @@
 		padding: 44px 20px;
 		text-align: center;
 		color: var(--ink-3);
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		line-height: 1.6;
 	}
 	.pempty kbd {
 		font-family: var(--mono);
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		padding: 1px 5px;
 		border: 1px solid var(--line-strong);
 		border-bottom-width: 2px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		color: var(--ink-2);
 		background: var(--surface);
 	}

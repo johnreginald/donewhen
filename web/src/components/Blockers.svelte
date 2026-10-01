@@ -85,7 +85,7 @@
 	{#if which === 'blockedBy'}
 		<span class="add">
 			{#if adding}
-				<input bind:this={inputEl} bind:value={query} onkeydown={onKey} onblur={() => setTimeout(() => (adding = false), 150)}
+				<input class="input" bind:this={inputEl} bind:value={query} onkeydown={onKey} onblur={() => setTimeout(() => (adding = false), 150)}
 					placeholder="Ticket key or title…" />
 				{#if matches.length}
 					<div class="menu">
@@ -112,7 +112,7 @@
 		display: inline-flex;
 		align-items: center;
 		border: 1px solid color-mix(in srgb, var(--st-blocked) 40%, var(--line));
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		background: var(--surface);
 	}
 	.chip.review {
@@ -133,7 +133,7 @@
 	}
 	.k {
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 	.chip.done .k {
 		text-decoration: line-through;
@@ -156,7 +156,7 @@
 	}
 	.none {
 		color: var(--ink-3);
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 	.add {
 		position: relative;
@@ -167,23 +167,17 @@
 		gap: 4px;
 		background: none;
 		border: 1px dashed var(--line);
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		color: var(--ink-3);
 		padding: 2px 8px;
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	.addbtn:hover {
 		color: var(--ink);
 		border-color: var(--ink-3);
 	}
 	input {
-		background: var(--paper);
-		border: 1px solid var(--line-strong);
-		border-radius: 6px;
 		padding: 3px 8px;
-		font-size: 12.5px;
-		color: var(--ink);
-		outline: none;
 		width: 200px;
 	}
 	.menu {
@@ -194,7 +188,7 @@
 		width: 320px;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 8px;
+		border-radius: var(--r);
 		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;
@@ -208,8 +202,8 @@
 		border: none;
 		text-align: left;
 		padding: 6px 8px;
-		border-radius: 6px;
-		font-size: 12.5px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 		color: var(--ink);
 		overflow: hidden;
 		white-space: nowrap;

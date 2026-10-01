@@ -95,7 +95,7 @@
 	}
 	.sk-title {
 		font-weight: 600;
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.qc-close {
 		margin-left: auto;
@@ -104,7 +104,7 @@
 		color: var(--ink-3);
 		width: 24px;
 		height: 24px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -121,7 +121,7 @@
 	}
 	.sk-gtitle {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--ink-3);
@@ -139,16 +139,16 @@
 	}
 	.kbd {
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		padding: 2px 6px;
 		border: 1px solid var(--line-strong);
 		border-bottom-width: 2px;
-		border-radius: 5px;
+		border-radius: var(--r-sm);
 		color: var(--ink-2);
 		background: var(--surface);
 	}
 	.sk-desc {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 		margin-left: 4px;
 	}

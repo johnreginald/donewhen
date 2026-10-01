@@ -102,6 +102,7 @@
 		<div class="nr-bounce">
 			<label for="bounce-{item.id}">Reason (optional)</label>
 			<textarea
+				class="textarea"
 				id="bounce-{item.id}"
 				bind:this={textareaEl}
 				placeholder="What needs another pass?"
@@ -178,13 +179,13 @@
 	}
 	.k {
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		flex: none;
 	}
 	.ttl-btn {
 		font-family: var(--serif);
-		font-size: 17px;
+		font-size: var(--t-lg);
 		color: var(--ink);
 		white-space: nowrap;
 		overflow: hidden;
@@ -201,7 +202,7 @@
 		text-decoration: underline;
 	}
 	.time {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		flex: none;
 	}
@@ -210,7 +211,7 @@
 		align-items: center;
 		gap: 6px;
 		flex-wrap: wrap;
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-2);
 	}
 	.dot2 {
@@ -224,7 +225,7 @@
 	.nr-dw .bar {
 		width: 32px;
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: var(--sunken);
 		overflow: hidden;
 		display: inline-block;
@@ -253,7 +254,7 @@
 	}
 	.prose {
 		font-family: var(--serif);
-		font-size: 14px;
+		font-size: var(--t-base);
 		line-height: 1.6;
 		color: var(--ink-2);
 		margin: 0;
@@ -262,7 +263,7 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 9px;
-		font-size: 13px;
+		font-size: var(--t-sm);
 	}
 	.ck.done span {
 		color: var(--ink-3);
@@ -271,14 +272,14 @@
 	.box {
 		width: 15px;
 		height: 15px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		border: 1.5px solid var(--line-strong);
 		flex: none;
 		margin-top: 2px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 10px;
+		font-size: var(--t-xs);
 		font-weight: 700;
 		line-height: 1;
 		color: var(--accent-ink);
@@ -290,7 +291,7 @@
 		border-color: var(--accent);
 	}
 	.ck-loading {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	.nr-bounce {
 		display: flex;
@@ -300,29 +301,17 @@
 		border-top: 1px dashed var(--line);
 	}
 	.nr-bounce label {
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		font-weight: 600;
 	}
 	.nr-bounce textarea {
-		width: 100%;
 		min-height: 54px;
-		resize: vertical;
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r-sm);
-		background: var(--surface);
-		font: 13px var(--font);
-		color: var(--ink);
-		padding: 8px 10px;
-		box-sizing: border-box;
-	}
-	.nr-bounce textarea::placeholder {
-		color: var(--ink-3);
 	}
 	.help {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		margin-top: -2px;
 	}
@@ -342,7 +331,7 @@
 		flex: 1;
 	}
 	.nr-note {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.btn {

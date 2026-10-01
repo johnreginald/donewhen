@@ -12,8 +12,8 @@
 		align-items: center;
 		gap: 6px;
 		padding: 3px 9px;
-		border-radius: 6px;
-		font-size: 12.5px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 		font-weight: 500;
 		line-height: 1.3;
 		color: var(--ink);

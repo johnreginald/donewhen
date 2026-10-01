@@ -148,21 +148,27 @@
 		align-items: center;
 		gap: 7px;
 		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: 7px;
+		border: 1px solid var(--line-strong);
+		border-radius: var(--r);
 		padding: 5px 10px;
 		color: var(--ink-3);
 		width: min(260px, 100%);
+		transition:
+			border-color 0.12s,
+			box-shadow 0.12s;
 	}
+	/* the wrapper is the field: it shares the .input border and focus ring */
 	.search:focus-within {
-		border-color: var(--line-strong);
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--focus);
 	}
 	.search input {
 		background: none;
 		border: none;
 		outline: none;
-		font-size: 13px;
+		font-size: var(--t-base);
 		width: 100%;
+		color: var(--ink);
 	}
 	.search input::placeholder {
 		color: var(--ink-3);
@@ -173,8 +179,8 @@
 	.btn {
 		height: 30px;
 		padding: 0 11px;
-		border-radius: 8px;
-		font: 500 13px/1 var(--font);
+		border-radius: var(--r);
+		font: 500 var(--t-sm)/1 var(--font);
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
@@ -213,7 +219,7 @@
 		width: 200px;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 9px;
+		border-radius: var(--r);
 		box-shadow: var(--shadow-2);
 		padding: 5px;
 		display: flex;
@@ -222,7 +228,7 @@
 		overflow-y: auto;
 	}
 	.dd-head {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -237,8 +243,8 @@
 		color: var(--ink-2);
 		text-align: left;
 		padding: 7px 9px;
-		border-radius: 6px;
-		font-size: 13.5px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-base);
 	}
 	.dd-item:hover {
 		background: var(--hover);
@@ -254,7 +260,7 @@
 		gap: 2px;
 		background: var(--surface);
 		border: 1px solid var(--line);
-		border-radius: 8px;
+		border-radius: var(--r);
 		padding: 2px;
 	}
 	.vt {
@@ -262,8 +268,8 @@
 		align-items: center;
 		gap: 6px;
 		padding: 4px 10px;
-		border-radius: 6px;
-		font-size: 12.5px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 	}
 	.vt:hover {
@@ -288,7 +294,7 @@
 		border-radius: 999px;
 		background: var(--accent-soft);
 		color: var(--accent);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 		border: none;
 	}

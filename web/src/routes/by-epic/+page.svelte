@@ -301,7 +301,7 @@
 		align-items: center;
 		gap: 8px;
 		padding: 4px 20px 10px;
-		font: 600 11px var(--mono);
+		font: 600 var(--t-xs) var(--mono);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -332,14 +332,14 @@
 	}
 	.ehd .nm {
 		font-weight: 600;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.ehd .repo {
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		display: flex;
 		align-items: center;
@@ -353,7 +353,7 @@
 	.ehd .rg {
 		width: 8px;
 		height: 8px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		border: 1.4px solid currentColor;
 		flex: none;
 	}
@@ -362,7 +362,7 @@
 	}
 	.ehd .frac {
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		flex: none;
 	}
@@ -370,7 +370,7 @@
 		height: 4px;
 		background: var(--sunken);
 		margin: 0 14px 10px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		overflow: hidden;
 	}
 	.eprog i {
@@ -390,7 +390,7 @@
 		background: none;
 		color: var(--ink);
 		text-align: left;
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	.erow:hover {
 		background: var(--hover);
@@ -402,7 +402,7 @@
 	.erow .k {
 		font-family: var(--mono);
 		color: var(--ink-3);
-		font-size: 11px;
+		font-size: var(--t-xs);
 		width: 54px;
 		flex: none;
 	}
@@ -421,7 +421,7 @@
 		overflow: hidden;
 	}
 	.erow .d {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		flex: none;
 		width: 44px;
@@ -430,7 +430,7 @@
 	.eempty {
 		padding: 14px 32px;
 		color: var(--ink-3);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		border-top: 1px solid var(--line);
 	}
 
@@ -439,7 +439,7 @@
 		background: linear-gradient(90deg, var(--sunken) 25%, var(--hover) 37%, var(--sunken) 63%);
 		background-size: 400% 100%;
 		animation: skshim 1.6s ease infinite;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		display: inline-block;
 	}
 	@keyframes skshim {
@@ -479,17 +479,17 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--ink-3);
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.etitle {
 		margin: 0;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		font-weight: 600;
 		color: var(--ink);
 	}
 	.esub {
 		margin: 0;
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		max-width: 280px;
 		line-height: 1.45;
@@ -497,7 +497,7 @@
 
 	.chv {
 		display: inline-block;
-		font-size: 9px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		transition: transform var(--dur) var(--ease);
 		flex: none;
@@ -518,10 +518,10 @@
 		.ehd .nm {
 			flex: 1 1 calc(100% - 24px);
 			max-width: calc(100% - 24px);
-			font-size: 13px;
+			font-size: var(--t-sm);
 		}
 		.ehd .repo {
-			font-size: 10.5px;
+			font-size: var(--t-xs);
 			max-width: 60%;
 		}
 		.ehd .frac {

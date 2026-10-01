@@ -350,14 +350,14 @@
 		background: var(--surface);
 		border: 1px solid var(--line);
 		color: var(--ink);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 	}
 	.gsbtn:hover {
 		border-color: var(--line-strong);
 	}
 	.chev {
 		color: var(--ink-3);
-		font-size: 10px;
+		font-size: var(--t-xs);
 	}
 	.gsmenu {
 		position: absolute;
@@ -372,7 +372,7 @@
 		padding: 6px;
 	}
 	.gsh {
-		font: 600 10px var(--mono);
+		font: 600 var(--t-xs) var(--mono);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -385,8 +385,8 @@
 		width: 100%;
 		height: 27px;
 		padding: 0 8px;
-		border-radius: 6px;
-		font-size: 12.5px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 		color: var(--ink);
 		background: none;
 		border: none;
@@ -412,7 +412,7 @@
 		align-items: center;
 		height: 25px;
 		padding: 0 20px;
-		font: 600 10px var(--mono);
+		font: 600 var(--t-xs) var(--mono);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -436,7 +436,7 @@
 		background: var(--sunken);
 		border: none;
 		border-bottom: 1px solid var(--line);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		font-weight: 500;
 		color: var(--ink);
 		text-align: left;
@@ -446,7 +446,7 @@
 	}
 	.chv {
 		display: inline-block;
-		font-size: 9px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		transition: transform var(--dur) var(--ease);
 	}
@@ -460,7 +460,7 @@
 		color: var(--ink-3);
 		font-weight: 400;
 		font-family: var(--mono);
-		font-size: 11px;
+		font-size: var(--t-xs);
 	}
 	.lrow {
 		display: grid;
@@ -474,7 +474,7 @@
 		border-bottom: 1px solid var(--line);
 		background: none;
 		color: var(--ink);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		text-align: left;
 	}
 	.lrow:hover {
@@ -493,7 +493,7 @@
 	}
 	.k {
 		font-family: var(--mono);
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 	}
 	.t {
@@ -506,11 +506,11 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-2);
 	}
 	.d {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		text-align: right;
 		font-variant-numeric: tabular-nums;
@@ -533,12 +533,12 @@
 		border-radius: var(--r-sm);
 		background: var(--danger-soft);
 		color: var(--danger);
-		font: 500 10.5px var(--mono);
+		font: 500 var(--t-xs) var(--mono);
 	}
 	.cbx {
 		width: 14px;
 		height: 14px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		border: 1.5px solid var(--line-strong);
 		background: var(--surface);
 		display: inline-block;
@@ -556,7 +556,7 @@
 		background: linear-gradient(90deg, var(--sunken) 25%, var(--hover) 37%, var(--sunken) 63%);
 		background-size: 400% 100%;
 		animation: skshim 1.6s ease infinite;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		display: inline-block;
 	}
 	@keyframes skshim {
@@ -602,17 +602,17 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--ink-3);
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.etitle {
 		margin: 0;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		font-weight: 600;
 		color: var(--ink);
 	}
 	.esub {
 		margin: 0;
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		max-width: 260px;
 		line-height: 1.45;
@@ -634,7 +634,7 @@
 		border-radius: var(--r-lg);
 		padding: 7px 8px 7px 14px;
 		box-shadow: var(--shadow-2);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		z-index: 6;
 	}
 	.bulkbar b {
@@ -656,10 +656,10 @@
 		gap: 6px;
 		height: 26px;
 		padding: 0 10px;
-		border-radius: 7px;
+		border-radius: var(--r);
 		background: oklch(1 0 0 / 0.08);
 		color: var(--paper);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		border: none;
 		white-space: nowrap;
 	}
@@ -671,7 +671,7 @@
 		border: none;
 		color: var(--paper);
 		padding: 4px 6px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 	}
 	.bulkbar .x:hover {
 		background: oklch(1 0 0 / 0.16);
@@ -686,7 +686,7 @@
 		overflow-y: auto;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 8px;
+		border-radius: var(--r);
 		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;
@@ -700,8 +700,8 @@
 		border: none;
 		text-align: left;
 		padding: 7px 9px;
-		border-radius: 6px;
-		font-size: 12.5px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-sm);
 		color: var(--ink);
 	}
 	.bmenu button:hover {
@@ -709,7 +709,7 @@
 	}
 	.bnone {
 		padding: 7px 9px;
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 	}
 	.ldot {

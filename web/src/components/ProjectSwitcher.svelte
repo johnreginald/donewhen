@@ -92,7 +92,7 @@
 		background: none;
 		border: none;
 		color: var(--ink);
-		font-size: 15px;
+		font-size: var(--t-md);
 		font-weight: 600;
 		padding: 4px 2px;
 		max-width: 40vw;
@@ -115,7 +115,7 @@
 		position: fixed;
 		inset: 0;
 		z-index: 60;
-		background: rgba(0, 0, 0, 0.45);
+		background: oklch(0 0 0 / 0.45);
 	}
 	.sheet {
 		position: fixed;
@@ -125,9 +125,9 @@
 		z-index: 61;
 		background: var(--surface);
 		border-top: 1px solid var(--line-strong);
-		border-radius: 16px 16px 0 0;
+		border-radius: var(--r-lg) var(--r-lg) 0 0;
 		padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
-		box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.35);
+		box-shadow: 0 -8px 30px oklch(0 0 0 / 0.35);
 		animation: slideup 0.18s ease;
 	}
 	@keyframes slideup {
@@ -143,12 +143,12 @@
 	.grip {
 		width: 36px;
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: var(--line-strong);
 		margin: 4px auto 8px;
 	}
 	.sheet-h {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		font-weight: 600;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
@@ -169,12 +169,12 @@
 		color: var(--ink-2);
 		text-align: left;
 		padding: 12px;
-		border-radius: 10px;
-		font-size: 15.5px;
+		border-radius: var(--r-lg);
+		font-size: var(--t-md);
 	}
 	.item.epic {
 		padding-left: 26px;
-		font-size: 14.5px;
+		font-size: var(--t-base);
 	}
 	.item.epic :global(svg:first-child) {
 		color: var(--accent);

@@ -41,6 +41,7 @@
 	{#if replying}
 		<div class="bl-reply">
 			<textarea
+				class="textarea"
 				placeholder="Reply to {aiName}…"
 				value={replyText}
 				oninput={(e) => onReplyInput?.(e.target.value)}
@@ -98,13 +99,13 @@
 	}
 	.k {
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		flex: none;
 	}
 	.ttl-btn {
 		font-family: var(--serif);
-		font-size: 16px;
+		font-size: var(--t-md);
 		color: var(--ink);
 		flex: 1;
 		min-width: 0;
@@ -121,12 +122,12 @@
 		text-decoration: underline;
 	}
 	.time {
-		font-size: 11px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		flex: none;
 	}
 	.bl-meta {
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-2);
 		display: flex;
 		align-items: center;
@@ -148,7 +149,7 @@
 	}
 	.bl-reason {
 		font-family: var(--serif);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		line-height: 1.5;
 		color: var(--ink-2);
 		margin: 0;
@@ -162,7 +163,7 @@
 		font-family: var(--font);
 		font-weight: 600;
 		color: var(--ink);
-		font-size: 11px;
+		font-size: var(--t-xs);
 	}
 	.bl-actions {
 		display: flex;
@@ -210,19 +211,7 @@
 		border-top: 1px dashed var(--line);
 	}
 	.bl-reply textarea {
-		width: 100%;
 		min-height: 54px;
-		resize: vertical;
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r-sm);
-		background: var(--surface);
-		font: 13px var(--font);
-		color: var(--ink);
-		padding: 8px 10px;
-		box-sizing: border-box;
-	}
-	.bl-reply textarea::placeholder {
-		color: var(--ink-3);
 	}
 	.brow {
 		display: flex;

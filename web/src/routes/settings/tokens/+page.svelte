@@ -78,7 +78,7 @@
 		<div class="settings-panel-h">Create a token</div>
 		<div class="settings-inline">
 			<input class="input" style="width:200px" placeholder="token name (e.g. claude)" bind:value={name} />
-			<select class="input" style="width:170px" bind:value={wsPin}>
+			<select class="select" style="width:170px" bind:value={wsPin}>
 				<option value="">All workspaces</option>
 				{#each $workspaces as w (w.id)}
 					<option value={w.slug}>{w.name}</option>

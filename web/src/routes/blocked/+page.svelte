@@ -175,16 +175,24 @@
 		gap: 7px;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: var(--r-sm);
+		border-radius: var(--r);
 		padding: 5px 10px;
 		color: var(--ink-3);
 		width: min(220px, 100%);
+		transition:
+			border-color 0.12s,
+			box-shadow 0.12s;
+	}
+	/* the wrapper is the field: it shares the .input border and focus ring */
+	.search:focus-within {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--focus);
 	}
 	.search input {
 		background: none;
 		border: none;
 		outline: none;
-		font-size: 12.5px;
+		font-size: var(--t-base);
 		width: 100%;
 		color: var(--ink);
 	}
@@ -195,7 +203,7 @@
 		flex: 1;
 	}
 	.count {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		white-space: nowrap;
 	}
@@ -224,12 +232,12 @@
 	.btop .k {
 		font-family: var(--mono);
 		color: var(--ink-3);
-		font-size: 11.5px;
+		font-size: var(--t-xs);
 		flex: none;
 	}
 	.btop .t {
 		font-weight: 500;
-		font-size: 13px;
+		font-size: var(--t-sm);
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
@@ -238,7 +246,7 @@
 	}
 	.btop .age {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		color: var(--danger);
 		background: var(--danger-soft);
 		padding: 2px 7px;
@@ -260,14 +268,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font: 600 9px var(--font);
+		font: 600 var(--t-xs) var(--font);
 		flex: none;
 		margin-top: 1px;
 	}
 	.breason p {
 		margin: 0;
 		font-family: var(--serif);
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		line-height: 1.4;
 		color: var(--ink-2);
 		overflow: hidden;
@@ -283,7 +291,7 @@
 		flex-wrap: wrap;
 	}
 	.bfoot .wl {
-		font-size: 10px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -299,7 +307,7 @@
 		border-radius: var(--r-sm);
 		background: var(--sunken);
 		border: 1px solid var(--line);
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-2);
 	}
 	.wchip.done {
@@ -310,7 +318,7 @@
 		height: 26px;
 		padding: 0 10px;
 		border-radius: var(--r-sm);
-		font: 500 12px/1 var(--font);
+		font: 500 var(--t-sm)/1 var(--font);
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
@@ -343,7 +351,7 @@
 		background: linear-gradient(90deg, var(--sunken) 25%, var(--hover) 37%, var(--sunken) 63%);
 		background-size: 400% 100%;
 		animation: skshim 1.6s ease infinite;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		display: inline-block;
 	}
 	@keyframes skshim {
@@ -380,17 +388,17 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--ink-3);
-		font-size: 14px;
+		font-size: var(--t-base);
 	}
 	.etitle {
 		margin: 0;
-		font-size: 13.5px;
+		font-size: var(--t-base);
 		font-weight: 600;
 		color: var(--ink);
 	}
 	.esub {
 		margin: 0;
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		max-width: 260px;
 		line-height: 1.45;

@@ -26,10 +26,10 @@
 		justify-content: center;
 		width: 14px;
 		height: 14px;
-		border-radius: 3px;
+		border-radius: var(--r-sm);
 		background: var(--danger);
 		color: var(--surface);
-		font: 700 10px/14px var(--font);
+		font: 700 var(--t-xs)/14px var(--font);
 		flex: none;
 	}
 	.pri3 {
@@ -41,7 +41,7 @@
 	.pri3 i {
 		display: block;
 		width: 3px;
-		border-radius: 1px;
+		border-radius: var(--r-sm);
 		background: var(--line-strong);
 	}
 	.pri3 i.on {

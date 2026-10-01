@@ -103,7 +103,7 @@
 	.card {
 		background: var(--surface);
 		border: 1px solid var(--line);
-		border-radius: 8px;
+		border-radius: var(--r);
 		padding: 11px 12px 10px;
 		display: flex;
 		flex-direction: column;
@@ -131,35 +131,35 @@
 		gap: 7px;
 	}
 	.key {
-		font-size: 12.5px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		font-family: var(--mono);
 		letter-spacing: -0.02em;
 	}
 	.nodoc {
-		font-size: 10px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		opacity: 0.6;
 	}
 	.sub {
-		font-size: 10px;
+		font-size: var(--t-xs);
 		font-family: var(--mono);
 		color: var(--ink-3);
 		background: var(--hover);
 		padding: 1px 6px;
-		border-radius: 10px;
+		border-radius: var(--r-lg);
 		letter-spacing: -0.02em;
 	}
 	.spacer {
 		flex: 1;
 	}
 	.date {
-		font-size: 12px;
+		font-size: var(--t-sm);
 		color: var(--ink-3);
 		white-space: nowrap;
 	}
 	.title {
-		font-size: 14px;
+		font-size: var(--t-base);
 		line-height: 1.45;
 		font-weight: 500;
 		color: var(--ink);
@@ -173,7 +173,7 @@
 	.prog-bar {
 		flex: 1;
 		height: 4px;
-		border-radius: 2px;
+		border-radius: var(--r-sm);
 		background: var(--sunken);
 		overflow: hidden;
 	}
@@ -183,7 +183,7 @@
 		background: var(--st-done);
 	}
 	.prog-txt {
-		font-size: 10.5px;
+		font-size: var(--t-xs);
 		font-family: var(--mono);
 		color: var(--ink-3);
 		flex: none;
@@ -204,8 +204,8 @@
 		gap: 5px;
 		height: 20px;
 		padding: 0 8px 0 6px;
-		border-radius: 6px;
-		font-size: 11px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-xs);
 		font-weight: 500;
 		line-height: 1.3;
 		color: var(--accent);
@@ -223,10 +223,10 @@
 		gap: 5px;
 		height: 22px;
 		padding: 0 7px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		background: var(--danger-soft);
 		color: var(--danger);
-		font: 500 11px var(--mono);
+		font: 500 var(--t-xs) var(--mono);
 		white-space: nowrap;
 	}
 	.actor {
@@ -238,7 +238,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font: 600 8.5px var(--mono);
+		font: 600 var(--t-xs) var(--mono);
 		color: var(--ink-2);
 		box-sizing: border-box;
 	}

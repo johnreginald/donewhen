@@ -48,7 +48,7 @@
 		gap: 8px;
 		padding: 7px 8px;
 		border-radius: var(--r-sm);
-		font-size: 13px;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 		background: none;
 		border: none;
@@ -67,10 +67,10 @@
 	}
 	.k {
 		font-family: var(--mono);
-		font-size: 10px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		background: var(--sunken);
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		padding: 2px 5px;
 		min-width: 30px;
 		text-align: center;
@@ -84,7 +84,7 @@
 		white-space: nowrap;
 	}
 	.wsbadge {
-		font: 600 10px var(--font);
+		font: 600 var(--t-xs) var(--font);
 		background: var(--accent);
 		color: var(--accent-ink);
 		border-radius: 999px;
@@ -94,11 +94,11 @@
 	}
 	.wskbd {
 		font-family: var(--mono);
-		font-size: 9.5px;
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		border: 1px solid var(--line-strong);
 		border-bottom-width: 2px;
-		border-radius: 4px;
+		border-radius: var(--r-sm);
 		padding: 0 4px;
 		flex: none;
 	}
@@ -111,6 +111,6 @@
 		margin-top: 3px;
 		padding-top: 8px;
 		color: var(--ink-3);
-		font-size: 12px;
+		font-size: var(--t-sm);
 	}
 </style>
