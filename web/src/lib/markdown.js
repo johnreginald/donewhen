@@ -136,10 +136,74 @@ async function renderMermaidNow(root) {
 			container.append(actions, wrap, codeEl);
 			block.replaceWith(container);
 		} catch (e) {
-			block.innerHTML = `<code>mermaid error: ${escapeHtml(String(e))}</code>`;
+			// Never a blank space: a visible error box with the source open.
+			const box = document.createElement('div');
+			box.className = 'mermaid-error';
+			box.setAttribute('role', 'alert');
+			const msg = document.createElement('div');
+			msg.className = 'mermaid-error-msg';
+			msg.textContent = 'Diagram error: ' + errorSummary(e);
+			msg.title = errorDetail(e);
+			const det = document.createElement('details');
+			det.className = 'mermaid-error-details';
+			const sum = document.createElement('summary');
+			sum.textContent = 'details';
+			const detPre = document.createElement('pre');
+			detPre.textContent = errorDetail(e);
+			det.append(sum, detPre);
+			const codeEl = document.createElement('pre');
+			codeEl.className = 'mermaid-source';
+			codeEl.textContent = code;
+			box.append(msg, det, codeEl);
+			block.replaceWith(box);
 		} finally {
 			// A failed render leaves its error drawing at the end of the page.
 			document.getElementById('d' + id)?.remove();
 		}
 	}
+}
+
+// errorDetail is the full parser message.
+export function errorDetail(e) {
+	return String((e && e.message) || e || 'Unknown error').trim();
+}
+
+// errorSummary condenses a Mermaid parse error to one line: the line number
+// plus the cause, e.g. "Line 2: got 'GRAPH' (expecting 'SEMI', …)".
+export function errorSummary(e) {
+	const lines = errorDetail(e).split('\n').map((l) => l.trim()).filter(Boolean);
+	if (!lines.length) return 'Unknown error';
+	const first = lines[0];
+	const last = lines[lines.length - 1];
+	let out = first;
+	const m = first.match(/line (\d+)/i);
+	const g = last.match(/^(Expecting .*?),? got (.+)$/i);
+	if (m && g) out = `Line ${m[1]}: got ${g[2]} (${g[1].toLowerCase().replace(/^expecting/, 'expecting')})`;
+	else if (lines.length > 1) out = first.replace(/:$/, '') + ': ' + last;
+	return out.length > 140 ? out.slice(0, 139) + '…' : out;
+}
+
+// checkMermaid parses one diagram with the app's Mermaid. Browser only —
+// Mermaid needs a DOM.
+export function checkMermaid(source) {
+	const turn = queue.then(async () => {
+		try {
+			const mermaid = await getMermaid();
+			await mermaid.parse(source);
+			return { ok: true, error: '' };
+		} catch (e) {
+			return { ok: false, error: errorSummary(e), detail: errorDetail(e) };
+		}
+	});
+	queue = turn.catch(() => {});
+	return turn;
+}
+
+// mermaidBlocks lists the source of every ```mermaid fence in a document.
+export function mermaidBlocks(src) {
+	if (!src) return [];
+	return marked
+		.lexer(src)
+		.filter((t) => t.type === 'code' && t.lang === 'mermaid')
+		.map((t) => t.text);
 }

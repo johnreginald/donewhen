@@ -10,6 +10,7 @@
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
 	import { rel } from '$lib/format.js';
+	import { checkMermaid, mermaidBlocks } from '$lib/markdown.js';
 
 	const TYPES = {
 		change: { label: 'Change', icon: '⟳', color: 'var(--accent)' },
@@ -33,6 +34,27 @@
 	let missing = $state([]);
 	let showGaps = $state(true);
 
+	// ---- diagram errors ----
+	// Every mermaid block of every document, parsed in the browser.
+	let diag = $state({ running: false, total: 0, broken: [], done: false });
+	let diagSeq = 0;
+	async function checkDiagrams(list) {
+		const seq = ++diagSeq;
+		diag = { running: true, total: 0, broken: [], done: false };
+		let total = 0;
+		const broken = [];
+		for (const d of list) {
+			const blocks = mermaidBlocks(d.bodyMd);
+			for (let i = 0; i < blocks.length; i++) {
+				const r = await checkMermaid(blocks[i]);
+				if (seq !== diagSeq) return;
+				total++;
+				if (!r.ok) broken.push({ id: d.id, title: d.title, n: i + 1, of: blocks.length, error: r.error, detail: r.detail });
+			}
+		}
+		if (seq === diagSeq) diag = { running: false, total, broken, done: true };
+	}
+
 	let loadSeq = 0;
 	async function load() {
 		const seq = ++loadSeq;
@@ -42,6 +64,7 @@
 			const list = await api.documents();
 			if (seq !== loadSeq) return; // a newer load already landed — drop this stale response
 			docs = list || [];
+			return docs;
 		} catch (e) {
 			if (seq !== loadSeq) return;
 			docsError = e?.message || 'Failed to load documents.';
@@ -201,7 +224,7 @@
 	}
 
 	onMount(() => {
-		load();
+		load().then((list) => list && checkDiagrams(list));
 		refreshMissing();
 		return onLive((ev) => {
 			if (ev.type === 'document.saved' || ev.type === 'document.deleted') {
@@ -356,6 +379,30 @@
 				</div>
 			{/if}
 
+			{#if diag.running || diag.done}
+				<div class="dgs" class:bad={diag.broken.length}>
+					<div class="dgs-h">
+						<span class="dgs-t">Diagram errors{#if diag.done && diag.broken.length}<span class="n">{diag.broken.length}</span>{/if}</span>
+						<button class="btn ghost" disabled={diag.running} onclick={() => checkDiagrams(docs)}>
+							{diag.running ? 'Checking…' : 'Re-check'}
+						</button>
+					</div>
+					{#if diag.done && !diag.broken.length}
+						<div class="dgs-ok">All {diag.total} diagram{diag.total === 1 ? '' : 's'} render</div>
+					{:else if diag.broken.length}
+						<div class="gaps-list">
+							{#each diag.broken as b (b.id + ':' + b.n)}
+								<a class="dgs-item" href={`/artifacts?doc=${b.id}`}>
+									<span class="gaps-t">{b.title}</span>
+									<span class="dgs-n mono">diagram {b.n} of {b.of}</span>
+									<span class="dgs-e" title={b.detail}>{b.error}</span>
+								</a>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<div class="toolsrow">
 				<input class="inp" placeholder="Search documents…" bind:value={query} />
 				<div class="tchips">
@@ -441,6 +488,16 @@
 	.gaps-item .k { color: var(--ink-3); font-size: var(--t-xs); flex: none; width: 54px; }
 	.gaps-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+	.dgs { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 11px 14px; margin-bottom: 14px; flex: none; }
+	.dgs.bad { border-color: var(--danger); background: var(--danger-soft); }
+	.dgs-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+	.dgs-t { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
+	.dgs-t .n { font-family: var(--mono); font-weight: 500; color: var(--danger); font-size: 11px; }
+	.dgs-ok { font-size: var(--t-sm); color: var(--ink-2); }
+	.dgs-item { display: grid; grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.4fr); gap: 12px; align-items: center; padding: 5px 8px; border-radius: 6px; font-size: var(--t-sm); color: var(--ink-2); text-decoration: none; }
+	.dgs-item:hover { background: var(--hover); color: var(--ink); }
+	.dgs-n { color: var(--ink-3); font-size: var(--t-xs); }
+	.dgs-e { color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.toolsrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 13px; border-bottom: 1px solid var(--line); margin-bottom: 12px; flex: none; }
 	.inp { height: 30px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); font: var(--t-base) var(--font); color: var(--ink); box-sizing: border-box; width: 220px; outline: none; }
 	.inp:focus { border-color: var(--accent); }

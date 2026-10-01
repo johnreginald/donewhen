@@ -134,6 +134,36 @@
 		background: var(--hover);
 		color: var(--ink);
 	}
+	.markdown :global(.mermaid-error) {
+		background: var(--danger-soft);
+		border: 1px solid var(--danger);
+		border-radius: var(--r);
+		padding: 10px 12px;
+		margin: 0.8em 0;
+	}
+	.markdown :global(.mermaid-error-msg) {
+		font-family: var(--font);
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--danger);
+	}
+	.markdown :global(.mermaid-error-details) {
+		margin-top: 6px;
+		font-family: var(--font);
+		font-size: 12px;
+		color: var(--ink-2);
+	}
+	.markdown :global(.mermaid-error-details summary) {
+		cursor: pointer;
+	}
+	.markdown :global(.mermaid-error-details pre) {
+		margin: 6px 0 0;
+		white-space: pre-wrap;
+		font-family: var(--mono);
+	}
+	.markdown :global(.mermaid-error .mermaid-source) {
+		margin: 8px 0 0;
+	}
 	.markdown :global(.mermaid-rendered) {
 		cursor: zoom-in;
 	}
