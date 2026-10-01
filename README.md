@@ -9,15 +9,28 @@
 </p>
 <p align="center"><sub>A 39-second tour. <a href="docs/showreel/donewhen-showreel.mp4">Watch it with sound (MP4)</a> · <a href="docs/showreel/donewhen-showreel-vertical.mp4">vertical version (9:16)</a>.</sub></p>
 
-## What and why
+> **Hi, I'm Htet Wai Yan Soe.** I am an engineering leader and backend engineer with 14+ years in mobile financial services, marketplaces and consumer platforms. I am based in Chiang Mai, Thailand, and I work remotely. More about me: [burmese.dev](https://burmese.dev) · [LinkedIn](https://www.linkedin.com/in/johnthelinux/)
 
-AI agents build fast, but you cannot follow all of it. The chat is gone, and the commit says "fix".
+## Why I built this
+
+I built DoneWhen to solve my own engineering problem.
+
+I build backend systems with AI agents every day. The agents work at lightspeed, often overnight. By the morning I could not tell what they had built, why they built it, or whether it was really done. The chat was gone. The commits said "fix". And a task was "done" because the AI said so.
+
+I did not want to read every line of code. I wanted three things:
+- A record I can read in minutes.
+- A rule the AI cannot skip.
+- A human gate on quality.
+
+I could not find a tool that did this, so I built one and ran my own projects on it. Now it is open source.
+
+## What it does
 
 DoneWhen is the place where you track the AI's work. It has three jobs:
 
-- **Track.** Every task is a ticket with a short note and a done-when checklist. The AI ticks each item as it works. You see the progress on a board.
-- **Understand.** Boards, short notes and Mermaid diagrams show what was built and why. You do not read a long chat.
-- **Gate.** A ticket cannot move to In Review while an item is open. A human then reviews the quality and approves. The commits, the notes and the checklist stay, so you can check the work again later.
+- **Track.** Every task is a ticket. The agent writes it as a full spec, with a done-when checklist. The AI ticks each item as it works. You see the progress on a board.
+- **Understand.** Tickets, attached documents and Mermaid diagrams show what was built and why. You do not read a long chat.
+- **Gate.** A ticket cannot move to In Review while an item is open. A human then reviews the quality and approves. The commits, the specs and the checklist stay, so you can check the work again later.
 
 Read [docs/CONCEPTS.md](docs/CONCEPTS.md) for the full idea.
 
