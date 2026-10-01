@@ -40,7 +40,7 @@ cd web && npm run build
 node --test 'plugin/scripts/*.test.mjs'
 ```
 
-Also run `go vet ./...` and `gofmt -l .` (it must print nothing). CI runs the same checks.
+Also run `go vet ./...` and `gofmt -l .` (it must print nothing). There is no CI: run these checks before you open a PR.
 
 ## Design system
 
@@ -59,7 +59,7 @@ Use only the tokens defined in `web/src/app.css` (colours, spacing, radii, type)
 1. Push your branch to your fork and open a PR against `main`.
 2. Fill in the PR template.
 3. Keep the PR small and focused. Explain the why.
-4. CI must pass. A maintainer reviews every PR.
+4. Run the checks above first. A maintainer reviews every PR.
 
 ## Security issues
 
