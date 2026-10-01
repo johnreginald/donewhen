@@ -154,43 +154,19 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
+		// Validate the whole list before any write: a malformed items arg must
+		// never wipe or half-write the checklist.
+		items, err := criteriaItems(req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
 			return toolErr(err), nil
 		}
-		// Reconcile in place against the existing rows (ordered by position): update
-		// slot i, append new slots, delete the tail. Ticking one item off re-sends the
-		// same list, so its row is updated — id and created_at survive, no churn.
-		existing, _ := d.store.ListCriteria(ctx, wsID, is.ID)
-		items := criteriaItems(req)
-		out := []models.Criterion{}
-		for i, it := range items {
-			if i < len(existing) {
-				body, done, kind := it.text, it.done, it.kind
-				if kind == "" {
-					kind = models.CriterionManual
-				}
-				c, err := d.store.UpdateCriterion(ctx, wsID, existing[i].ID, &body, &done, &kind, it.check, nil)
-				if err != nil {
-					return toolErr(err), nil
-				}
-				out = append(out, c)
-				continue
-			}
-			c, err := d.store.AddCriterion(ctx, wsID, is.ID, it.text, it.kind, it.check)
-			if err != nil {
-				return toolErr(err), nil
-			}
-			if it.done {
-				done := true
-				if c, err = d.store.UpdateCriterion(ctx, wsID, c.ID, nil, &done, nil, nil, nil); err != nil {
-					return toolErr(err), nil
-				}
-			}
-			out = append(out, c)
-		}
-		for i := len(items); i < len(existing); i++ {
-			_ = d.store.DeleteCriterion(ctx, wsID, existing[i].ID)
+		out, err := d.store.ReplaceCriteria(ctx, wsID, is.ID, items)
+		if err != nil {
+			return toolErr(err), nil
 		}
 		return jsonResult(out)
 	})

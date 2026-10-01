@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // ---- commits ----
@@ -94,23 +94,9 @@ func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
 
 // ---- done-when criteria ----
 
-// validateCriterionSpec enforces the same rule as the DB constraint: anything
-// other than a manual criterion has to say how it gets verified.
+// validateCriterionSpec is the shared store rule; see store.ValidateCriterionSpec.
 func validateCriterionSpec(kind string, spec json.RawMessage) error {
-	switch kind {
-	case "", models.CriterionManual:
-		return nil
-	case models.CriterionDeterministic, models.CriterionPolicy, models.CriterionJudgment:
-		if len(spec) == 0 {
-			return fmt.Errorf("checkSpec required for kind %q", kind)
-		}
-		if !json.Valid(spec) {
-			return fmt.Errorf("checkSpec is not valid JSON")
-		}
-		return nil
-	default:
-		return fmt.Errorf("unknown criterion kind %q", kind)
-	}
+	return store.ValidateCriterionSpec(kind, spec)
 }
 
 func (s *Server) handleListCriteria(w http.ResponseWriter, r *http.Request) {

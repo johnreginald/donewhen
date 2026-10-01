@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -199,6 +200,119 @@ func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *stri
 		return c, ErrNotFound
 	}
 	return c, err
+}
+
+// ValidateCriterionSpec enforces the same rule as the DB constraint: anything
+// other than a manual criterion has to say how it gets verified.
+func ValidateCriterionSpec(kind string, spec json.RawMessage) error {
+	switch kind {
+	case "", models.CriterionManual:
+		return nil
+	case models.CriterionDeterministic, models.CriterionPolicy, models.CriterionJudgment:
+		if len(spec) == 0 {
+			return fmt.Errorf("checkSpec required for kind %q", kind)
+		}
+		if !json.Valid(spec) {
+			return fmt.Errorf("checkSpec is not valid JSON")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown criterion kind %q", kind)
+	}
+}
+
+// CriterionInput is one line of a checklist handed to ReplaceCriteria.
+type CriterionInput struct {
+	Body string
+	Done bool
+	Kind string // empty means manual
+	// Check is the raw JSON verification spec, nil for manual criteria.
+	Check json.RawMessage
+}
+
+// ReplaceCriteria makes an issue's checklist exactly items, in order. It runs in
+// one transaction with the issue row locked, so a failure leaves the stored list
+// untouched and a concurrent AddCriterion cannot race the positions. Existing
+// rows are reconciled in place (slot i is updated, extra slots appended, the
+// tail deleted), so ticking one item off re-sends the same list without churning
+// ids or created_at.
+func (s *Store) ReplaceCriteria(ctx context.Context, wsID, issueID string, items []CriterionInput) ([]models.Criterion, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var locked string
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM issues WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, issueID, wsID).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT `+criterionCols+` FROM issue_criteria c
+		WHERE c.issue_id=$1 ORDER BY c.position, c.created_at`, issueID)
+	if err != nil {
+		return nil, err
+	}
+	var existing []models.Criterion
+	for rows.Next() {
+		c, err := scanCriterion(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		existing = append(existing, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]models.Criterion, 0, len(items))
+	for i, it := range items {
+		kind := it.Kind
+		if kind == "" {
+			kind = models.CriterionManual
+		}
+		var spec []byte
+		if len(it.Check) > 0 {
+			spec = it.Check
+		}
+		var c models.Criterion
+		if i < len(existing) {
+			// Un-ticking drops the evidence, as UpdateCriterion does.
+			c, err = scanCriterion(tx.QueryRow(ctx, `
+				UPDATE issue_criteria c SET body=$2, done=$3, position=$4, kind=$5, check_spec=$6,
+					evidence_ref = CASE WHEN $3 THEN c.evidence_ref ELSE NULL END
+				WHERE c.id=$1
+				RETURNING `+criterionCols, existing[i].ID, it.Body, it.Done, i, kind, spec))
+		} else {
+			c, err = scanCriterion(tx.QueryRow(ctx, `
+				INSERT INTO issue_criteria (issue_id, body, done, position, kind, check_spec)
+				VALUES ($1,$2,$3,$4,$5,$6)
+				RETURNING `+strings.ReplaceAll(criterionCols, "c.", ""), issueID, it.Body, it.Done, i, kind, spec))
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	if len(existing) > len(items) {
+		stale := make([]string, 0, len(existing)-len(items))
+		for _, c := range existing[len(items):] {
+			stale = append(stale, c.ID)
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM issue_criteria WHERE id = ANY($1::uuid[])`, stale); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *Store) DeleteCriterion(ctx context.Context, wsID, id string) error {

@@ -298,52 +298,52 @@ func stringSlice(req mcp.CallToolRequest, key string) []string {
 	return out
 }
 
-// criterionItem is one done-when line parsed from a set_criteria request.
-type criterionItem struct {
-	text string
-	done bool
-	// kind is a models.Criterion* constant; empty means manual.
-	kind string
-	// check is the raw JSON verification spec, nil for manual criteria.
-	check json.RawMessage
-}
-
-// criteriaItems parses the "items" arg, accepting either objects {text, done}
-// or bare strings (treated as not-done). Blank text is skipped.
-func criteriaItems(req mcp.CallToolRequest) []criterionItem {
+// criteriaItems parses and validates the "items" arg for set_criteria, accepting
+// either objects {text, done, kind, check} or bare strings (treated as not-done).
+// The whole list is checked before anything is written; every error names the
+// offending index.
+func criteriaItems(req mcp.CallToolRequest) ([]store.CriterionInput, error) {
 	raw, ok := req.GetArguments()["items"]
 	if !ok || raw == nil {
-		return nil
+		return nil, fmt.Errorf("items required")
 	}
 	arr, ok := raw.([]any)
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("items must be an array")
 	}
-	out := make([]criterionItem, 0, len(arr))
-	for _, v := range arr {
+	if len(arr) == 0 {
+		return nil, fmt.Errorf("items must not be empty")
+	}
+	out := make([]store.CriterionInput, 0, len(arr))
+	for i, v := range arr {
+		var it store.CriterionInput
 		switch t := v.(type) {
 		case string:
-			if t != "" {
-				out = append(out, criterionItem{text: t})
-			}
+			it.Body = t
 		case map[string]any:
-			text, _ := t["text"].(string)
-			if text == "" {
-				continue
-			}
-			done, _ := t["done"].(bool)
-			kind, _ := t["kind"].(string)
+			it.Body, _ = t["text"].(string)
+			it.Done, _ = t["done"].(bool)
+			it.Kind, _ = t["kind"].(string)
 			// "check" arrives as decoded JSON; re-encode it for the jsonb column.
-			var check json.RawMessage
-			if raw, ok := t["check"]; ok && raw != nil {
-				if b, err := json.Marshal(raw); err == nil {
-					check = b
+			if c, ok := t["check"]; ok && c != nil {
+				b, err := json.Marshal(c)
+				if err != nil {
+					return nil, fmt.Errorf("items[%d]: check is not valid JSON", i)
 				}
+				it.Check = b
 			}
-			out = append(out, criterionItem{text: text, done: done, kind: kind, check: check})
+		default:
+			return nil, fmt.Errorf("items[%d]: must be an object or a string", i)
 		}
+		if strings.TrimSpace(it.Body) == "" {
+			return nil, fmt.Errorf("items[%d]: text required", i)
+		}
+		if err := store.ValidateCriterionSpec(it.Kind, it.Check); err != nil {
+			return nil, fmt.Errorf("items[%d]: %s", i, strings.Replace(err.Error(), "checkSpec", "check", 1))
+		}
+		out = append(out, it)
 	}
-	return out
+	return out, nil
 }
 
 // resolveIssueRef accepts a uuid or a human key (K-42) and returns the issue
