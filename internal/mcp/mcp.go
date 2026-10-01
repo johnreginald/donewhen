@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -501,58 +503,117 @@ func (d *deps) register(s *server.MCPServer) {
 
 	// ---- save_workspace ----
 	s.AddTool(mcp.NewTool("save_workspace",
-		mcp.WithDescription("Create a workspace (omit id) or rename/re-prefix the active one (pass id)."),
+		mcp.WithDescription("Create a workspace (omit id; browser session only, not available to API tokens) or rename/re-prefix one (pass id; owner/admin only, and a pinned token may only touch its own workspace)."),
 		mcp.WithString("id", mcp.Description("Workspace id to update; omit to create")),
 		mcp.WithString("name", mcp.Description("Display name")),
 		mcp.WithString("slug", mcp.Description("URL-safe handle; derived from the name when omitted")),
 		mcp.WithString("keyPrefix", mcp.Description("Issue key prefix for NEW issues, e.g. 'GLX'")),
 		mcp.WithString("aiName", mcp.Description("What the AI actor is called in this workspace (1–24 chars, default 'Clanker'); owner/admin only")),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		user, ok := auth.UserFrom(ctx)
-		if !ok {
-			u, err := d.store.FirstUser(ctx)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			user = u
-		}
-		id := req.GetString("id", "")
-		prefix := req.GetString("keyPrefix", "")
-		if prefix != "" {
-			if err := store.ValidatePrefix(prefix, d.store.ReservedPrefix()); err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-		}
-		if id == "" {
-			name := req.GetString("name", "")
-			if name == "" || prefix == "" {
-				return mcp.NewToolResultError("name and keyPrefix are required to create a workspace"), nil
-			}
-			ws, err := d.store.CreateWorkspace(ctx, name, req.GetString("slug", ""), prefix, user.ID)
-			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
-			}
-			return jsonResult(ws)
-		}
-		role, err := d.store.RoleIn(ctx, id, user.ID)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		aiName := strp(req.GetString("aiName", ""))
-		if aiName != nil && !models.CanAdmin(role) {
-			return mcp.NewToolResultError("changing the AI name requires workspace owner or admin"), nil
-		}
-		ws, err := d.store.UpdateWorkspace(ctx, id,
-			strp(req.GetString("name", "")), strp(req.GetString("slug", "")), strp(prefix), aiName)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		return jsonResult(ws)
-	})
+	), d.handleSaveWorkspace)
 
 	d.registerMeta(s)
 	d.registerContent(s)
 	d.registerDev(s)
+}
+
+// saveWorkspaceArg reads an optional string argument. A key that is present
+// but blank is an error rather than "not provided": the REST PATCH rejects the
+// same input, and silently ignoring it would let a client believe it renamed
+// something.
+func saveWorkspaceArg(req mcp.CallToolRequest, key string) (*string, error) {
+	raw, present := req.GetArguments()[key]
+	if !present || raw == nil {
+		return nil, nil
+	}
+	s, ok := raw.(string)
+	if !ok {
+		return nil, fmt.Errorf("%s must be a string", key)
+	}
+	if strings.TrimSpace(s) == "" {
+		return nil, fmt.Errorf("%s must not be empty", key)
+	}
+	return &s, nil
+}
+
+// handleSaveWorkspace mirrors the REST rules: creating a workspace is a
+// session-only action, and changing one needs owner/admin and a token that is
+// not pinned elsewhere.
+func (d *deps) handleSaveWorkspace(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	user, err := d.caller(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	name, err := saveWorkspaceArg(req, "name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	slug, err := saveWorkspaceArg(req, "slug")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	prefix, err := saveWorkspaceArg(req, "keyPrefix")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	aiName, err := saveWorkspaceArg(req, "aiName")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	id := req.GetString("id", "")
+	if id == "" {
+		if auth.IsBearer(ctx) {
+			return mcp.NewToolResultError("creating a workspace requires a browser session"), nil
+		}
+		if name == nil || prefix == nil {
+			return mcp.NewToolResultError("name and keyPrefix are required to create a workspace"), nil
+		}
+		slugIn := ""
+		if slug != nil {
+			slugIn = *slug
+		}
+		ws, err := d.store.CreateWorkspace(ctx, *name, slugIn, *prefix, user.ID)
+		if err != nil {
+			return toolErr(err), nil
+		}
+		return jsonResult(ws)
+	}
+
+	target, err := d.store.ResolveWorkspace(ctx, id)
+	if err != nil {
+		return toolErr(err), nil
+	}
+	if pin, pinned := auth.TokenPinFrom(ctx); pinned && pin != target.ID {
+		return mcp.NewToolResultError("token is pinned to another workspace"), nil
+	}
+	role, err := d.store.RoleIn(ctx, target.ID, user.ID)
+	if err != nil {
+		return toolErr(err), nil
+	}
+	if !models.CanAdmin(role) {
+		return mcp.NewToolResultError("admin role required"), nil
+	}
+	ws, err := d.store.UpdateWorkspace(ctx, target.ID, name, slug, prefix, aiName)
+	if err != nil {
+		return toolErr(err), nil
+	}
+	return jsonResult(ws)
+}
+
+// toolErr turns a store error into a tool result. Validation and conflict
+// messages are written for the caller; anything else is logged and replaced by
+// a plain message so driver detail never reaches a client.
+func toolErr(err error) *mcp.CallToolResult {
+	switch {
+	case errors.Is(err, store.ErrInvalid):
+		return mcp.NewToolResultError(strings.TrimPrefix(err.Error(), "invalid: "))
+	case errors.Is(err, store.ErrConflict):
+		return mcp.NewToolResultError(strings.TrimPrefix(err.Error(), "conflict: "))
+	case errors.Is(err, store.ErrNotMember), errors.Is(err, store.ErrNotFound):
+		return mcp.NewToolResultError(err.Error())
+	}
+	log.Printf("mcp: internal error: %v", err)
+	return mcp.NewToolResultError("internal error")
 }
 
 func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

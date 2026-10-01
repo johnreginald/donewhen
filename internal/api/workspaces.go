@@ -53,12 +53,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := auth.UserFrom(r.Context())
 	ws, err := s.store.CreateWorkspace(r.Context(), body.Name, body.Slug, body.KeyPrefix, u.ID)
-	if err != nil {
-		if isDuplicate(err) {
-			writeErr(w, http.StatusConflict, "a workspace with that slug or key prefix already exists")
-			return
-		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+	if handleStoreErr(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, ws)
@@ -88,14 +83,8 @@ func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	updated, err := s.store.UpdateWorkspace(r.Context(), active, body.Name, body.Slug, body.KeyPrefix, body.AIName)
-	if err != nil {
-		if isDuplicate(err) {
-			writeErr(w, http.StatusConflict, "a workspace with that slug or key prefix already exists")
-			return
-		}
-		if handleStoreErr(w, err) {
-			return
-		}
+	if handleStoreErr(w, err) {
+		return
 	}
 	writeJSON(w, 200, updated)
 }
@@ -165,10 +154,4 @@ func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "removed"})
-}
-
-// isDuplicate reports a unique-constraint collision, which for workspaces means
-// the slug or key prefix is taken.
-func isDuplicate(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "SQLSTATE 23505")
 }
