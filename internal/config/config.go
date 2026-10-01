@@ -26,6 +26,10 @@ type Config struct {
 // DevSessionSecret is the public fallback secret used only when Env is "dev".
 const DevSessionSecret = "dev-insecure-session-secret-do-not-use-in-prod"
 
+// ExampleSessionSecret is the placeholder in .env.example. It is public, so it
+// is rejected outside dev, like DevSessionSecret.
+const ExampleSessionSecret = "change-me-please-32-bytes-minimum-secret"
+
 // IsProd reports whether this is a production run. Only the exact value "dev"
 // is development; any other DONEWHEN_ENV (prod, production, a typo) counts as
 // prod, so a mistyped value fails safe instead of accepting the dev secret.
@@ -71,6 +75,9 @@ func Load() (Config, error) {
 	}
 	if c.IsProd() && c.SessionSecret == DevSessionSecret {
 		return c, fmt.Errorf("DONEWHEN_SESSION_SECRET must not be the public dev secret when DONEWHEN_ENV=%q (only \"dev\" may use it)", c.Env)
+	}
+	if c.IsProd() && c.SessionSecret == ExampleSessionSecret {
+		return c, fmt.Errorf("DONEWHEN_SESSION_SECRET is still the placeholder from .env.example; generate one with: openssl rand -hex 32")
 	}
 	if len(c.SessionSecret) < 16 {
 		return c, fmt.Errorf("DONEWHEN_SESSION_SECRET must be at least 16 bytes")

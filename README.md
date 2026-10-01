@@ -48,7 +48,7 @@ You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md
    openssl rand -hex 32
    ```
 
-   Also change `POSTGRES_PASSWORD`. If you do, change the password inside `DONEWHEN_DATABASE_URL` too (only the local, non-Docker use reads that line).
+   The placeholder secret from `.env.example` is rejected unless `DONEWHEN_ENV=dev`, so replace it. Also change `POSTGRES_PASSWORD`. If you do, change the password inside `DONEWHEN_DATABASE_URL` too (only the local, non-Docker use reads that line).
 
 4. For a local try-out, set the public URL to the port that Compose publishes:
 
@@ -185,10 +185,12 @@ Set these in `.env` (Compose) or in the environment. The project was called Raen
 | `DONEWHEN_ENV` | `dev` (Compose: `prod`) | `dev` or `prod`. `prod` needs a session secret and always sets Secure cookies (HTTPS). |
 | `DONEWHEN_SESSION_SECRET` | none | Secret for sessions. At least 16 characters. Required in `prod`. Generate with `openssl rand -hex 32`. |
 | `DONEWHEN_ISSUE_PREFIX` | `R` | Key prefix of the legacy default workspace. New workspaces choose their own prefix. |
-| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header your proxy sets to the real client IP. Used for login rate limiting. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#trusted-proxy-header). |
+| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header your proxy sets to the real client IP. Used for login rate limiting. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#4-trusted-proxy-header). |
 | `DONEWHEN_VAPID_PUBLIC` | empty | Web Push public key. Push is off if this or the private key is empty. |
 | `DONEWHEN_VAPID_PRIVATE` | empty | Web Push private key. Make a pair with `donewhen genvapid`. |
 | `DONEWHEN_VAPID_SUBJECT` | `mailto:admin@localhost` | Contact for push services. Use `mailto:you@example.com`. |
+| `DONEWHEN_DEMO` | empty | Compose passes it through. `1` seeds the Demo workspace at start, once a user exists. |
+| `DONEWHEN_BACKUP_CONFIRMED` | empty | Names of destructive migrations you have backed up for, comma-separated. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#migration-safety). |
 | `DONEWHEN_HOST_PORT` | `8090` | Compose only. Host port on `127.0.0.1` for the app. |
 | `DONEWHEN_SITE_ADDRESS` | `:80` | Compose only. Domain for the bundled Caddy (`edge` profile). |
 | `POSTGRES_USER` | `donewhen` | Compose only. Database user. |
@@ -206,7 +208,9 @@ git pull
 docker compose up -d --build
 ```
 
-Migrations run when the app starts. Back up first.
+Migrations run when the app starts. Back up first. If a destructive migration is pending, the app refuses to start and tells you what to do. See [Migration safety](docs/SELF-HOSTING.md#migration-safety).
+
+Upgrading from before the rename to DoneWhen? The Compose service was called `raenil`, so run `docker compose up -d --build --remove-orphans`. The old container holds the port until you do. Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` at `raenil` in `.env`.
 
 Back up the database:
 
@@ -214,13 +218,18 @@ Back up the database:
 docker compose exec -T db pg_dump -U donewhen donewhen | gzip > donewhen-$(date +%Y%m%d-%H%M%S).sql.gz
 ```
 
-Or run `make backup`, which writes to `./backups`.
+Or run `make backup`, which writes to `./backups` and uses your `POSTGRES_USER` and `POSTGRES_DB`. `make` picks Podman when it is installed. To force Docker, run `make backup COMPOSE="docker compose"`.
 
-Restore into an empty database:
+Restore on a new machine or an empty `data/pg`. Start only the database, load the dump, then start the app:
 
 ```bash
+docker compose up -d db
+# wait until `docker compose ps db` says healthy (about 20 seconds on a first start)
 gunzip -c donewhen-YYYYMMDD-HHMMSS.sql.gz | docker compose exec -T db psql -U donewhen donewhen
+docker compose up -d --build
 ```
+
+Start the app only after the load. If the app ran first, it has already created the tables, and the load fails on them. To restore over a running install, see [SELF-HOSTING.md](docs/SELF-HOSTING.md#restore).
 
 More in [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md).
 
