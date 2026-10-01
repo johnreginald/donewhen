@@ -373,6 +373,7 @@ func (d *deps) register(s *server.MCPServer) {
 		mcp.WithString("label", mcp.Description("Label name (or id) — issues carrying this label")),
 		mcp.WithString("parent", mcp.Description("Parent issue key (e.g. R-8) — its sub-issues")),
 		mcp.WithString("query", mcp.Description("Text search over title/key")),
+		mcp.WithBoolean("includeArchived", mcp.Description("Include issues of archived epics (hidden by default)")),
 		limitArg(),
 		verboseArg(),
 		wsArg(),
@@ -391,6 +392,8 @@ func (d *deps) register(s *server.MCPServer) {
 			Query:        req.GetString("query", ""),
 			Limit:        limit + 1,
 			NewestFirst:  true,
+
+			IncludeArchived: req.GetBool("includeArchived", false),
 		}
 		if label := req.GetString("label", ""); isUUID(label) {
 			f.LabelID = label

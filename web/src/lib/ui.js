@@ -4,6 +4,7 @@ import { goto } from '$app/navigation';
 export const paletteOpen = writable(false);
 export const navOpen = writable(false); // the sidebar, on a phone
 export const composer = writable(null); // { kind: 'issue'|'project'|'initiative', prefill }
+export const archiveTarget = writable(null); // an epic awaiting archive confirmation
 export const quickCapture = writable(false); // the "C" one-line issue composer
 export const shortcutHelp = writable(false); // the "?" keyboard-shortcut overlay
 export const connectionLost = writable(false); // true while the SSE stream is erroring
@@ -31,6 +32,10 @@ export function onLive(fn) {
 // prefilled fields (e.g. a column's stateId when creating from that lane).
 export function openComposer(kind, prefill = {}) {
 	composer.set({ kind, prefill });
+}
+// askArchive opens the archive confirmation for an epic.
+export function askArchive(project) {
+	archiveTarget.set(project);
 }
 export function closeComposer() {
 	composer.set(null);

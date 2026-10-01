@@ -4,7 +4,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { states, projects, blockLinks } from '$lib/store.js';
+	import { states, projects, archivedProjects, blockLinks, unarchiveProject } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
@@ -51,7 +51,16 @@
 	let descSavedTimer;
 
 	const stOf = (c) => $states.find((s) => s.id === c.stateId);
-	const epic = $derived(issue ? $projects.find((p) => p.id === issue.projectId) : null);
+	const archivedEpic = $derived(issue ? $archivedProjects.find((p) => p.id === issue.projectId) : null);
+	const epic = $derived(issue ? ($projects.find((p) => p.id === issue.projectId) ?? archivedEpic) : null);
+	async function unarchiveEpic() {
+		try {
+			await unarchiveProject(archivedEpic.id);
+			showToast('Epic unarchived');
+		} catch (e) {
+			showToast(e.message || 'Failed to unarchive', 'error');
+		}
+	}
 	const doneChildren = $derived(children.filter((c) => stOf(c)?.category === 'completed').length);
 	const DOC_ICON = { change: '⟳', feature: '◈', decision: '◆', overview: '◇', reference: '▤' };
 	const descConflict = $derived(
@@ -307,7 +316,7 @@
 	<div class="prow">
 		<span class="plabel">Epic</span>
 		<span class="pval">
-			<EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} />
+			<EpicMenu value={issue.projectId || ''} options={archivedEpic ? [...$projects, archivedEpic] : $projects} none="No epic" onchange={(v) => patch({ projectId: v })} />
 		</span>
 	</div>
 	<div class="prow wide">
@@ -376,6 +385,13 @@
 		>
 			<button class="btn danger sm" bind:this={delBtnEl} onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
 		</PageHeader>
+
+		{#if archivedEpic}
+			<div class="archived-banner" role="status">
+				<span>This epic is archived</span>
+				<button class="btn sm" onclick={unarchiveEpic}>Unarchive</button>
+			</div>
+		{/if}
 
 		<div class="panes" role="tablist">
 			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
@@ -1072,6 +1088,17 @@
 	}
 	.faint {
 		color: var(--ink-3);
+	}
+	.archived-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--s3);
+		padding: var(--s2) var(--s4);
+		background: var(--sunken);
+		border-bottom: 1px solid var(--line);
+		color: var(--ink-2);
+		font-size: var(--t-sm);
 	}
 	.panes {
 		display: none;

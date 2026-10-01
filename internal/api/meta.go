@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"raenil/internal/auth"
 	"raenil/internal/models"
 )
 
@@ -107,7 +108,7 @@ func (s *Server) handleDeleteInitiative(w http.ResponseWriter, r *http.Request) 
 // ---- projects ----
 
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
-	items, err := s.store.ListProjects(r.Context(), ws(r), r.URL.Query().Get("initiative"))
+	items, err := s.store.ListProjects(r.Context(), ws(r), r.URL.Query().Get("initiative"), r.URL.Query().Get("archived"))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -140,6 +141,22 @@ func (s *Server) handleSaveProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, saved)
+}
+
+func (s *Server) handleArchiveProject(w http.ResponseWriter, r *http.Request) {
+	s.setArchived(w, r, true)
+}
+
+func (s *Server) handleUnarchiveProject(w http.ResponseWriter, r *http.Request) {
+	s.setArchived(w, r, false)
+}
+
+func (s *Server) setArchived(w http.ResponseWriter, r *http.Request, archived bool) {
+	p, err := s.store.ArchiveProject(r.Context(), ws(r), r.PathValue("id"), archived, auth.ActorFrom(r.Context()))
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, 200, p)
 }
 
 func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {

@@ -541,3 +541,114 @@ func TestWorkspaceAIName(t *testing.T) {
 		t.Fatalf("other workspace AI name changed to %q", other.AIName)
 	}
 }
+
+func TestArchiveProject(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+
+	repo := "https://example.test/repo"
+	p, err := s.SaveProject(ctx, ws, models.Project{Name: "Epic A", DescriptionMD: "desc", RepoURL: &repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.SaveProject(ctx, ws, models.Project{Name: "Epic B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := s.CreateIssue(ctx, ws, IssueInput{Title: "in A", StateName: "Backlog", ProjectID: &p.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.CreateIssue(ctx, ws, IssueInput{Title: "in B", StateName: "Backlog", ProjectID: &other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose, err := s.CreateIssue(ctx, ws, IssueInput{Title: "no epic", StateName: "Backlog"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.ArchiveProject(ctx, ws, p.ID, true, "human")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "archived" || got.Name != p.Name || got.DescriptionMD != p.DescriptionMD ||
+		got.RepoURL == nil || *got.RepoURL != repo {
+		t.Fatalf("archive changed more than status: %+v", got)
+	}
+
+	ids := func(ps []models.Project) map[string]bool {
+		m := map[string]bool{}
+		for _, x := range ps {
+			m[x.ID] = true
+		}
+		return m
+	}
+	def, _ := s.ListProjects(ctx, ws, "", "")
+	if m := ids(def); m[p.ID] || !m[other.ID] {
+		t.Fatalf("default list should hide archived only: %v", m)
+	}
+	only, _ := s.ListProjects(ctx, ws, "", "1")
+	if m := ids(only); !m[p.ID] || m[other.ID] {
+		t.Fatalf("archived=1 should list archived only: %v", m)
+	}
+	all, _ := s.ListProjects(ctx, ws, "", "all")
+	if m := ids(all); !m[p.ID] || !m[other.ID] {
+		t.Fatalf("archived=all should list both: %v", m)
+	}
+
+	keys := func(is []models.Issue) map[string]bool {
+		m := map[string]bool{}
+		for _, x := range is {
+			m[x.Key] = true
+		}
+		return m
+	}
+	l, err := s.ListIssues(ctx, IssueFilter{WorkspaceID: ws})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := keys(l); m[in.Key] || !m[out.Key] || !m[loose.Key] {
+		t.Fatalf("default issue list: %v", m)
+	}
+	l, _ = s.ListIssues(ctx, IssueFilter{WorkspaceID: ws, IncludeArchived: true})
+	if m := keys(l); !m[in.Key] || !m[out.Key] || !m[loose.Key] {
+		t.Fatalf("includeArchived issue list: %v", m)
+	}
+	if _, err := s.GetIssueByKey(ctx, ws, in.Key); err != nil {
+		t.Fatalf("get by key: %v", err)
+	}
+	if _, err := s.GetIssue(ctx, ws, in.ID); err != nil {
+		t.Fatalf("get by id: %v", err)
+	}
+
+	got, err = s.ArchiveProject(ctx, ws, p.ID, false, "ai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "active" || got.Name != p.Name {
+		t.Fatalf("unarchive: %+v", got)
+	}
+	l, _ = s.ListIssues(ctx, IssueFilter{WorkspaceID: ws})
+	if !keys(l)[in.Key] {
+		t.Fatal("unarchived issue should be back in default list")
+	}
+
+	acts, err := s.ListRecentActivity(ctx, ActivityFilter{WorkspaceID: ws, Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasA, hasU := false, false
+	for _, a := range acts {
+		hasA = hasA || a.Kind == "epic_archived"
+		hasU = hasU || a.Kind == "epic_unarchived"
+	}
+	if !hasA || !hasU {
+		t.Fatalf("expected epic_archived and epic_unarchived activity, got %d entries", len(acts))
+	}
+
+	if _, err := s.ArchiveProject(ctx, ws, "00000000-0000-0000-0000-000000000000", true, "human"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing epic: %v", err)
+	}
+}

@@ -88,6 +88,9 @@ type IssueFilter struct {
 	Query        string
 	ParentKey    string // list sub-issues of this epic key
 	Limit        int
+	// IncludeArchived keeps the issues of archived epics, which are hidden
+	// from lists by default. Single-issue lookups are never filtered.
+	IncludeArchived bool
 	// NewestFirst orders by last update instead of board position, so a
 	// capped list keeps the issues someone is most likely asking about.
 	NewestFirst bool
@@ -130,6 +133,9 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 		n++
 		q += fmt.Sprintf(" AND %s$%d", cond, n)
 		args = append(args, v)
+	}
+	if !f.IncludeArchived {
+		q += " AND (i.project_id IS NULL OR i.project_id NOT IN (SELECT id FROM projects WHERE status = 'archived'))"
 	}
 	if f.StateID != "" {
 		add("i.state_id=", f.StateID)

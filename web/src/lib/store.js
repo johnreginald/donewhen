@@ -6,7 +6,8 @@ export const activeWorkspace = writable(null); // the one everything is scoped t
 // What the active workspace calls its AI actor (Settings → Workspace).
 export const aiName = derived(activeWorkspace, (w) => w?.aiName || 'Clanker');
 export const states = writable([]);
-export const projects = writable([]);
+export const projects = writable([]); // active epics only; archived ones are hidden
+export const archivedProjects = writable([]);
 export const initiatives = writable([]);
 export const labels = writable([]);
 export const labelGroups = writable([]); // { id, name, exclusive }
@@ -100,9 +101,10 @@ export async function switchWorkspace(slug) {
 }
 
 export async function loadMeta() {
-	const [st, pr, ini, lb, lg, cfg] = await Promise.all([
+	const [st, pr, arch, ini, lb, lg, cfg] = await Promise.all([
 		api.states(),
 		api.projects(),
+		api.projects('', '1').catch(() => []),
 		api.initiatives(),
 		api.labels(),
 		api.labelGroups(),
@@ -111,6 +113,7 @@ export async function loadMeta() {
 	loadBlockLinks();
 	states.set(st || []);
 	projects.set(pr || []);
+	archivedProjects.set(arch || []);
 	initiatives.set(ini || []);
 	labels.set(lb || []);
 	labelGroups.set(lg || []);
@@ -149,6 +152,23 @@ export function applyEvent(ev) {
 			return [...l, ev.issue];
 		});
 	}
+}
+
+// archiveProject / unarchiveProject flip an epic's archived status, then
+// reload the epics and issues so every view drops (or regains) it.
+export async function archiveProject(id) {
+	if (get(activeProject) === id) activeProject.set('');
+	const p = await api.archiveProject(id);
+	await loadMeta();
+	await loadIssues();
+	return p;
+}
+
+export async function unarchiveProject(id) {
+	const p = await api.unarchiveProject(id);
+	await loadMeta();
+	await loadIssues();
+	return p;
 }
 
 export function stateById(id) {

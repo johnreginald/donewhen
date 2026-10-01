@@ -21,6 +21,8 @@ func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 		Query:        q.Get("q"),
 		ParentKey:    q.Get("parent"),
 		Limit:        limit,
+
+		IncludeArchived: q.Get("includeArchived") == "1" || q.Get("includeArchived") == "true",
 	})
 	if handleStoreErr(w, err) {
 		return

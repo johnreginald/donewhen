@@ -306,17 +306,26 @@ func (s *Store) DeleteInitiative(ctx context.Context, wsID, id string) error {
 
 // ---- Projects ----
 
-func (s *Store) ListProjects(ctx context.Context, wsID, initiativeID string) ([]models.Project, error) {
-	return s.ListProjectsAcross(ctx, []string{wsID}, initiativeID)
+// ListProjects's archived filter: "" / "false" hides archived epics,
+// "true" / "1" lists only archived ones, "all" lists both.
+func (s *Store) ListProjects(ctx context.Context, wsID, initiativeID, archived string) ([]models.Project, error) {
+	return s.ListProjectsAcross(ctx, []string{wsID}, initiativeID, archived)
 }
 
-func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiativeID string) ([]models.Project, error) {
+func (s *Store) ListProjectsAcross(ctx context.Context, wsIDs []string, initiativeID, archived string) ([]models.Project, error) {
 	q := `SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
 	      FROM projects WHERE workspace_id = ANY($1)`
 	args := []any{wsIDs}
 	if initiativeID != "" {
 		q += ` AND initiative_id=$2`
 		args = append(args, initiativeID)
+	}
+	switch archived {
+	case "all":
+	case "1", "true":
+		q += ` AND status = 'archived'`
+	default:
+		q += ` AND status <> 'archived'`
 	}
 	q += ` ORDER BY position, created_at`
 	rows, err := s.pool.Query(ctx, q, args...)
@@ -375,6 +384,43 @@ func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) 
 		return p, ErrNotFound
 	}
 	return s.GetProject(ctx, wsID, p.ID)
+}
+
+// SetProjectStatus changes only the epic's status — unlike SaveProject it
+// never overwrites the other fields.
+func (s *Store) SetProjectStatus(ctx context.Context, wsID, id, status string) (models.Project, error) {
+	ct, err := s.pool.Exec(ctx,
+		`UPDATE projects SET status=$3, updated_at=now() WHERE id=$1 AND workspace_id=$2`, id, wsID, status)
+	if err != nil {
+		return models.Project{}, err
+	}
+	if ct.RowsAffected() == 0 {
+		return models.Project{}, ErrNotFound
+	}
+	return s.GetProject(ctx, wsID, id)
+}
+
+// ArchiveProject archives (or unarchives) an epic and records the activity.
+func (s *Store) ArchiveProject(ctx context.Context, wsID, id string, archived bool, actor string) (models.Project, error) {
+	status, kind, from := "active", "epic_unarchived", "archived"
+	if archived {
+		status, kind, from = "archived", "epic_archived", "active"
+	}
+	before, err := s.GetProject(ctx, wsID, id)
+	if err != nil {
+		return before, err
+	}
+	p, err := s.SetProjectStatus(ctx, wsID, id, status)
+	if err != nil {
+		return p, err
+	}
+	if before.Status != status {
+		_ = s.RecordActivity(ctx, wsID, models.Activity{
+			IssueTitle: p.Name, Actor: actor, Kind: kind, Field: "status",
+			FromVal: from, ToVal: status, Detail: p.Name,
+		})
+	}
+	return p, nil
 }
 
 func (s *Store) DeleteProject(ctx context.Context, wsID, id string) error {

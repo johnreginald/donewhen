@@ -13,10 +13,10 @@
 		activeWorkspace,
 		me
 	} from '$lib/store.js';
-	import { paletteOpen, openComposer } from '$lib/ui.js';
+	import { paletteOpen, openComposer, askArchive } from '$lib/ui.js';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import {
-		FileText, Box, Plus, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
+		FileText, Box, Plus, Archive, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
 		ChevronsUpDown, Settings, LogOut, ChevronRight, ChevronLeft, OctagonX
 	} from '@lucide/svelte';
 
@@ -214,6 +214,7 @@
 					<span class="ini-count">{p.count}</span>
 				</button>
 				<button class="row-edit" title="Edit epic" onclick={() => editEpic(p)}><Pencil size={13} strokeWidth={2} /></button>
+				<button class="row-edit row-archive" title="Archive epic" aria-label="Archive epic" onclick={() => askArchive(p)}><Archive size={13} strokeWidth={2} /></button>
 			</div>
 		{/each}
 		{/if}
@@ -495,6 +496,9 @@
 	}
 	.epic-row:hover .row-edit {
 		opacity: 1;
+	}
+	.row-archive {
+		margin-left: -4px;
 	}
 	.row-edit:hover {
 		background: var(--hover);

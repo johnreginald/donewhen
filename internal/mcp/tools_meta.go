@@ -6,6 +6,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"raenil/internal/auth"
 	"raenil/internal/models"
 )
 
@@ -15,6 +16,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		mcp.WithDescription("List projects (epics), optionally within an initiative. Rows carry no description; "+
 			"use get_project for it."),
 		mcp.WithString("initiative", mcp.Description("Initiative id filter")),
+		mcp.WithString("archived", mcp.Description("'false' (default) hides archived epics, 'true' lists only archived, 'all' both")),
 		verboseArg(),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -22,7 +24,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		items, err := d.store.ListProjectsAcross(ctx, wsIDs, req.GetString("initiative", ""))
+		items, err := d.store.ListProjectsAcross(ctx, wsIDs, req.GetString("initiative", ""), req.GetString("archived", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -30,6 +32,28 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 			return jsonResult(items)
 		}
 		return jsonResult(projectRows(items))
+	})
+
+	s.AddTool(mcp.NewTool("archive_project",
+		mcp.WithDescription("Archive (default) or unarchive a project (epic). Archived epics and their issues "+
+			"leave the default lists; only the status changes."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Project id")),
+		mcp.WithBoolean("archived", mcp.Description("true (default) archives, false unarchives")),
+		wsArg(),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		wsID, err := d.scopeOne(ctx, req, projectRef(id))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		p, err := d.store.ArchiveProject(ctx, wsID, id, req.GetBool("archived", true), auth.ActorAI)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return jsonResult(p)
 	})
 
 	s.AddTool(mcp.NewTool("get_project",

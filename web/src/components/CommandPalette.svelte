@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { workspaces, initiatives, activeInitiative, activeProject, loadIssues, switchWorkspace } from '$lib/store.js';
+	import { workspaces, initiatives, archivedProjects, activeInitiative, activeProject, loadIssues, switchWorkspace } from '$lib/store.js';
 	import { paletteOpen, openIssue, showToast } from '$lib/ui.js';
 
 	// mode: 'search' (issues + nav + switch commands) or one of the two
@@ -23,7 +23,7 @@
 		}
 		const t = setTimeout(async () => {
 			try {
-				serverIssues = (await api.issues({ q, limit: 8 })) || [];
+				serverIssues = (await api.issues({ q, limit: 8, includeArchived: 1 })) || [];
 			} catch {
 				serverIssues = [];
 			}
@@ -64,9 +64,9 @@
 		};
 	}
 
-	const items = $derived(build(mode, query, serverIssues, $workspaces, $initiatives));
+	const items = $derived(build(mode, query, serverIssues, $workspaces, $initiatives, $archivedProjects));
 
-	function build(mode, q, srvIssues, wsList, iniList) {
+	function build(mode, q, srvIssues, wsList, iniList, archList) {
 		const ql = q.trim().toLowerCase();
 		if (mode === 'workspace') {
 			return wsList
@@ -105,7 +105,7 @@
 			}
 		}
 		for (const is of srvIssues) {
-			list.push({ kind: 'issue', id: 'issue-' + is.id, label: `${is.key}  ${is.title}`, run: () => openIssue(is.key) });
+			list.push({ kind: 'issue', id: 'issue-' + is.id, label: `${is.key}  ${is.title}` + (archList.some((p) => p.id === is.projectId) ? '  · archived' : ''), run: () => openIssue(is.key) });
 		}
 		return list;
 	}

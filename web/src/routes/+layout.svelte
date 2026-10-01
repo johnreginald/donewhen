@@ -11,6 +11,7 @@
 	import ShortcutHelp from '$components/ShortcutHelp.svelte';
 	import ToastStack from '$components/ToastStack.svelte';
 	import Composer from '$components/Composer.svelte';
+	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount, workspaces, switchWorkspace } from '$lib/store.js';
@@ -187,6 +188,7 @@
 	<QuickCapture />
 	<ShortcutHelp />
 	<Composer />
+	<ArchiveEpicDialog />
 {:else}
 	<div class="booting">Loading Raenil…</div>
 {/if}

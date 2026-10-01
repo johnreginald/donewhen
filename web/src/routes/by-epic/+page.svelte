@@ -2,7 +2,9 @@
 	// By epic — Project (initiative) → Epic (project) → Issue, collapsible,
 	// with a done/total progress bar and the epic's repo URL on its header.
 	// (Moved out of /list, which is now the state-grouped row view.)
-	import { visibleIssues, states, projects, initiatives, activeInitiative } from '$lib/store.js';
+	import { visibleIssues, states, projects, archivedProjects, initiatives, activeInitiative, unarchiveProject } from '$lib/store.js';
+	import { api } from '$lib/api.js';
+	import { askArchive, showToast } from '$lib/ui.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import IssuesToolbar from '$components/IssuesToolbar.svelte';
 	import { openIssue } from '$lib/ui.js';
@@ -96,6 +98,29 @@
 		}
 		return res.sort((a, b) => last(a.name, 'No project') - last(b.name, 'No project') || a.name.localeCompare(b.name));
 	}
+	// "Show archived" lists archived epics greyed out, each with Unarchive.
+	let showArchived = $state(false);
+	let archivedCounts = $state({});
+	$effect(() => {
+		if (!showArchived) return;
+		$archivedProjects; // recount when an epic is archived or restored
+		api
+			.issues({ includeArchived: 1 })
+			.then((list) => {
+				const m = {};
+				for (const i of list || []) if (i.projectId) m[i.projectId] = (m[i.projectId] || 0) + 1;
+				archivedCounts = m;
+			})
+			.catch(() => {});
+	});
+	async function restore(p) {
+		try {
+			await unarchiveProject(p.id);
+			showToast(`${p.name} unarchived`);
+		} catch (e) {
+			showToast(e.message || 'Failed to unarchive', 'error');
+		}
+	}
 	const hasAnyEpic = $derived(groups.some((g) => g.epics.length));
 	const loading = $derived($states.length === 0);
 </script>
@@ -103,6 +128,12 @@
 <div class="page">
 	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'By epic' }]} />
 	<IssuesToolbar />
+	<div class="archbar">
+		<label class="archtoggle">
+			<input type="checkbox" bind:checked={showArchived} />
+			<span>Show archived{$archivedProjects.length ? ` (${$archivedProjects.length})` : ''}</span>
+		</label>
+	</div>
 
 	{#if loading}
 		<div class="tree">
@@ -118,7 +149,7 @@
 				</div>
 			{/each}
 		</div>
-	{:else if !hasAnyEpic}
+	{:else if !hasAnyEpic && !(showArchived && $archivedProjects.length)}
 		<div class="empty">
 			<div class="ic">▦</div>
 			<p class="etitle">No epics yet</p>
@@ -134,15 +165,20 @@
 					</div>
 					{#each g.epics as e (e.id)}
 						<div class="epic">
-							<button class="ehd" onclick={() => toggle(e.id)} aria-expanded={!collapsed.has(e.id)}>
-								<span class="chv" class:open={!collapsed.has(e.id)}>›</span>
-								<span class="nm">{e.name}</span>
-								{#if e.repoUrl}
-									<span class="repo"><span class="rg"></span>{shortRepo(e.repoUrl)}</span>
+							<div class="ehwrap">
+								<button class="ehd" onclick={() => toggle(e.id)} aria-expanded={!collapsed.has(e.id)}>
+									<span class="chv" class:open={!collapsed.has(e.id)}>›</span>
+									<span class="nm">{e.name}</span>
+									{#if e.repoUrl}
+										<span class="repo"><span class="rg"></span>{shortRepo(e.repoUrl)}</span>
+									{/if}
+									<span class="sp"></span>
+									<span class="frac">{e.done}/{e.total}</span>
+								</button>
+								{#if e.id !== '__none__'}
+									<button class="earch" onclick={() => askArchive({ id: e.id, name: e.name })}>Archive</button>
 								{/if}
-								<span class="sp"></span>
-								<span class="frac">{e.done}/{e.total}</span>
-							</button>
+							</div>
 							{#if e.total}
 								<div class="eprog"><i style="width:{e.pct}%"></i></div>
 							{/if}
@@ -169,11 +205,82 @@
 					{/each}
 				</div>
 			{/each}
+			{#if showArchived}
+				<div class="proj-group">
+					<div class="proj-head">
+						<span class="pn">Archived epics</span>
+						<span class="c">{$archivedProjects.length}</span>
+					</div>
+					{#each $archivedProjects as p (p.id)}
+						<div class="epic archived">
+							<div class="ehwrap">
+								<span class="ehd static">
+									<span class="nm">{p.name}</span>
+									{#if p.repoUrl}
+										<span class="repo"><span class="rg"></span>{shortRepo(p.repoUrl)}</span>
+									{/if}
+									<span class="sp"></span>
+									<span class="frac">{archivedCounts[p.id] ?? 0} issues</span>
+								</span>
+								<button class="earch" onclick={() => restore(p)}>Unarchive</button>
+							</div>
+						</div>
+					{:else}
+						<div class="eempty">No archived epics.</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
 
 <style>
+	.archbar {
+		display: flex;
+		justify-content: flex-end;
+		padding: var(--s2) 20px 0;
+	}
+	.archtoggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: var(--t-sm);
+		color: var(--ink-2);
+		cursor: pointer;
+	}
+	.ehwrap {
+		display: flex;
+		align-items: center;
+	}
+	.ehwrap .ehd {
+		flex: 1;
+		min-width: 0;
+		width: auto;
+	}
+	.ehd.static:hover {
+		background: none;
+	}
+	.earch {
+		flex: none;
+		margin-right: 10px;
+		padding: 3px 9px;
+		background: none;
+		border: 1px solid var(--line-strong);
+		border-radius: var(--r-sm);
+		color: var(--ink-2);
+		font-size: var(--t-xs);
+	}
+	.earch:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+	.epic.archived {
+		opacity: 0.6;
+		background: var(--sunken);
+	}
+	.epic.archived .earch {
+		opacity: 1;
+	}
 	.page {
 		height: 100%;
 		display: flex;

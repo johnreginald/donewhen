@@ -152,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/projects", s.wsGuard(s.handleSaveProject))
 	mux.HandleFunc("GET /api/projects/{id}", s.wsGuard(s.handleGetProject))
 	mux.HandleFunc("PATCH /api/projects/{id}", s.wsGuard(s.handleSaveProject))
+	mux.HandleFunc("POST /api/projects/{id}/archive", s.wsGuard(s.handleArchiveProject))
+	mux.HandleFunc("POST /api/projects/{id}/unarchive", s.wsGuard(s.handleUnarchiveProject))
 	mux.HandleFunc("DELETE /api/projects/{id}", s.wsGuard(s.handleDeleteProject))
 
 	// Issues.

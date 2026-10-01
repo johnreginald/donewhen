@@ -106,8 +106,17 @@ export const api = {
 	saveInitiative: (b) => request('POST', '/initiatives', b),
 	updateInitiative: (id, b) => request('PATCH', `/initiatives/${id}`, b),
 	deleteInitiative: (id) => request('DELETE', `/initiatives/${id}`),
-	projects: (initiative) =>
-		request('GET', '/projects' + (initiative ? `?initiative=${initiative}` : '')),
+	// archived: '' (default: active only) | '1' (archived only) | 'all'
+	projects: (initiative, archived) => {
+		const p = new URLSearchParams();
+		if (initiative) p.set('initiative', initiative);
+		if (archived) p.set('archived', archived);
+		const s = p.toString();
+		return request('GET', '/projects' + (s ? `?${s}` : ''));
+	},
+	project: (id) => request('GET', `/projects/${id}`),
+	archiveProject: (id) => request('POST', `/projects/${id}/archive`, {}),
+	unarchiveProject: (id) => request('POST', `/projects/${id}/unarchive`, {}),
 	saveProject: (b) => request('POST', '/projects', b),
 	updateProject: (id, b) => request('PATCH', `/projects/${id}`, b),
 	deleteProject: (id) => request('DELETE', `/projects/${id}`),
