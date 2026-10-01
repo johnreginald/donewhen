@@ -10,6 +10,8 @@
 	import QuickCapture from '$components/QuickCapture.svelte';
 	import ShortcutHelp from '$components/ShortcutHelp.svelte';
 	import BlockedReasonDialog from '$components/BlockedReasonDialog.svelte';
+	import IssueMenuHost from '$components/IssueMenuHost.svelte';
+	import { SHORTCUTS, isTypingTarget, stepIndex, createChord } from '$lib/shortcuts.js';
 	import ToastStack from '$components/ToastStack.svelte';
 	import Composer from '$components/Composer.svelte';
 	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
@@ -21,6 +23,8 @@
 		quickCapture,
 		shortcutHelp,
 		blockPrompt,
+		issueMenu,
+		archiveTarget,
 		connectionLost,
 		streamStatus,
 		composer,
@@ -49,10 +53,12 @@
 
 	onMount(() => {
 		registerServiceWorker();
-		window.addEventListener('keydown', globalKeys);
+		window.addEventListener('keydown', globalKeys, true);
+		window.addEventListener('keydown', backKey);
 		boot();
 		return () => {
-			window.removeEventListener('keydown', globalKeys);
+			window.removeEventListener('keydown', globalKeys, true);
+			window.removeEventListener('keydown', backKey);
 		};
 	});
 
@@ -133,12 +139,32 @@
 		connectionLost.set(status === 'reconnecting' || status === 'offline');
 	}
 
-	function isTypingTarget(el) {
-		if (!el) return false;
-		const tag = el.tagName;
-		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+	// "g" then a letter jumps somewhere; the second key must land in a short window.
+	const chord = createChord();
+
+	// The issue the shortcuts act on: the one holding focus (a card or row), the
+	// selected inbox card, or the issue page being read.
+	function targetIssueKey() {
+		const el = document.activeElement?.closest?.('[data-issue-key]') || document.querySelector('[data-issue-key][data-selected="true"]');
+		if (el) return el.getAttribute('data-issue-key');
+		const m = /^\/issue\/([^/]+)/.exec(get(page).url.pathname);
+		return m ? decodeURIComponent(m[1]) : '';
 	}
 
+	function moveIssueFocus(dir) {
+		const els = [...document.querySelectorAll('[data-issue-key]')].filter((el) => el.offsetParent !== null);
+		const cur = els.indexOf(document.activeElement?.closest?.('[data-issue-key]'));
+		const next = els[stepIndex(cur, els.length, dir)];
+		if (!next) return;
+		next.focus();
+		next.scrollIntoView({ block: 'nearest' });
+	}
+
+	const dialogOpen = () =>
+		get(paletteOpen) || get(quickCapture) || get(shortcutHelp) || get(composer) || get(blockPrompt) || get(issueMenu) || get(archiveTarget);
+
+	// Capture phase, so "g b" is settled before a page's own "b" (the inbox's
+	// bounce) can see it.
 	function globalKeys(e) {
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
@@ -155,17 +181,51 @@
 			}
 			return;
 		}
-		// "C" (quick capture) and "?" (shortcut help) — never while typing, and
-		// never stacked on top of another dialog that's already up.
-		if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-		if (get(paletteOpen) || get(quickCapture) || get(shortcutHelp) || get(composer) || get(blockPrompt)) return;
-		if (e.key === 'c' || e.key === 'C') {
+		// Everything below is a bare key: never while typing, never with a
+		// modifier, never on top of a dialog that is already up.
+		if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey || dialogOpen()) return;
+		const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+		if (chord.armed && chord.take(e.timeStamp)) {
+			const go = SHORTCUTS.find((s) => s.to && s.keys[1].toLowerCase() === key);
+			if (go) {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				goto(go.to);
+				return;
+			}
+		}
+		if (key === 'g') {
+			chord.arm(e.timeStamp);
+		} else if (key === 'c') {
 			e.preventDefault();
 			quickCapture.set(true);
-		} else if (e.key === '?') {
+		} else if (key === '?') {
 			e.preventDefault();
 			shortcutHelp.set(true);
+		} else if ((key === 'j' || key === 'k') && get(page).url.pathname !== '/inbox') {
+			// The inbox keeps its own j/k: its selection expands a review card.
+			e.preventDefault();
+			moveIssueFocus(key === 'j' ? 1 : -1);
+		} else {
+			const menu = SHORTCUTS.find((s) => s.menu && s.keys[0].toLowerCase() === key);
+			const issueKey = menu && targetIssueKey();
+			if (issueKey) {
+				e.preventDefault();
+				issueMenu.set({ kind: menu.menu, key: issueKey });
+			}
 		}
+	}
+
+	// Esc on an issue page goes back to the list it was opened from. Bubble
+	// phase and defaultPrevented: a menu, field or dialog that used Esc wins.
+	function backKey(e) {
+		if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+		if (isTypingTarget(e.target) || dialogOpen() || !get(page).url.pathname.startsWith('/issue/')) return;
+		if (document.querySelector('.dd-menu')) return;
+		e.preventDefault();
+		if (window.history.length > 1) window.history.back();
+		else goto('/board');
 	}
 
 </script>
@@ -215,6 +275,7 @@
 	<QuickCapture />
 	<ShortcutHelp />
 	<BlockedReasonDialog />
+	<IssueMenuHost />
 	<Composer />
 	<ArchiveEpicDialog />
 {:else}

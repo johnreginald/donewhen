@@ -110,25 +110,8 @@
 	}
 	const totalRows = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
 
-	// ── keyboard nav (j/k over expanded rows, Enter opens) ─────────────
-	const flat = $derived(collapsed === null ? [] : groups.flatMap((g) => (collapsed.has(g.id) ? [] : g.rows)));
-	let kb = $state(-1);
-	$effect(() => {
-		if (kb >= flat.length) kb = flat.length - 1;
-	});
-	function onKeydown(e) {
-		const tag = document.activeElement?.tagName;
-		if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return;
-		if (e.key === 'j') {
-			e.preventDefault();
-			kb = Math.min(flat.length - 1, kb + 1);
-		} else if (e.key === 'k') {
-			e.preventDefault();
-			kb = Math.max(0, kb - 1);
-		} else if (e.key === 'Enter' && flat[kb]) {
-			openIssue(flat[kb].key);
-		}
-	}
+	// j / k / Enter come from the layout's shortcut handler: it moves real focus
+	// across the rows, and Enter on a focused row is just its click.
 
 	// ── selection + bulk bar (existing PATCH /api/issues/:id only) ─────
 	let selected = $state(new Set());
@@ -173,8 +156,6 @@
 
 	const loading = $derived($states.length === 0);
 </script>
-
-<svelte:window onkeydown={onKeydown} />
 
 <div class="page">
 	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'List' }]} />
@@ -250,7 +231,7 @@
 						{@const waits = (openBlockers[r.id] || []).length}
 						<button
 							class="lrow"
-							class:kb={flat[kb]?.id === r.id}
+							data-issue-key={r.key}
 							class:selr={selected.has(r.id)}
 							onclick={() => openIssue(r.key)}
 						>
@@ -490,10 +471,6 @@
 	}
 	.lrow:hover {
 		background: var(--hover);
-	}
-	.lrow.kb {
-		background: var(--accent-soft);
-		box-shadow: inset 2px 0 0 var(--accent);
 	}
 	.lrow.selr {
 		background: var(--accent-soft);

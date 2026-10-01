@@ -48,7 +48,7 @@
 	}
 </script>
 
-<a class="card" class:live={flashing} href={'/issue/' + encodeURIComponent(issue.key)}>
+<a class="card" class:live={flashing} data-issue-key={issue.key} href={'/issue/' + encodeURIComponent(issue.key)}>
 	<div class="top">
 		{#if state}
 			<StateIcon category={state.category} color={state.color} name={state.name} />

@@ -10,6 +10,7 @@ export const archiveTarget = writable(null); // an epic awaiting archive confirm
 export const quickCapture = writable(false); // the "C" one-line issue composer
 export const shortcutHelp = writable(false); // the "?" keyboard-shortcut overlay
 export const blockPrompt = writable(null); // { label, resolve }: the "why is it blocked?" dialog
+export const issueMenu = writable(null); // { kind: 'status'|'priority'|'label'|'epic', key }: the keyboard menus
 export const connectionLost = writable(false); // true while the SSE stream is erroring
 // '' | 'connecting' | 'live' | 'reconnecting' | 'offline' — the sidebar dot
 export const streamStatus = writable('');

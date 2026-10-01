@@ -1,8 +1,11 @@
 <script>
-	// "?" — the keyboard reference. Static content; nothing to load.
+	// "?" — the keyboard reference, rendered from the shortcut registry.
 	import { shortcutHelp } from '$lib/ui.js';
+	import { groupShortcuts } from '$lib/shortcuts.js';
 	import { X } from '@lucide/svelte';
 
+	// Every shortcut comes from the one registry the key handler also follows.
+	const groups = groupShortcuts();
 	let closeEl = $state(null);
 	let lastFocused = null;
 
@@ -42,24 +45,17 @@
 			</button>
 		</div>
 		<div class="sk-groups">
-			<div>
-				<div class="sk-gtitle">Global</div>
-				<div class="sk-row"><kbd class="kbd">⌘K</kbd><span class="sk-desc">Search &amp; command palette</span></div>
-				<div class="sk-row"><kbd class="kbd">Ctrl</kbd><kbd class="kbd">1–9</kbd><span class="sk-desc">Switch workspace</span></div>
-				<div class="sk-row"><kbd class="kbd">C</kbd><span class="sk-desc">New issue (quick capture)</span></div>
-				<div class="sk-row"><kbd class="kbd">?</kbd><span class="sk-desc">This help</span></div>
-			</div>
-			<div>
-				<div class="sk-gtitle">In a list</div>
-				<div class="sk-row"><kbd class="kbd">↑</kbd><kbd class="kbd">↓</kbd><span class="sk-desc">Move selection</span></div>
-				<div class="sk-row"><kbd class="kbd">↵</kbd><span class="sk-desc">Open selected</span></div>
-				<div class="sk-row"><kbd class="kbd">Esc</kbd><span class="sk-desc">Close</span></div>
-			</div>
-			<div>
-				<div class="sk-gtitle">In a form</div>
-				<div class="sk-row"><kbd class="kbd">⌘↵</kbd><span class="sk-desc">Save</span></div>
-				<div class="sk-row"><kbd class="kbd">Esc</kbd><span class="sk-desc">Cancel</span></div>
-			</div>
+			{#each groups as g (g.name)}
+				<div>
+					<div class="sk-gtitle">{g.name}</div>
+					{#each g.items as s (s.label + s.keys.join())}
+						<div class="sk-row">
+							{#each s.keys as k (k)}<kbd class="kbd">{k}</kbd>{/each}
+							<span class="sk-desc">{s.label}</span>
+						</div>
+					{/each}
+				</div>
+			{/each}
 		</div>
 	</div>
 {/if}
