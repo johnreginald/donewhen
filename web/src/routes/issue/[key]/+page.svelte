@@ -12,8 +12,7 @@
 	import StatusMenu from '$components/StatusMenu.svelte';
 	import EpicMenu from '$components/EpicMenu.svelte';
 	import LabelPicker from '$components/LabelPicker.svelte';
-	import ActivityFeed from '$components/ActivityFeed.svelte';
-	import Comments from '$components/Comments.svelte';
+	import IssueTimeline from '$components/IssueTimeline.svelte';
 	import Blockers from '$components/Blockers.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
@@ -26,7 +25,6 @@
 	let docs = $state([]);
 	let children = $state([]);
 	let parent = $state(null);
-	let activity = $state([]);
 	let criteria = $state([]);
 	let commits = $state([]);
 	let newCrit = $state('');
@@ -131,16 +129,14 @@
 			api.documents({ issue: issue.id }),
 			issue.childCount > 0 ? api.issues({ parent: issue.key }) : Promise.resolve([]),
 			issue.parentKey ? api.issue(issue.parentKey) : Promise.resolve(null),
-			api.issueActivity(issue.id),
 			api.criteria(issue.id),
 			api.commits(issue.id)
 		]);
 		if (seq !== loadSeq) return; // stale: this issue is no longer the one on screen
-		const [d, c, p, a, cr, co] = results;
+		const [d, c, p, cr, co] = results;
 		docs = d.status === 'fulfilled' ? d.value || [] : [];
 		children = c.status === 'fulfilled' ? c.value || [] : [];
 		parent = p.status === 'fulfilled' ? p.value : null;
-		activity = a.status === 'fulfilled' ? a.value || [] : [];
 		criteria = cr.status === 'fulfilled' ? cr.value || [] : [];
 		commits = co.status === 'fulfilled' ? co.value || [] : [];
 	}
@@ -187,7 +183,6 @@
 			// This is our own change, not a conflict — advance the edit's base
 			// so an in-progress description edit doesn't get falsely flagged.
 			if (editingDesc) descEditBase = issue.updatedAt;
-			activity = (await api.issueActivity(issue.id).catch(() => activity)) || activity;
 		} catch (e) {
 			showToast('Update failed: ' + e.message, 'error');
 		}
@@ -216,7 +211,6 @@
 			justSavedDesc = true;
 			clearTimeout(descSavedTimer);
 			descSavedTimer = setTimeout(() => (justSavedDesc = false), 2500);
-			activity = (await api.issueActivity(issue.id).catch(() => activity)) || activity;
 		} catch (e) {
 			// A failed save restores the draft: stay in edit mode with exactly
 			// what was typed, rather than reverting to the last-saved text.
@@ -396,7 +390,7 @@
 		<div class="panes" role="tablist">
 			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
 			<button role="tab" aria-selected={pane === 'chat'} class:on={pane === 'chat'} onclick={() => (pane = 'chat')}>
-				Comments
+				Activity
 			</button>
 		</div>
 
@@ -537,17 +531,11 @@
 						</section>
 					{/if}
 
-					{#if activity.length}
-						<section class="block">
-							<div class="rh">Activity</div>
-							<ActivityFeed items={activity} />
-						</section>
-					{/if}
 				</div>
 			</main>
 
 			<aside class="chat">
-				{#key issue.id}<Comments {issue} />{/key}
+				{#key issue.id}<IssueTimeline {issue} />{/key}
 			</aside>
 		</div>
 	</div>
