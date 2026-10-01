@@ -358,7 +358,10 @@
 		position: absolute;
 		top: 44px;
 		left: 0;
-		right: 0;
+		/* Grow past the sidebar so long workspace names aren't cut. */
+		width: max-content;
+		min-width: 100%;
+		max-width: min(380px, calc(100vw - 24px));
 		z-index: 31;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
