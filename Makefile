@@ -63,7 +63,7 @@ engine: ## show which container engine will be used
 backup: ## dump the database to ./backups
 	@mkdir -p backups
 	@set -o pipefail; f=backups/donewhen-$$(date +%Y%m%d-%H%M%S).sql.gz; \
-	if $(COMPOSE) exec -T db pg_dump -U $${POSTGRES_USER:-donewhen} $${POSTGRES_DB:-donewhen} | gzip > $$f; then \
+	if $(COMPOSE) exec -T db sh -c 'pg_dump -U "$$POSTGRES_USER" "$$POSTGRES_DB"' | gzip > $$f; then \
 		echo "backup written to $$f"; \
 	else rm -f $$f; echo "backup FAILED" >&2; exit 1; fi
 
