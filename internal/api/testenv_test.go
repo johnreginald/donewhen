@@ -66,6 +66,7 @@ func newEnvOn(t *testing.T, dsn string, cfg config.Config) *testEnv {
 	st := store.New(pool, "K")
 	bus := events.NewBus()
 	srv := NewServer(cfg, st, service.New(st, bus), bus, nil)
+	t.Cleanup(srv.Close)
 	return &testEnv{t: t, pool: pool, store: st, srv: srv, handler: srv.Handler()}
 }
 

@@ -14,6 +14,10 @@ type Config struct {
 	Env           string // dev | prod
 	SessionSecret string
 	IssuePrefix   string
+	// TrustedProxyHeader names the request header a trusted reverse proxy sets
+	// to the real client address (CF-Connecting-IP, X-Forwarded-For). Empty
+	// means no proxy is trusted and the TCP peer address is used.
+	TrustedProxyHeader string
 
 	VAPIDPublic  string
 	VAPIDPrivate string
@@ -43,15 +47,16 @@ func env(key, def string) string {
 // Load reads configuration from the environment, applying defaults.
 func Load() (Config, error) {
 	c := Config{
-		BaseURL:       env("RAENIL_BASE_URL", "http://localhost:8080"),
-		ListenAddr:    env("RAENIL_LISTEN_ADDR", ":8080"),
-		DatabaseURL:   env("RAENIL_DATABASE_URL", "postgres://raenil:raenil@localhost:5432/raenil?sslmode=disable"),
-		Env:           env("RAENIL_ENV", "dev"),
-		SessionSecret: os.Getenv("RAENIL_SESSION_SECRET"),
-		IssuePrefix:   env("RAENIL_ISSUE_PREFIX", "R"),
-		VAPIDPublic:   os.Getenv("RAENIL_VAPID_PUBLIC"),
-		VAPIDPrivate:  os.Getenv("RAENIL_VAPID_PRIVATE"),
-		VAPIDSubject:  env("RAENIL_VAPID_SUBJECT", "mailto:admin@localhost"),
+		BaseURL:            env("RAENIL_BASE_URL", "http://localhost:8080"),
+		ListenAddr:         env("RAENIL_LISTEN_ADDR", ":8080"),
+		DatabaseURL:        env("RAENIL_DATABASE_URL", "postgres://raenil:raenil@localhost:5432/raenil?sslmode=disable"),
+		Env:                env("RAENIL_ENV", "dev"),
+		SessionSecret:      os.Getenv("RAENIL_SESSION_SECRET"),
+		IssuePrefix:        env("RAENIL_ISSUE_PREFIX", "R"),
+		TrustedProxyHeader: strings.TrimSpace(os.Getenv("RAENIL_TRUSTED_PROXY_HEADER")),
+		VAPIDPublic:        os.Getenv("RAENIL_VAPID_PUBLIC"),
+		VAPIDPrivate:       os.Getenv("RAENIL_VAPID_PRIVATE"),
+		VAPIDSubject:       env("RAENIL_VAPID_SUBJECT", "mailto:admin@localhost"),
 	}
 	if c.SessionSecret == "" {
 		if c.IsProd() {

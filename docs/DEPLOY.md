@@ -23,7 +23,22 @@ RAENIL_SITE_ADDRESS=tracker.yourdomain.com     # Caddy auto-TLS
 RAENIL_BASE_URL=https://tracker.yourdomain.com # cookies, push origin, deep links
 RAENIL_SESSION_SECRET=<openssl rand -hex 32>
 POSTGRES_PASSWORD=<something strong>
+RAENIL_TRUSTED_PROXY_HEADER=CF-Connecting-IP   # see below
 ```
+
+`RAENIL_TRUSTED_PROXY_HEADER` tells Raenil which request header carries the real
+client IP, so the login rate limit is per visitor and cannot be dodged by
+spoofing a header. Set it to match what sits in front of Raenil:
+
+| Deployment | Value |
+|---|---|
+| Behind a Cloudflare Tunnel (prod) | `CF-Connecting-IP` |
+| Behind the bundled Caddy, or another proxy that appends to `X-Forwarded-For` | `X-Forwarded-For` (the right-most entry is used) |
+| Exposed directly, or no proxy you control | leave empty (the TCP peer address is used) |
+
+Only set it when that proxy is the sole way to reach Raenil, since the header is
+believed as sent. If it is unset or the header is missing, all callers share the
+proxy's address and the limit becomes global rather than bypassable.
 
 Generate VAPID keys once and paste both lines in:
 

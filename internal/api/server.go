@@ -2,11 +2,13 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"raenil/internal/auth"
 	"raenil/internal/config"
@@ -25,10 +27,17 @@ type Server struct {
 	sse       *sse.Handler
 	mcp       http.Handler // mounted at /mcp (may be nil)
 	staticDir string
+
+	loginLimiter *rateLimiter
+	// verifyPassword is auth.VerifyPassword; a field so tests can observe it.
+	verifyPassword func(hash, password string) bool
+	stop           context.CancelFunc
 }
 
 func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *events.Bus, mcp http.Handler) *Server {
-	return &Server{
+	sweepCtx, stop := context.WithCancel(context.Background())
+	loginDummyHash() // pay the one-off argon2 cost now, not on the first miss
+	s := &Server{
 		cfg:       cfg,
 		store:     st,
 		svc:       svc,
@@ -37,8 +46,17 @@ func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *ev
 		sse:       sse.NewHandler(bus),
 		mcp:       mcp,
 		staticDir: "web/build",
+
+		loginLimiter:   newRateLimiter(10, time.Minute),
+		verifyPassword: auth.VerifyPassword,
+		stop:           stop,
 	}
+	go s.loginLimiter.run(sweepCtx, sweepInterval)
+	return s
 }
+
+// Close stops the server's background sweeper.
+func (s *Server) Close() { s.stop() }
 
 func safeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions

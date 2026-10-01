@@ -36,6 +36,7 @@ services:
       RAENIL_VAPID_PUBLIC: ${RAENIL_VAPID_PUBLIC}
       RAENIL_VAPID_PRIVATE: ${RAENIL_VAPID_PRIVATE}
       RAENIL_VAPID_SUBJECT: ${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}
+      RAENIL_TRUSTED_PROXY_HEADER: ${RAENIL_TRUSTED_PROXY_HEADER:-}
     restart: unless-stopped
 
   # Bundled edge TLS proxy — only for boxes with FREE 80/443.

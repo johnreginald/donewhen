@@ -80,7 +80,10 @@
 			confirmPassword = '';
 			phase = 'setup2';
 		} catch (err) {
-			error = err.message || 'Could not create the account.';
+			error =
+				err.status === 409
+					? 'This tracker is already set up. Sign in instead.'
+					: err.message || 'Could not create the account.';
 		} finally {
 			busy = false;
 		}
