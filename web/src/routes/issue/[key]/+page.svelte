@@ -7,7 +7,7 @@
 	import { api } from '$lib/api.js';
 	import { safeHref } from '$lib/url.js';
 	import { states, projects, archivedProjects, blockLinks, unarchiveProject } from '$lib/store.js';
-	import { onLive, showToast } from '$lib/ui.js';
+	import { onLive, showToast, blockedReasonFor } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import InlineCode from '$components/InlineCode.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
@@ -176,6 +176,11 @@
 	let gateBlock = $state(null);
 	const canForce = $derived(['owner', 'admin'].includes($activeWorkspace?.role));
 	async function patch(body) {
+		if (body.stateId && !body.blockedReason) {
+			const reason = await blockedReasonFor(issue.stateId, body.stateId, issue.key);
+			if (reason === null) return;
+			if (reason) body = { ...body, blockedReason: reason };
+		}
 		try {
 			issue = await api.updateIssue(issue.id, body);
 			gateBlock = null;

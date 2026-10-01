@@ -12,6 +12,8 @@ type issueMoveReq struct {
 	After  *string `json:"after"`  // card above the drop point
 	Before *string `json:"before"` // card below the drop point
 	Force  bool    `json:"force"`
+	// BlockedReason is required when State is Blocked.
+	BlockedReason string `json:"blockedReason"`
 }
 
 // handleMoveIssue moves one card in a single request: it changes the column
@@ -31,6 +33,8 @@ func (s *Server) handleMoveIssue(w http.ResponseWriter, r *http.Request) {
 	p := store.IssuePatch{
 		Rank:      &store.Rank{After: derefStr(req.After), Before: derefStr(req.Before)},
 		ForceGate: req.Force && canForceGate(r),
+
+		BlockedReason: req.BlockedReason,
 	}
 	if req.State != "" {
 		if looksLikeKey(req.State) {

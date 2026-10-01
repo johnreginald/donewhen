@@ -79,7 +79,7 @@ func (e *gateEnv) crit(issueID, body, kind string, done bool) models.Criterion {
 }
 
 func (e *gateEnv) move(is models.Issue, state, actor string, force bool) error {
-	_, err := e.svc.UpdateIssue(e.ctx, e.ws, is.ID, store.IssuePatch{StateName: &state, ForceGate: force}, actor)
+	_, err := e.svc.UpdateIssue(e.ctx, e.ws, is.ID, store.IssuePatch{StateName: &state, ForceGate: force, BlockedReason: "waiting on a decision"}, actor)
 	return err
 }
 

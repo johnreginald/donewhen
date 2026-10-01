@@ -462,6 +462,7 @@ func (d *deps) register(s *server.MCPServer) {
 		mcp.WithNumber("priority", mcp.Description("0 none, 1 urgent, 2 high, 3 medium, 4 low")),
 		mcp.WithArray("labels", mcp.Description("Label names (exclusive groups enforced)"),
 			mcp.Items(map[string]any{"type": "string"})),
+		mcp.WithString("reason", mcp.Description("Why the issue is blocked. Required when 'state' is Blocked; shown on the Blocked page (1-500 characters).")),
 		mcp.WithArray("blockedBy", mcp.Description("Keys of the tickets this one waits on (blocked by); replaces the list."),
 			mcp.Items(map[string]any{"type": "string"})),
 		wsArg(),
@@ -666,6 +667,7 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 	if v, ok := args["state"].(string); ok && v != "" {
 		p.StateName = &v
 	}
+	p.BlockedReason = req.GetString("reason", "")
 	if v, ok := args["project"].(string); ok {
 		p.SetProject = true
 		p.ProjectID = strp(v)

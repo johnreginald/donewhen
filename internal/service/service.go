@@ -9,6 +9,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/johnreginald/donewhen/internal/events"
 	"github.com/johnreginald/donewhen/internal/models"
@@ -109,6 +110,7 @@ func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.Issu
 	var gate store.GateOutcome
 	p.ForceGate = p.ForceGate && actor != "ai" // AI callers never force
 	p.GateOut = &gate
+	p.Actor = actor
 	is, err := s.Store.UpdateIssue(ctx, wsID, id, p)
 	if err != nil {
 		return is, err
@@ -137,6 +139,9 @@ func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.Issu
 		e := base
 		e.Kind, e.Field = "state_changed", "status"
 		e.FromVal, e.ToVal = s.stateName(ctx, wsID, before.StateID), s.stateName(ctx, wsID, is.StateID)
+		if strings.EqualFold(e.ToVal, "Blocked") {
+			e.Detail = strings.TrimSpace(p.BlockedReason) // why, on the activity row too
+		}
 		s.logActivity(ctx, wsID, e)
 	}
 	if before.Priority != is.Priority {

@@ -19,7 +19,8 @@
 	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
-	import { openIssue, showToast } from '$lib/ui.js';
+	import { openIssue, showToast, askBlockedReason } from '$lib/ui.js';
+	import { needsReason } from '$lib/blocked.js';
 	import { rel } from '$lib/format.js';
 	import { api } from '$lib/api.js';
 
@@ -152,7 +153,16 @@
 			showToast(e.message, 'error');
 		}
 	}
-	const bulkSetState = (stateId) => runBulk('Moved', (id) => api.updateIssue(id, { stateId }));
+	async function bulkSetState(stateId) {
+		// One reason covers the whole selection when it is moving into Blocked.
+		const entering = [...selected].filter((id) => needsReason($states, $visibleIssues.find((i) => i.id === id)?.stateId, stateId));
+		let blockedReason;
+		if (entering.length) {
+			blockedReason = await askBlockedReason(entering.length === 1 ? $visibleIssues.find((i) => i.id === entering[0])?.key : `${entering.length} issues`);
+			if (blockedReason === null) return;
+		}
+		runBulk('Moved', (id) => api.updateIssue(id, entering.includes(id) ? { stateId, blockedReason } : { stateId }));
+	}
 	const bulkSetPriority = (priority) => runBulk('Priority set', (id) => api.updateIssue(id, { priority }));
 	const bulkAddLabel = (label) =>
 		runBulk('Label added', (id) => {

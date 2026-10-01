@@ -9,6 +9,7 @@
 	import CommandPalette from '$components/CommandPalette.svelte';
 	import QuickCapture from '$components/QuickCapture.svelte';
 	import ShortcutHelp from '$components/ShortcutHelp.svelte';
+	import BlockedReasonDialog from '$components/BlockedReasonDialog.svelte';
 	import ToastStack from '$components/ToastStack.svelte';
 	import Composer from '$components/Composer.svelte';
 	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
@@ -19,6 +20,7 @@
 		paletteOpen,
 		quickCapture,
 		shortcutHelp,
+		blockPrompt,
 		connectionLost,
 		streamStatus,
 		composer,
@@ -155,7 +157,7 @@
 		// "C" (quick capture) and "?" (shortcut help) — never while typing, and
 		// never stacked on top of another dialog that's already up.
 		if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-		if (get(paletteOpen) || get(quickCapture) || get(shortcutHelp) || get(composer)) return;
+		if (get(paletteOpen) || get(quickCapture) || get(shortcutHelp) || get(composer) || get(blockPrompt)) return;
 		if (e.key === 'c' || e.key === 'C') {
 			e.preventDefault();
 			quickCapture.set(true);
@@ -211,6 +213,7 @@
 	<CommandPalette />
 	<QuickCapture />
 	<ShortcutHelp />
+	<BlockedReasonDialog />
 	<Composer />
 	<ArchiveEpicDialog />
 {:else}

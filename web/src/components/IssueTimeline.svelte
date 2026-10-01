@@ -141,6 +141,7 @@
 				<div class="c">
 					<div class="meta">
 						<span class="chip" class:ai={e.c.actor === 'ai'}>{e.c.actor === 'ai' ? `✦ ${$aiName}` : 'You'}</span>
+						{#if e.c.kind === 'blocked_reason'}<span class="when">blocked reason</span>{/if}
 						<span class="when">{rel(e.at)}</span>
 					</div>
 					<div class="body"><Markdown source={e.c.bodyMd} /></div>

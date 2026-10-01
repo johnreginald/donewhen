@@ -9,6 +9,7 @@
 		activeInitiative,
 		loadIssues,
 		allIssues,
+		states,
 		inboxCount,
 		refreshInbox,
 		activeWorkspace,
@@ -33,6 +34,12 @@
 	];
 
 	let { onnavigate = () => {} } = $props();
+
+	// Issues in Blocked, from the live list, for the Blocked entry's badge.
+	const blockedCount = $derived.by(() => {
+		const blocked = $states.find((s) => s.name.toLowerCase() === 'blocked');
+		return blocked ? $allIssues.filter((i) => i.stateId === blocked.id).length : 0;
+	});
 
 	const LIVE_LABEL = {
 		connecting: 'Connecting…',
@@ -213,7 +220,11 @@
 				class:active={n.href === '/artifacts' ? $page.url.pathname.startsWith('/artifacts') : $page.url.pathname === n.href}
 				onclick={onnavigate}
 			>
-				<span class="icon"><Icon size={16} strokeWidth={2} /></span><span class="lbl">{n.label}</span>
+				<span class="icon" style="position:relative">
+					<Icon size={16} strokeWidth={2} />
+					{#if collapsed && n.href === '/blocked' && blockedCount > 0}<span class="dotbadge"></span>{/if}
+				</span><span class="lbl">{n.label}</span>
+				{#if !collapsed && n.href === '/blocked' && blockedCount > 0}<span class="badge">{blockedCount}</span>{/if}
 			</a>
 		{/each}
 	</div>

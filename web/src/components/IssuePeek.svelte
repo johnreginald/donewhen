@@ -8,7 +8,7 @@
 	import { api } from '$lib/api.js';
 	import { gateFailure, gateSummary } from '$lib/gate.js';
 	import { aiName, projects, states } from '$lib/store.js';
-	import { onLive, showToast } from '$lib/ui.js';
+	import { onLive, showToast, blockedReasonFor } from '$lib/ui.js';
 	import { rel, activityVerb } from '$lib/format.js';
 	import StateIcon from './StateIcon.svelte';
 	import StatusMenu from './StatusMenu.svelte';
@@ -61,6 +61,11 @@
 		if (a) events = a;
 	}
 	async function patch(body) {
+		if (body.stateId && !body.blockedReason) {
+			const reason = await blockedReasonFor(issue.stateId, body.stateId, issue.key);
+			if (reason === null) return;
+			if (reason) body = { ...body, blockedReason: reason };
+		}
 		try {
 			issue = await api.updateIssue(issue.id, body);
 			api.issueActivity(issue.id).then((a) => a && (events = a)).catch(() => {});

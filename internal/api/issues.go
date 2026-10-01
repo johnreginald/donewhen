@@ -118,6 +118,8 @@ type issueUpdateReq struct {
 	// Force skips the done-when gate. Honoured only for an owner/admin browser
 	// session; a bearer token's value is ignored.
 	Force bool `json:"force"`
+	// BlockedReason is required when the patch moves the issue to Blocked.
+	BlockedReason string `json:"blockedReason"`
 }
 
 func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +136,7 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		Priority:      req.Priority,
 		Position:      req.Position,
 		ForceGate:     req.Force && canForceGate(r),
+		BlockedReason: req.BlockedReason,
 	}
 	// Empty string clears the relation; a value sets it; absent leaves unchanged.
 	if req.ProjectId != nil {

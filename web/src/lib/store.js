@@ -277,14 +277,14 @@ function upsert(list, issue, keep) {
 // moveIssueTo is a board drop: move the card optimistically, send one request,
 // and on failure put the original back (and rethrow). prev / next are the cards
 // above and below the drop point as the board shows them.
-export async function moveIssueTo(id, stateId, prev, next) {
+export async function moveIssueTo(id, stateId, prev, next, blockedReason) {
 	const original = get(allIssues).find((x) => x.id === id) || get(issues).find((x) => x.id === id);
 	if (!original) return null;
 	const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position + 1 : next ? next.position - 1 : 0;
 	movingIds.add(id);
 	replaceIssue({ ...original, stateId, position });
 	try {
-		const saved = await api.moveIssue(id, { state: stateId, after: prev?.id ?? null, before: next?.id ?? null });
+		const saved = await api.moveIssue(id, { state: stateId, after: prev?.id ?? null, before: next?.id ?? null, ...(blockedReason ? { blockedReason } : {}) });
 		replaceIssue(saved);
 		return { original, saved };
 	} catch (err) {

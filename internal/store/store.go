@@ -493,6 +493,10 @@ type IssuePatch struct {
 	ReplaceLabels bool
 	ForceGate     bool         // owner/admin session only: skip the done-when gate
 	GateOut       *GateOutcome // filled when ForceGate overrode the gate
+	// BlockedReason is why the issue is moving to Blocked; required for that
+	// move and stored as a blocked_reason comment by Actor in the same tx.
+	BlockedReason string
+	Actor         string
 }
 
 func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) (models.Issue, error) {
@@ -553,6 +557,9 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		}
 		if cur != resolved {
 			if err := s.gateTx(ctx, tx, id, resolved, p.ForceGate, p.GateOut); err != nil {
+				return models.Issue{}, err
+			}
+			if err := s.blockedReasonTx(ctx, tx, id, resolved, p.BlockedReason, p.Actor); err != nil {
 				return models.Issue{}, err
 			}
 		}
