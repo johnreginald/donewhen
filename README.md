@@ -4,7 +4,10 @@
 
 <p align="center"><b>See what your AI built. Review it at a gate. Check it again later.</b></p>
 
-![The DoneWhen board with the demo workspace](docs/images/board-light.png)
+<p align="center">
+  <a href="docs/showreel/donewhen-showreel.mp4"><img src="docs/images/showreel.gif" width="860" alt="A 48-second tour of DoneWhen: track the work, understand it at a glance, a human holds the gate, check it again later"></a>
+</p>
+<p align="center"><sub>A 48-second tour. <a href="docs/showreel/donewhen-showreel.mp4">Watch it with sound (MP4)</a>.</sub></p>
 
 ## What and why
 
