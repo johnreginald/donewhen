@@ -1,19 +1,24 @@
 <script>
-	// "C" — a one-line quick-add that lands in Triage. Epic, a single "type"
-	// label and priority are optional extras, not a full issue form (that's the
-	// issue detail page's job).
+	// "C" — a one-line quick-add that lands in Triage. The title is the point;
+	// description, epic, labels and priority are optional extras, not a full
+	// issue form (that's the issue detail page's job).
 	import { api } from '$lib/api.js';
-	import { projects, typeLabels, loadIssues, PRIORITIES } from '$lib/store.js';
-	import { quickCapture, showToast } from '$lib/ui.js';
+	import { projects, labels, labelGroups, activeProject, loadIssues, PRIORITIES } from '$lib/store.js';
+	import { quickCapture, showToast, openIssue } from '$lib/ui.js';
+	import { validateTitle, toggleLabel, hasDraft, TITLE_MAX } from '$lib/capture.js';
 	import { X } from '@lucide/svelte';
+	import { get } from 'svelte/store';
 	import EpicMenu from './EpicMenu.svelte';
 	import PriorityIcon from './PriorityIcon.svelte';
 
 	let title = $state('');
+	let description = $state('');
 	let epicId = $state('');
-	let labelId = $state('');
+	let labelIds = $state([]);
 	let priority = $state(0);
 	let saving = $state(false);
+	let error = $state('');
+	let confirmDiscard = $state(false);
 	let titleEl = $state(null);
 	let modalEl = $state(null);
 	let lastFocused = null;
@@ -22,10 +27,14 @@
 		if ($quickCapture) {
 			lastFocused = document.activeElement;
 			title = '';
-			epicId = '';
-			labelId = '';
+			description = '';
+			// The epic the board is filtered to is where the user is working.
+			epicId = get(activeProject) || '';
+			labelIds = [];
 			priority = 0;
 			saving = false;
+			error = '';
+			confirmDiscard = false;
 			queueMicrotask(() => titleEl && titleEl.focus());
 		} else if (lastFocused) {
 			lastFocused.focus?.();
@@ -37,29 +46,59 @@
 		quickCapture.set(false);
 	}
 
-	async function create() {
-		if (saving || !title.trim()) return;
+	// Closing with typed text asks first; an untouched dialog just closes.
+	function tryClose() {
+		if (hasDraft(title, description)) confirmDiscard = true;
+		else close();
+	}
+
+	// keepOpen clears the draft for the next issue (epic, labels and priority
+	// stay: a run of captures usually shares them).
+	async function create(keepOpen) {
+		if (saving) return;
+		const v = validateTitle(title);
+		if (v.error) {
+			error = v.error;
+			titleEl?.focus();
+			return;
+		}
+		error = '';
 		saving = true;
 		try {
 			const is = await api.createIssue({
-				title: title.trim(),
+				title: v.title,
+				descriptionMd: description.trim(),
+				stateName: 'Triage',
 				projectId: epicId || undefined,
 				priority,
-				labelIds: labelId ? [labelId] : []
+				labelIds
 			});
-			showToast(`${is.key} created`);
-			close();
+			showToast(`${is.key} created`, 'info', { actionLabel: 'Open', onAction: () => openIssue(is.key) });
 			loadIssues();
+			if (keepOpen) {
+				title = '';
+				description = '';
+				titleEl?.focus();
+			} else {
+				close();
+			}
 		} catch (e) {
-			showToast(e.message || 'Failed to create', 'error');
+			error = e.message || 'Failed to create';
 		} finally {
 			saving = false;
 		}
 	}
 
 	function pickLabel(id) {
-		labelId = labelId === id ? '' : id;
+		labelIds = toggleLabel(labelIds, id, $labels, $labelGroups);
 	}
+
+	// Labels shown group by group, so an exclusive group reads as one choice.
+	const labelSections = $derived(
+		$labelGroups
+			.map((g) => ({ group: g, items: $labels.filter((l) => l.groupId === g.id) }))
+			.filter((s) => s.items.length)
+	);
 
 	// Keep Tab cycling inside the dialog instead of leaking to the page behind it.
 	function trapTab(e) {
@@ -81,10 +120,14 @@
 	function onKey(e) {
 		if (e.key === 'Escape') {
 			e.preventDefault();
-			close();
+			if (confirmDiscard) confirmDiscard = false;
+			else tryClose();
 		} else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
 			e.preventDefault();
-			create();
+			create(true);
+		} else if (e.key === 'Enter' && !e.shiftKey && e.target === titleEl) {
+			e.preventDefault();
+			create(false);
 		} else {
 			trapTab(e);
 		}
@@ -92,7 +135,7 @@
 </script>
 
 {#if $quickCapture}
-	<div class="backdrop" role="presentation" onclick={close}></div>
+	<div class="backdrop" role="presentation" onclick={tryClose}></div>
 	<div
 		class="qc-modal"
 		bind:this={modalEl}
@@ -106,16 +149,31 @@
 			<span class="qc-dot"></span>
 			<span class="qc-title">New issue</span>
 			<span class="qc-dest">→ Triage</span>
-			<button class="qc-close" onclick={close} aria-label="Close"><X size={15} strokeWidth={2} /></button>
+			<button class="qc-close" onclick={tryClose} aria-label="Close"><X size={15} strokeWidth={2} /></button>
 		</div>
 		<div class="qc-body">
-			<input
-				bind:this={titleEl}
-				bind:value={title}
-				class="input qc-input"
-				placeholder="Issue title"
-				maxlength="200"
-			/>
+			<div class="qc-titlebox">
+				<input
+					bind:this={titleEl}
+					bind:value={title}
+					oninput={() => (error = '')}
+					class="input qc-input"
+					class:bad={!!error}
+					placeholder="Issue title"
+					aria-label="Title"
+					aria-invalid={!!error}
+					aria-describedby={error ? 'qc-error' : undefined}
+					maxlength={TITLE_MAX}
+				/>
+				{#if error}<div id="qc-error" class="qc-error" role="alert">{error}</div>{/if}
+			</div>
+			<textarea
+				bind:value={description}
+				class="textarea qc-desc"
+				rows="3"
+				placeholder="Description (Markdown, optional)"
+				aria-label="Description"
+			></textarea>
 			<div class="qc-row">
 				<label class="qc-field">
 					<span>Epic</span>
@@ -139,17 +197,16 @@
 					</div>
 				</div>
 			</div>
-			{#if $typeLabels.length}
+			{#each labelSections as sec (sec.group.id)}
 				<div class="qc-field wide">
-					<span id="qc-label-label">Label</span>
-					<div class="qc-chips" role="radiogroup" aria-labelledby="qc-label-label">
-						{#each $typeLabels as l (l.id)}
+					<span id={`qc-label-${sec.group.id}`}>{sec.group.name}</span>
+					<div class="qc-chips" role="group" aria-labelledby={`qc-label-${sec.group.id}`}>
+						{#each sec.items as l (l.id)}
 							<button
 								type="button"
 								class="chip"
-								class:on={labelId === l.id}
-								role="radio"
-								aria-checked={labelId === l.id}
+								class:on={labelIds.includes(l.id)}
+								aria-pressed={labelIds.includes(l.id)}
 								onclick={() => pickLabel(l.id)}
 							>
 								<span class="dot" style:background={l.color}></span>{l.name}
@@ -157,13 +214,21 @@
 						{/each}
 					</div>
 				</div>
+			{/each}
+			{#if confirmDiscard}
+				<div class="qc-confirm" role="alertdialog" aria-label="Discard this issue?">
+					<span>Discard what you typed?</span>
+					<span class="spacer"></span>
+					<button class="btn ghost" onclick={() => (confirmDiscard = false)}>Keep editing</button>
+					<button class="btn danger" onclick={close}>Discard</button>
+				</div>
 			{/if}
 		</div>
 		<div class="qc-foot">
-			<span class="qc-hint">⌘↵ to save · Esc to cancel</span>
+			<span class="qc-hint">↵ create · ⌘↵ create and add another · Esc cancel</span>
 			<span class="spacer"></span>
-			<button class="btn ghost" onclick={close}>Cancel</button>
-			<button class="btn primary" onclick={create} disabled={saving || !title.trim()}>
+			<button class="btn ghost" onclick={tryClose}>Cancel</button>
+			<button class="btn primary" onclick={() => create(false)} disabled={saving}>
 				{saving ? 'Creating…' : 'Create'}
 			</button>
 		</div>
@@ -241,6 +306,31 @@
 		font-size: var(--t-lg);
 		font-weight: 500;
 		padding: 8px 10px;
+	}
+	.qc-titlebox {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.qc-input.bad {
+		border-color: var(--danger);
+	}
+	.qc-error {
+		font-size: var(--t-sm);
+		color: var(--danger);
+	}
+	.qc-desc {
+		font-size: var(--t-base);
+	}
+	.qc-confirm {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 9px 12px;
+		border: 1px solid var(--line-strong);
+		border-radius: var(--r);
+		background: var(--hover);
+		font-size: var(--t-sm);
 	}
 	.qc-row {
 		display: flex;

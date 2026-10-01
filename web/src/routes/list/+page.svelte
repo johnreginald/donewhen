@@ -19,7 +19,8 @@
 	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
-	import { openIssue, showToast } from '$lib/ui.js';
+	import { openIssue, showToast, askBlockedReason } from '$lib/ui.js';
+	import { needsReason } from '$lib/blocked.js';
 	import { rel } from '$lib/format.js';
 	import { api } from '$lib/api.js';
 
@@ -109,25 +110,8 @@
 	}
 	const totalRows = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
 
-	// ── keyboard nav (j/k over expanded rows, Enter opens) ─────────────
-	const flat = $derived(collapsed === null ? [] : groups.flatMap((g) => (collapsed.has(g.id) ? [] : g.rows)));
-	let kb = $state(-1);
-	$effect(() => {
-		if (kb >= flat.length) kb = flat.length - 1;
-	});
-	function onKeydown(e) {
-		const tag = document.activeElement?.tagName;
-		if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return;
-		if (e.key === 'j') {
-			e.preventDefault();
-			kb = Math.min(flat.length - 1, kb + 1);
-		} else if (e.key === 'k') {
-			e.preventDefault();
-			kb = Math.max(0, kb - 1);
-		} else if (e.key === 'Enter' && flat[kb]) {
-			openIssue(flat[kb].key);
-		}
-	}
+	// j / k / Enter come from the layout's shortcut handler: it moves real focus
+	// across the rows, and Enter on a focused row is just its click.
 
 	// ── selection + bulk bar (existing PATCH /api/issues/:id only) ─────
 	let selected = $state(new Set());
@@ -152,7 +136,16 @@
 			showToast(e.message, 'error');
 		}
 	}
-	const bulkSetState = (stateId) => runBulk('Moved', (id) => api.updateIssue(id, { stateId }));
+	async function bulkSetState(stateId) {
+		// One reason covers the whole selection when it is moving into Blocked.
+		const entering = [...selected].filter((id) => needsReason($states, $visibleIssues.find((i) => i.id === id)?.stateId, stateId));
+		let blockedReason;
+		if (entering.length) {
+			blockedReason = await askBlockedReason(entering.length === 1 ? $visibleIssues.find((i) => i.id === entering[0])?.key : `${entering.length} issues`);
+			if (blockedReason === null) return;
+		}
+		runBulk('Moved', (id) => api.updateIssue(id, entering.includes(id) ? { stateId, blockedReason } : { stateId }));
+	}
 	const bulkSetPriority = (priority) => runBulk('Priority set', (id) => api.updateIssue(id, { priority }));
 	const bulkAddLabel = (label) =>
 		runBulk('Label added', (id) => {
@@ -163,8 +156,6 @@
 
 	const loading = $derived($states.length === 0);
 </script>
-
-<svelte:window onkeydown={onKeydown} />
 
 <div class="page">
 	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'List' }]} />
@@ -240,7 +231,7 @@
 						{@const waits = (openBlockers[r.id] || []).length}
 						<button
 							class="lrow"
-							class:kb={flat[kb]?.id === r.id}
+							data-issue-key={r.key}
 							class:selr={selected.has(r.id)}
 							onclick={() => openIssue(r.key)}
 						>
@@ -480,10 +471,6 @@
 	}
 	.lrow:hover {
 		background: var(--hover);
-	}
-	.lrow.kb {
-		background: var(--accent-soft);
-		box-shadow: inset 2px 0 0 var(--accent);
 	}
 	.lrow.selr {
 		background: var(--accent-soft);

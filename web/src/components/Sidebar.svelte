@@ -9,6 +9,12 @@
 		activeInitiative,
 		loadIssues,
 		allIssues,
+		states,
+		savedViews,
+		activeFilters,
+		issueQuery,
+		filterQuery,
+		applyFilterQuery,
 		inboxCount,
 		refreshInbox,
 		activeWorkspace,
@@ -18,8 +24,9 @@
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import {
 		FileText, Box, Plus, Archive, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
-		ChevronsUpDown, Settings, LogOut, ChevronRight, ChevronLeft, OctagonX
+		ChevronsUpDown, Settings, LogOut, ChevronRight, ChevronLeft, OctagonX, Bookmark, X
 	} from '@lucide/svelte';
+	import { parseFilters, serializeFilters } from '$lib/filters.js';
 
 	// The broad app sections (design's sidebar nav).
 	const WORKSPACE_NAV = [
@@ -33,6 +40,36 @@
 	];
 
 	let { onnavigate = () => {} } = $props();
+
+	// Saved views (PP-205): clicking one sets its filters and opens its layout.
+	const nowQuery = $derived.by(() => {
+		$activeFilters;
+		$activeProject;
+		$issueQuery;
+		return filterQuery();
+	});
+	const viewActive = (v) =>
+		$page.url.pathname === '/' + v.layout && serializeFilters(parseFilters(v.query)) === nowQuery;
+	function openView(v) {
+		applyFilterQuery(v.query);
+		const q = serializeFilters(parseFilters(v.query));
+		goto(`/${v.layout}${q ? '?' + q : ''}`);
+		onnavigate();
+	}
+	async function removeView(v) {
+		try {
+			await api.del(`/views/${v.id}`);
+			savedViews.update((l) => l.filter((x) => x.id !== v.id));
+		} catch (e) {
+			showToast(e.message || 'Could not delete the view', 'error');
+		}
+	}
+
+	// Issues in Blocked, from the live list, for the Blocked entry's badge.
+	const blockedCount = $derived.by(() => {
+		const blocked = $states.find((s) => s.name.toLowerCase() === 'blocked');
+		return blocked ? $allIssues.filter((i) => i.stateId === blocked.id).length : 0;
+	});
 
 	const LIVE_LABEL = {
 		connecting: 'Connecting…',
@@ -213,10 +250,28 @@
 				class:active={n.href === '/artifacts' ? $page.url.pathname.startsWith('/artifacts') : $page.url.pathname === n.href}
 				onclick={onnavigate}
 			>
-				<span class="icon"><Icon size={16} strokeWidth={2} /></span><span class="lbl">{n.label}</span>
+				<span class="icon" style="position:relative">
+					<Icon size={16} strokeWidth={2} />
+					{#if collapsed && n.href === '/blocked' && blockedCount > 0}<span class="dotbadge"></span>{/if}
+				</span><span class="lbl">{n.label}</span>
+				{#if !collapsed && n.href === '/blocked' && blockedCount > 0}<span class="badge">{blockedCount}</span>{/if}
 			</a>
 		{/each}
 	</div>
+
+	{#if !collapsed && $savedViews.length}
+		<div class="section">
+			<div class="section-head"><span class="section-title">Views</span></div>
+			{#each $savedViews as v (v.id)}
+				<div class="epic-row">
+					<button class="nav-item epic-sub" class:active={viewActive(v)} onclick={() => openView(v)}>
+						<span class="icon epic-ic"><Bookmark size={13} strokeWidth={2} /></span><span class="pname">{v.name}</span>
+					</button>
+					<button class="row-edit row-archive" title="Delete view" aria-label="Delete view {v.name}" onclick={() => removeView(v)}><X size={13} strokeWidth={2} /></button>
+				</div>
+			{/each}
+		</div>
+	{/if}
 
 	<div class="section epics">
 		<div class="section-head">

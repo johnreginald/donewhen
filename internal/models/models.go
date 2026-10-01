@@ -138,6 +138,15 @@ type InboxItem struct {
 	EnteredReviewAt *time.Time `json:"enteredReviewAt"` // when the AI moved it to In Review
 }
 
+// BlockedItem is a Blocked issue with why it is blocked, for the Blocked page.
+type BlockedItem struct {
+	Issue
+	Reason    string    `json:"reason"`    // latest blocked_reason comment
+	Since     time.Time `json:"since"`     // when it last moved into Blocked
+	Actor     string    `json:"actor"`     // human | ai: who moved it there
+	WaitingOn []string  `json:"waitingOn"` // keys of "blocked by" issues not yet Done
+}
+
 // IssueCommit links an issue to a commit that implemented it (the record of how).
 type IssueCommit struct {
 	ID        string    `json:"id"`
@@ -183,6 +192,7 @@ type Comment struct {
 	IssueID   string    `json:"issueId"`
 	BodyMD    string    `json:"bodyMd"`
 	Actor     string    `json:"actor"` // human | ai
+	Kind      string    `json:"kind"`  // comment | blocked_reason
 	CreatedAt time.Time `json:"createdAt"`
 }
 

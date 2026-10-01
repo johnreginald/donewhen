@@ -1,5 +1,7 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { goto } from '$app/navigation';
+import { states } from './store.js';
+import { needsReason } from './blocked.js';
 
 export const paletteOpen = writable(false);
 export const navOpen = writable(false); // the sidebar, on a phone
@@ -7,6 +9,8 @@ export const composer = writable(null); // { kind: 'issue'|'project'|'initiative
 export const archiveTarget = writable(null); // an epic awaiting archive confirmation
 export const quickCapture = writable(false); // the "C" one-line issue composer
 export const shortcutHelp = writable(false); // the "?" keyboard-shortcut overlay
+export const blockPrompt = writable(null); // { label, resolve }: the "why is it blocked?" dialog
+export const issueMenu = writable(null); // { kind: 'status'|'priority'|'label'|'epic', key }: the keyboard menus
 export const connectionLost = writable(false); // true while the SSE stream is erroring
 // '' | 'connecting' | 'live' | 'reconnecting' | 'offline' — the sidebar dot
 export const streamStatus = writable('');
@@ -64,6 +68,23 @@ export function showToast(message, kind = 'info', opts = {}) {
 }
 export function dismissToast(id) {
 	toasts.update((list) => list.filter((t) => t.id !== id));
+}
+
+// askBlockedReason opens the reason dialog and resolves with the trimmed
+// reason, or null when the user backs out. label names what is being blocked.
+export function askBlockedReason(label) {
+	return new Promise((resolve) => {
+		// A second prompt replaces the first, which counts as cancelled.
+		get(blockPrompt)?.resolve(null);
+		blockPrompt.set({ label, resolve });
+	});
+}
+
+// blockedReasonFor is what every state change calls first. '' means no reason
+// is needed, a string is the reason to send, and null means the user cancelled.
+export async function blockedReasonFor(fromStateId, toStateId, label) {
+	if (!needsReason(get(states), fromStateId, toStateId)) return '';
+	return askBlockedReason(label);
 }
 
 // openIssue navigates to the full detail page (replaces the old right-side drawer).

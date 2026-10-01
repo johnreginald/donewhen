@@ -4,6 +4,7 @@
 	import { aiName, states, projectById, inboxCount, inboxTotal, refreshInbox, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { openIssue, onLive, paletteOpen } from '$lib/ui.js';
+	import { isTypingTarget } from '$lib/shortcuts.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import InboxReviewCard from '$components/InboxReviewCard.svelte';
 	import InboxBlockedCard from '$components/InboxBlockedCard.svelte';
@@ -264,12 +265,6 @@
 	}
 
 	// ---- keyboard: j/k navigate, a approve, b bounce ----
-	function isTypingTarget(el) {
-		if (!el) return false;
-		const tag = el.tagName;
-		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
-	}
-
 	function onKeydown(e) {
 		if (e.metaKey || e.ctrlKey || e.altKey) return;
 		if (isTypingTarget(e.target)) return;

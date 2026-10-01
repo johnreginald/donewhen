@@ -61,7 +61,7 @@
 	}
 </script>
 
-<div class="nr-card" class:selected>
+<div class="nr-card" class:selected data-issue-key={item.key} data-selected={selected ? "true" : undefined}>
 	<div class="nr-top">
 		<span class="gl ring review"><span class="tq"></span></span>
 		<span class="k">{item.key}</span>

@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/johnreginald/donewhen/internal/auth"
@@ -13,12 +14,18 @@ import (
 func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
+	priorities, ok := intList(q.Get("priority"))
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "priority must be a comma-separated list of numbers")
+		return
+	}
 	issues, err := s.store.ListIssues(r.Context(), store.IssueFilter{
 		WorkspaceID:  ws(r),
-		StateID:      q.Get("state"),
 		ProjectID:    q.Get("project"),
 		InitiativeID: q.Get("initiative"),
-		LabelID:      q.Get("label"),
+		States:       csv(q.Get("state")),
+		Priorities:   priorities,
+		LabelIDs:     csv(q.Get("label")),
 		Query:        q.Get("q"),
 		ParentKey:    q.Get("parent"),
 		Limit:        limit,
@@ -122,6 +129,8 @@ type issueUpdateReq struct {
 	// Force skips the done-when gate. Honoured only for an owner/admin browser
 	// session; a bearer token's value is ignored.
 	Force bool `json:"force"`
+	// BlockedReason is required when the patch moves the issue to Blocked.
+	BlockedReason string `json:"blockedReason"`
 }
 
 func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +149,7 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		ForceGate:     req.Force && canForceGate(r),
 		// Compared inside the update transaction, under the row lock.
 		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
+		BlockedReason:     req.BlockedReason,
 	}
 	// Empty string clears the relation; a value sets it; absent leaves unchanged.
 	if req.ProjectId != nil {
@@ -179,4 +189,29 @@ func (s *Server) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})
+}
+
+// csv splits a comma-separated query value, dropping blanks.
+func csv(v string) []string {
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// intList parses a comma-separated list of integers; ok is false when any
+// entry is not one.
+func intList(v string) ([]int, bool) {
+	var out []int
+	for _, p := range csv(v) {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return nil, false
+		}
+		out = append(out, n)
+	}
+	return out, true
 }

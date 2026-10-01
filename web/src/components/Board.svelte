@@ -1,9 +1,9 @@
 <script>
 	import { dndzone } from 'svelte-dnd-action';
-	import { states, boardVisibleIssues, issueQuery, issues, moveIssueTo, activeWorkspace } from '$lib/store.js';
+	import { states, visibleIssues, issueQuery, issues, moveIssueTo, activeWorkspace } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { gateFailure, gateSummary } from '$lib/gate.js';
-	import { showToast } from '$lib/ui.js';
+	import { showToast, blockedReasonFor } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
 	import StateIcon from './StateIcon.svelte';
 	import { ChevronDown, ChevronRight, Lock } from '@lucide/svelte';
@@ -78,7 +78,7 @@
 	// Rebuild columns from live data, except while a drag is in flight.
 	$effect(() => {
 		const st = $states;
-		const is = $boardVisibleIssues;
+		const is = $visibleIssues;
 		if (dragging) return;
 		cols = st.map((s) => ({
 			id: s.id,
@@ -120,8 +120,15 @@
 		const prevItem = col.items[idx - 1];
 		const nextItem = col.items[idx + 1];
 		const key = col.items[idx].key;
+		const from = ($issues.find((x) => x.id === movedId) || {}).stateId;
+		const reason = await blockedReasonFor(from, col.id, key);
+		if (reason === null) {
+			// Cancelled: rebuild the columns from the store so the card snaps back.
+			issues.update((l) => [...l]);
+			return;
+		}
 		try {
-			const r = await moveIssueTo(movedId, col.id, prevItem, nextItem);
+			const r = await moveIssueTo(movedId, col.id, prevItem, nextItem, reason);
 			if (r && r.original.stateId !== col.id) showToast(`${r.original.key} → ${col.name}`);
 		} catch (err) {
 			const g = gateFailure(err);

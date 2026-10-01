@@ -77,7 +77,7 @@ func TestSaveIssueDoneWhenGate(t *testing.T) {
 	}
 
 	// Other states are never gated.
-	if out, isErr = e.call(ctx, "save_issue", map[string]any{"id": is.Key, "state": "Blocked"}); isErr {
+	if out, isErr = e.call(ctx, "save_issue", map[string]any{"id": is.Key, "state": "Blocked", "reason": "waiting on a decision"}); isErr {
 		t.Fatalf("blocked: %s", out)
 	}
 

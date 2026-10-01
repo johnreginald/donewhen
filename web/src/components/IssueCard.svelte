@@ -5,7 +5,7 @@
 	import { Box } from '@lucide/svelte';
 	import { flashIssueId } from '$lib/ui.js';
 	import {
-		states, projects, activeProject, activeInitiative, activeLabel, loadIssues,
+		states, projects, activeProject, activeInitiative, loadIssues,
 		blockLinks, issues, aiName
 	} from '$lib/store.js';
 
@@ -33,7 +33,6 @@
 		e.preventDefault();
 		activeProject.set(issue.projectId);
 		activeInitiative.set('');
-		activeLabel.set('');
 		loadIssues();
 	}
 	function stopKey(e) {
@@ -49,7 +48,7 @@
 	}
 </script>
 
-<a class="card" class:live={flashing} href={'/issue/' + encodeURIComponent(issue.key)}>
+<a class="card" class:live={flashing} data-issue-key={issue.key} href={'/issue/' + encodeURIComponent(issue.key)}>
 	<div class="top">
 		{#if state}
 			<StateIcon category={state.category} color={state.color} name={state.name} />

@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { workspaces, initiatives, archivedProjects, activeInitiative, activeProject, loadIssues, switchWorkspace } from '$lib/store.js';
-	import { paletteOpen, openIssue, showToast } from '$lib/ui.js';
+	import { paletteOpen, quickCapture, openIssue, showToast } from '$lib/ui.js';
 
 	// mode: 'search' (issues + nav + switch commands) or one of the two
 	// switcher sub-lists a "Switch workspace…" / "Switch project…" result
@@ -87,11 +87,14 @@
 				id: 'create',
 				label: `Create issue "${q.trim()}"`,
 				run: async () => {
-					const is = await api.createIssue({ title: q.trim() });
+					const is = await api.createIssue({ title: q.trim(), stateName: 'Triage' });
 					showToast(`${is.key} created`);
 					openIssue(is.key);
 				}
 			});
+		}
+		if (!ql || 'create issue'.includes(ql) || 'new issue'.includes(ql)) {
+			list.push({ kind: 'create', id: 'create-dialog', label: 'Create issue', run: () => quickCapture.set(true) });
 		}
 		if (!ql || 'switch workspace'.includes(ql)) {
 			list.push({ kind: 'switch', id: 'sw-ws', label: 'Switch workspace…', keepOpen: true, run: enterMode('workspace') });

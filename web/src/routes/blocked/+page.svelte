@@ -1,14 +1,13 @@
 <script>
 	// Blocked — every ticket sitting in the Blocked state, workspace-wide (not
 	// scoped to the current epic/label filter — a blocker worth seeing might
-	// live in a different epic). Each card: the latest comment as the reason,
-	// the blockers it waits on with their current state, how long it's been
-	// stuck, and the one action that matters: Unblock → In Progress.
-	// This is the UI half of PP-207.
+	// live in a different epic). Each card: the reason it was blocked with,
+	// who blocked it and since when, the tickets it still waits on, and the
+	// actions that matter: open, move back to In Progress, reply.
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api.js';
-	import { states, blockLinks, loadBlockLinks } from '$lib/store.js';
-	import { openIssue, showToast } from '$lib/ui.js';
+	import { states, aiName, loadBlockLinks } from '$lib/store.js';
+	import { openIssue, showToast, onLive } from '$lib/ui.js';
 	import { rel } from '$lib/format.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
@@ -16,58 +15,56 @@
 	const stOf = (id) => $states.find((s) => s.id === id);
 
 	let loading = $state(true);
-	let allIssues = $state([]);
-	let comments = $state({}); // issueId -> latest comment bodyMd (or '')
+	let items = $state([]); // GET /api/blocked: oldest blocked first, reason attached
 	let query = $state('');
 	let busy = $state(new Set()); // issue ids mid-unblock
+	let replyFor = $state(''); // issue id whose reply box is open
+	let replyText = $state('');
+	let replying = $state(false);
 
 	async function load() {
-		loading = true;
 		try {
-			const [list] = await Promise.all([api.issues(), loadBlockLinks()]);
-			allIssues = list || [];
-			const blocked = allIssues.filter((i) => stOf(i.stateId)?.name === 'Blocked');
-			const pairs = await Promise.all(
-				blocked.map(async (i) => {
-					const list = await api.comments(i.key).catch(() => []);
-					const last = (list || [])[list?.length - 1];
-					return [i.id, last?.bodyMd || ''];
-				})
-			);
-			comments = Object.fromEntries(pairs);
+			items = (await api.blocked()) || [];
+		} catch (e) {
+			if (e?.status !== 401 && !e?.network) showToast("Couldn't load blocked issues: " + (e?.message || e), 'error');
 		} finally {
 			loading = false;
 		}
 	}
-	onMount(load);
+	onMount(() => {
+		load();
+		loadBlockLinks();
+		// A state change, comment or blockers edit anywhere may add or drop a card.
+		let timer;
+		const off = onLive((ev) => {
+			if (!['issue.state_changed', 'issue.deleted', 'issue.blockers', 'comment.added'].includes(ev.type)) return;
+			clearTimeout(timer);
+			timer = setTimeout(load, 200);
+		});
+		return () => {
+			off();
+			clearTimeout(timer);
+		};
+	});
 
-	// A plain-text excerpt of a markdown comment: strip the common markdown
+	// A plain-text excerpt of a markdown reason: strip the common markdown
 	// marks rather than rendering them, then clip to one line's worth.
 	function excerpt(md) {
-		if (!md) return 'No comment yet explaining why.';
+		if (!md) return 'No reason recorded.';
 		const text = md
 			.replace(/```[\s\S]*?```/g, ' ')
 			.replace(/[#>*_`~]/g, '')
 			.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
 			.replace(/\s+/g, ' ')
 			.trim();
-		return text.length > 160 ? text.slice(0, 157) + '…' : text || 'No comment yet explaining why.';
+		return text.length > 240 ? text.slice(0, 237) + '…' : text || 'No reason recorded.';
 	}
 
-	const issueById = $derived(new Map(allIssues.map((i) => [i.id, i])));
-	const blockedIssues = $derived(
-		allIssues
-			.filter((i) => stOf(i.stateId)?.name === 'Blocked')
-			.filter((i) => !query.trim() || i.title.toLowerCase().includes(query.trim().toLowerCase()) || i.key.toLowerCase().includes(query.trim().toLowerCase()))
-			.map((i) => ({
-				...i,
-				reason: excerpt(comments[i.id]),
-				blockers: $blockLinks
-					.filter((l) => l.issueId === i.id)
-					.map((l) => ({ ...issueById.get(l.blockerId), done: l.done }))
-					.filter((b) => b.id)
-			}))
-			.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+	const shown = $derived(
+		items.filter((i) => {
+			const q = query.trim().toLowerCase();
+			return !q || i.title.toLowerCase().includes(q) || i.key.toLowerCase().includes(q);
+		})
 	);
 
 	async function unblock(i) {
@@ -75,13 +72,42 @@
 		try {
 			await api.updateIssue(i.id, { stateName: 'In Progress' });
 			showToast(`${i.key} moved to In Progress`, 'info');
-			allIssues = allIssues.map((x) => (x.id === i.id ? { ...x, stateId: $states.find((s) => s.name === 'In Progress')?.id ?? x.stateId } : x));
+			items = items.filter((x) => x.id !== i.id);
 		} catch (e) {
 			showToast(e.message, 'error');
 		} finally {
 			const n = new Set(busy);
 			n.delete(i.id);
 			busy = n;
+		}
+	}
+
+	function openReply(i) {
+		replyFor = replyFor === i.id ? '' : i.id;
+		replyText = '';
+	}
+	async function sendReply(i) {
+		const body = replyText.trim();
+		if (!body || replying) return;
+		replying = true;
+		try {
+			await api.addComment(i.id, body);
+			showToast(`Reply added to ${i.key}`, 'info');
+			replyFor = '';
+			replyText = '';
+		} catch (e) {
+			showToast(e.message, 'error');
+		} finally {
+			replying = false;
+		}
+	}
+	function replyKey(e, i) {
+		if (e.key === 'Escape') {
+			e.stopPropagation();
+			replyFor = '';
+		} else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+			e.preventDefault();
+			sendReply(i);
 		}
 	}
 </script>
@@ -94,7 +120,7 @@
 		</label>
 		<span class="spacer"></span>
 		<span class="count">
-			{#if !loading}{blockedIssues.length} ticket{blockedIssues.length === 1 ? '' : 's'} waiting on another ticket{/if}
+			{#if !loading}{items.length} blocked, oldest first{/if}
 		</span>
 	</div>
 
@@ -111,7 +137,7 @@
 				</div>
 			{/each}
 		</div>
-	{:else if !blockedIssues.length}
+	{:else if !shown.length}
 		<div class="empty">
 			<div class="ic">✓</div>
 			<p class="etitle">Nothing is blocked</p>
@@ -119,34 +145,45 @@
 		</div>
 	{:else}
 		<div class="blist">
-			{#each blockedIssues as i (i.id)}
+			{#each shown as i (i.id)}
 				{@const st = stOf(i.stateId)}
 				<div class="bcard">
 					<div class="btop">
 						<StateIcon category={st?.category} color={st?.color} size={13} />
 						<span class="k">{i.key}</span>
 						<span class="t">{i.title}</span>
-						<span class="age">blocked {rel(i.updatedAt)}</span>
+						<span class="age" title={new Date(i.since).toLocaleString()}>blocked {rel(i.since)} by {i.actor === 'ai' ? $aiName : 'you'}</span>
 					</div>
-					<div class="breason"><span class="av">C</span><p>{i.reason}</p></div>
+					<div class="breason"><span class="av">{i.actor === 'ai' ? 'C' : 'Y'}</span><p>{excerpt(i.reason)}</p></div>
 					<div class="bfoot">
-						{#if i.blockers.length}
+						{#if i.waitingOn.length}
 							<span class="wl">Waiting on</span>
-							{#each i.blockers as b (b.id)}
-								{@const bst = stOf(b.stateId)}
-								<span class="wchip" class:done={b.done}>
-									<StateIcon category={bst?.category} color={bst?.color} size={11} />{b.key} · {bst?.name || ''}
-								</span>
+							{#each i.waitingOn as key (key)}
+								<button class="wchip" onclick={() => openIssue(key)}>{key}</button>
 							{/each}
 						{:else}
-							<span class="wl">No linked blockers</span>
+							<span class="wl">Not waiting on another ticket</span>
 						{/if}
 						<span class="spacer"></span>
+						<button class="btn gho" onclick={() => openReply(i)} aria-expanded={replyFor === i.id}>Reply</button>
 						<button class="btn gho" disabled={busy.has(i.id)} onclick={() => unblock(i)}>
-							{busy.has(i.id) ? 'Unblocking…' : 'Unblock'}
+							{busy.has(i.id) ? 'Moving…' : 'Back to In Progress'}
 						</button>
 						<button class="btn sd" onclick={() => openIssue(i.key)}>Open ↗</button>
 					</div>
+					{#if replyFor === i.id}
+						<div class="reply">
+							<textarea
+								class="textarea"
+								rows="2"
+								bind:value={replyText}
+								onkeydown={(e) => replyKey(e, i)}
+								placeholder="Reply on {i.key} (Markdown)"
+								aria-label="Reply"
+							></textarea>
+							<button class="btn sd" disabled={replying || !replyText.trim()} onclick={() => sendReply(i)}>Send</button>
+						</div>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -310,8 +347,21 @@
 		font-size: var(--t-xs);
 		color: var(--ink-2);
 	}
-	.wchip.done {
-		opacity: 0.65;
+	.wchip {
+		font-family: var(--mono);
+	}
+	.wchip:hover {
+		background: var(--hover);
+	}
+
+	.reply {
+		display: flex;
+		gap: 8px;
+		align-items: flex-end;
+		margin-top: 8px;
+	}
+	.reply .textarea {
+		flex: 1;
 	}
 
 	.btn {

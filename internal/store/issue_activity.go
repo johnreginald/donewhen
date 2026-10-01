@@ -77,7 +77,7 @@ func scalarTx(ctx context.Context, tx pgx.Tx, query string, arg any) (string, er
 
 // issueChanges is the timeline rows for an issue going from before to after:
 // one per field that actually changed, none for a no-op.
-func (s *Store) issueChanges(ctx context.Context, tx pgx.Tx, before, after models.Issue, actor string) ([]models.Activity, error) {
+func (s *Store) issueChanges(ctx context.Context, tx pgx.Tx, before, after models.Issue, actor, blockedReason string) ([]models.Activity, error) {
 	base := models.Activity{IssueID: &after.ID, IssueKey: after.Key, IssueTitle: after.Title, Actor: actor}
 	var out []models.Activity
 	add := func(kind, field, from, to string) {
@@ -95,6 +95,9 @@ func (s *Store) issueChanges(ctx context.Context, tx pgx.Tx, before, after model
 			return nil, err
 		}
 		add("state_changed", "status", from, to)
+		if strings.EqualFold(to, "Blocked") {
+			out[len(out)-1].Detail = strings.TrimSpace(blockedReason) // why, on the timeline row too
+		}
 	}
 	if before.Priority != after.Priority {
 		add("priority_changed", "priority", PriorityLabel(before.Priority), PriorityLabel(after.Priority))

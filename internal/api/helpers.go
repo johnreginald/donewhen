@@ -58,6 +58,11 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 		writeErr(w, http.StatusConflict, err.Error())
 		return true
 	}
+	if errors.Is(err, store.ErrReasonRequired) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": strings.TrimPrefix(err.Error(), "invalid: "), "code": "reason_required"})
+		return true
+	}
 	if errors.Is(err, store.ErrInvalid) {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
 		return true
