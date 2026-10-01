@@ -383,3 +383,411 @@ select {
 	min-height: 0;
 	overflow: auto;
 }
+
+/* ============================================================
+   Settings + Login (PP-215) — every selector below is scoped to
+   the settings/login routes by its own class name (settings-* /
+   auth-*), so it is purely additive: nothing here redefines a
+   shared rule above.
+   ============================================================ */
+
+.settings-shell {
+	display: flex;
+	height: 100%;
+	min-height: 0;
+}
+.settings-nav {
+	flex: none;
+	width: 208px;
+	background: var(--sunken);
+	border-right: 1px solid var(--line);
+	padding: 12px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	overflow-y: auto;
+}
+.settings-navitem {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 32px;
+	padding: 0 10px;
+	border-radius: var(--r-sm);
+	color: var(--ink-2);
+	font-size: 14px;
+	text-align: left;
+	background: none;
+	border: none;
+	width: 100%;
+	cursor: pointer;
+}
+.settings-navitem:hover {
+	background: var(--hover);
+	color: var(--ink);
+}
+.settings-navitem.on {
+	background: var(--surface);
+	color: var(--ink);
+	font-weight: 500;
+	box-shadow: var(--shadow-1);
+}
+.settings-navitem .chev {
+	color: var(--ink-3);
+}
+.settings-nav-mobile {
+	display: none;
+	flex-direction: column;
+}
+.settings-nav-mobile .settings-navitem {
+	height: 46px;
+	border-bottom: 1px solid var(--line);
+	border-radius: 0;
+	justify-content: space-between;
+	color: var(--ink);
+	background: none;
+}
+.settings-nav-mobile .settings-navitem:hover,
+.settings-nav-mobile .settings-navitem.on {
+	background: none;
+	box-shadow: none;
+}
+.settings-main {
+	flex: 1;
+	min-width: 0;
+	overflow-y: auto;
+	padding: 32px 40px 60px;
+	box-sizing: border-box;
+}
+.settings-wrap {
+	max-width: 640px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.settings-head {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 4px;
+}
+.settings-h1 {
+	font-family: var(--serif);
+	font-weight: 400;
+	font-size: var(--t-2xl);
+	margin: 0;
+}
+.settings-lede {
+	font-size: var(--t-sm);
+	color: var(--ink-2);
+	margin: 0;
+	max-width: 56ch;
+}
+.settings-panel {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--r-lg);
+	padding: 18px 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.settings-panel .pill {
+	background: var(--sunken);
+}
+.settings-panel .input,
+.auth-card .input {
+	background: var(--surface);
+	border-color: var(--line-strong);
+}
+.settings-panel-h {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: var(--t-sm);
+	font-weight: 600;
+}
+.settings-panel-h .n {
+	font-family: var(--mono);
+	font-weight: 400;
+	color: var(--ink-3);
+	font-size: var(--t-xs);
+}
+.settings-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	max-width: 420px;
+}
+.settings-field label {
+	font-size: var(--t-sm);
+	color: var(--ink-2);
+	font-weight: 500;
+}
+.settings-field .input.errb {
+	border-color: var(--danger);
+}
+.settings-hint {
+	font-size: var(--t-xs);
+	color: var(--ink-3);
+}
+.settings-err {
+	font-size: var(--t-xs);
+	color: var(--danger);
+}
+.settings-mono {
+	font-family: var(--mono);
+}
+.settings-note {
+	display: flex;
+	gap: 8px;
+	background: var(--sunken);
+	border: 1px solid var(--line);
+	border-radius: var(--r-sm);
+	padding: 9px 11px;
+	font-size: var(--t-xs);
+	color: var(--ink-2);
+	line-height: 1.5;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.settings-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--line);
+}
+.settings-row:last-child {
+	border-bottom: 0;
+}
+.settings-inline {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.settings-seg {
+	display: inline-flex;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--r-sm);
+	overflow: hidden;
+	width: fit-content;
+}
+.settings-seg button {
+	height: 28px;
+	padding: 0 14px;
+	border: 0;
+	border-right: 1px solid var(--line-strong);
+	background: var(--surface);
+	color: var(--ink-2);
+	font: 500 13px/1 var(--font);
+	cursor: pointer;
+}
+.settings-seg button:last-child {
+	border-right: 0;
+}
+.settings-seg button.on {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+.settings-switch {
+	width: 34px;
+	height: 20px;
+	border-radius: 999px;
+	background: var(--line-strong);
+	position: relative;
+	flex: none;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+}
+.settings-switch i {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: var(--surface);
+	box-shadow: var(--shadow-1);
+	transition: left var(--dur) var(--ease);
+}
+.settings-switch.on {
+	background: var(--accent);
+}
+.settings-switch.on i {
+	left: 16px;
+}
+.settings-switch:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.settings-cmdwrap {
+	position: relative;
+}
+.settings-cmdblock {
+	background: var(--sunken);
+	border: 1px solid var(--line);
+	border-radius: var(--r);
+	padding: 12px 14px;
+	padding-right: 64px;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	line-height: 1.7;
+	color: var(--ink);
+	white-space: pre;
+	overflow-x: auto;
+}
+.settings-cmdwrap .btn {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+}
+.settings-secret {
+	background: var(--accent-soft);
+	border: 1px solid var(--accent);
+	border-radius: var(--r-lg);
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.settings-secret .code {
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 9px 11px;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	word-break: break-all;
+}
+.settings-confirm {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--t-xs);
+	color: var(--ink-2);
+	flex-wrap: wrap;
+}
+.settings-swatches {
+	display: flex;
+	gap: 7px;
+	align-items: center;
+}
+.settings-swatch {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	border: 2px solid transparent;
+	cursor: pointer;
+	padding: 0;
+}
+.settings-swatch.on {
+	border-color: var(--ink);
+}
+.settings-btn-full {
+	width: 100%;
+	justify-content: center;
+}
+.settings-btn-sm {
+	height: 24px;
+	padding: 0 9px;
+	font-size: 11.5px;
+}
+.settings-input-short {
+	max-width: 150px;
+	flex: none;
+}
+.settings-input-wide {
+	width: 100%;
+	max-width: 420px;
+}
+
+@media (max-width: 720px) {
+	.settings-nav {
+		display: none;
+	}
+	.settings-nav-mobile {
+		display: flex;
+	}
+	.settings-main {
+		padding: 16px 16px 40px;
+	}
+	.settings-wrap {
+		gap: 16px;
+	}
+	.settings-inline > .input,
+	.settings-inline > select.input {
+		width: 100% !important;
+		max-width: none;
+		flex: 1 1 100%;
+	}
+}
+
+/* ---- Auth: login + first-run setup ---- */
+.auth-wrap {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	box-sizing: border-box;
+}
+.auth-brand {
+	font-family: var(--serif);
+	font-size: 26px;
+	color: var(--ink);
+	margin-bottom: 22px;
+}
+.auth-card {
+	width: min(380px, 100%);
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: var(--r-lg);
+	box-shadow: var(--shadow-1);
+	padding: 30px 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	box-sizing: border-box;
+}
+.auth-card h1 {
+	font-family: var(--serif);
+	font-weight: 400;
+	font-size: var(--t-xl);
+	margin: 2px 0 0;
+}
+.auth-card .sub {
+	font-size: var(--t-sm);
+	color: var(--ink-2);
+	margin: 0 0 4px;
+}
+.auth-steps {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 14px;
+}
+.auth-stepdot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--line-strong);
+}
+.auth-stepdot.on {
+	background: var(--accent);
+}
+.auth-stepn {
+	font-family: var(--mono);
+	font-size: var(--t-xs);
+	color: var(--ink-3);
+	margin-left: 6px;
+}
+@media (max-width: 480px) {
+	.auth-card {
+		padding: 24px 20px;
+	}
+}
