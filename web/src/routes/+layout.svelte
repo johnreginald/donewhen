@@ -15,7 +15,7 @@
 	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
 	import { api, expireSession, setNotifier } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, catchUp, me, activeWorkspace, workspaces, switchWorkspace, switching } from '$lib/store.js';
+	import { loadMeta, loadIssues, loadViews, loadWorkspaces, applyEvent, catchUp, me, activeWorkspace, workspaces, switchWorkspace, switching } from '$lib/store.js';
 	import {
 		paletteOpen,
 		quickCapture,
@@ -83,6 +83,7 @@
 			}
 			await loadMeta();
 			if (!(await loadIssues())) throw new Error("Couldn't load issues");
+			loadViews();
 			ready = true;
 			setNotifier(toastNetwork);
 		} catch (e) {

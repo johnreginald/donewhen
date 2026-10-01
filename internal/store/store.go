@@ -85,9 +85,14 @@ type IssueFilter struct {
 	InitiativeID string // all issues whose epic belongs to this Project (initiative)
 	LabelID      string // all issues carrying this label
 	LabelName    string // same, by name, so it works across workspaces
-	Query        string
-	ParentKey    string // list sub-issues of this epic key
-	Limit        int
+	// States, Priorities and LabelIDs each match any of their values (OR within
+	// one filter, AND across filters). A States entry is a state id or name.
+	States     []string
+	Priorities []int
+	LabelIDs   []string
+	Query      string
+	ParentKey  string // list sub-issues of this epic key
+	Limit      int
 	// IncludeArchived keeps the issues of archived epics, which are hidden
 	// from lists by default. Single-issue lookups are never filtered.
 	IncludeArchived bool
@@ -122,6 +127,10 @@ func scanIssue(row pgx.Row) (models.Issue, error) {
 	return is, err
 }
 
+// likeEscaper makes a search term literal inside LIKE: a user typing 50% or
+// snake_case means those characters, not wildcards.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, error) {
 	if f.WorkspaceID == "" && len(f.WorkspaceIDs) == 0 {
 		return nil, errors.New("ListIssues: workspace id is required")
@@ -144,6 +153,24 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 		n++
 		q += fmt.Sprintf(" AND i.state_id IN (SELECT id FROM workflow_states WHERE lower(name)=lower($%d))", n)
 		args = append(args, f.StateName)
+	}
+	if len(f.States) > 0 {
+		lowered := make([]string, len(f.States))
+		for i, v := range f.States {
+			lowered[i] = strings.ToLower(strings.TrimSpace(v))
+		}
+		n++
+		q += fmt.Sprintf(" AND (i.state_id::text = ANY($%d) OR i.state_id IN (SELECT id FROM workflow_states WHERE lower(name) = ANY($%d)))", n, n)
+		args = append(args, lowered)
+	}
+	if len(f.Priorities) > 0 {
+		add("i.priority = ANY(", f.Priorities)
+		q += ")"
+	}
+	if len(f.LabelIDs) > 0 {
+		n++
+		q += fmt.Sprintf(" AND i.id IN (SELECT issue_id FROM issue_labels WHERE label_id::text = ANY($%d))", n)
+		args = append(args, f.LabelIDs)
 	}
 	if f.ProjectID != "" {
 		add("i.project_id=", f.ProjectID)
@@ -168,8 +195,8 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 	}
 	if f.Query != "" {
 		n++
-		q += fmt.Sprintf(" AND (i.title ILIKE $%d OR i.key ILIKE $%d)", n, n)
-		args = append(args, "%"+f.Query+"%")
+		q += fmt.Sprintf(` AND (i.title ILIKE $%d ESCAPE '\' OR i.key ILIKE $%d ESCAPE '\')`, n, n)
+		args = append(args, "%"+likeEscaper.Replace(f.Query)+"%")
 	}
 	if f.NewestFirst {
 		q += " ORDER BY i.updated_at DESC, i.number DESC"

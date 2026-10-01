@@ -1,5 +1,5 @@
 <script>
-	import { initiatives, projects, activeInitiative, activeProject, activeLabel, loadIssues } from '$lib/store.js';
+	import { initiatives, projects, activeInitiative, activeProject, loadIssues } from '$lib/store.js';
 	import { ChevronDown, ChevronRight, Check, Layers, Box, Hexagon } from '@lucide/svelte';
 
 	let open = $state(false);
@@ -23,21 +23,18 @@
 	function pickAll() {
 		activeInitiative.set('');
 		activeProject.set('');
-		activeLabel.set('');
 		loadIssues();
 		open = false;
 	}
 	function pickInitiative(id) {
 		activeInitiative.set(id);
 		activeProject.set('');
-		activeLabel.set('');
 		loadIssues();
 		open = false;
 	}
 	function pickEpic(id) {
 		activeProject.set(id);
 		activeInitiative.set('');
-		activeLabel.set('');
 		loadIssues();
 		open = false;
 	}

@@ -1,6 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { api, getWorkspace, setWorkspace, notify } from './api.js';
 import { belongsInView, coalesce } from './live.js';
+import { emptyFilters, matchesFilters, textMatches, parseFilters, serializeFilters, sameList } from './filters.js';
 
 export const workspaces = writable([]); // the caller's memberships
 export const activeWorkspace = writable(null); // the one everything is scoped to
@@ -54,7 +55,11 @@ export const appConfig = writable({});
 export const me = writable(null);
 export const activeProject = writable(''); // '' = all (epic-level filter)
 export const activeInitiative = writable(''); // '' = all (Project-level filter)
-export const activeLabel = writable(''); // '' = all (label filter)
+// The state / priority / label filters of the filter bar (PP-205): workflow
+// state names, priority numbers and label ids. They narrow the lists on the
+// client, so a live event is judged by the same rule as a fetched issue.
+export const activeFilters = writable(emptyFilters());
+export const savedViews = writable([]); // the caller's saved views in this workspace
 export const inboxCount = writable(0); // needs-review queue size (sidebar badge)
 // True from the moment a workspace switch starts until the server has recorded
 // it. The live stream stays closed meanwhile (see the layout).
@@ -92,12 +97,46 @@ export async function loadWorkspaceCounts() {
 	workspaceCounts.set(Object.fromEntries(entries));
 }
 
-// visibleIssues is the issue list narrowed by the search box, by title or key.
-export const visibleIssues = derived([issues, issueQuery], ([list, q]) => {
-	const needle = q.trim().toLowerCase();
-	if (!needle) return list;
-	return list.filter((i) => i.title.toLowerCase().includes(needle) || i.key.toLowerCase().includes(needle));
-});
+// visibleIssues is the issue list narrowed by the search box (title or key) and
+// the filter bar.
+export const visibleIssues = derived([issues, issueQuery, activeFilters, states], ([list, q, f, sts]) =>
+	list.filter((i) => textMatches(i, q) && matchesFilters(i, f, sts))
+);
+
+// filterQuery is the URL query string (no "?") of every filter now in effect.
+export function filterQuery() {
+	const f = get(activeFilters);
+	return serializeFilters({ ...f, project: get(activeProject), q: get(issueQuery) });
+}
+
+// applyFilterQuery sets every filter from a URL query string: what a shared
+// link, a saved view or a reload carries. A filter the string leaves out is
+// cleared, so the string alone says what the list shows.
+export function applyFilterQuery(search) {
+	const f = parseFilters(search);
+	const cur = get(activeFilters);
+	if (!sameList(cur.states, f.states) || !sameList(cur.priorities, f.priorities) || !sameList(cur.labels, f.labels)) {
+		activeFilters.set({ states: f.states, priorities: f.priorities, labels: f.labels });
+	}
+	if (get(issueQuery) !== f.q) issueQuery.set(f.q);
+	if (get(activeProject) !== f.project) {
+		activeProject.set(f.project);
+		activeInitiative.set('');
+		loadIssues();
+	}
+}
+
+// loadViews reads the caller's saved views; the server creates the defaults the
+// first time. A failure keeps the views on screen.
+export async function loadViews() {
+	const gen = wsGen;
+	try {
+		const list = (await api.get('/views')) || [];
+		if (gen === wsGen) savedViews.set(list);
+	} catch {
+		/* the sidebar just shows what it has */
+	}
+}
 
 // loadWorkspaces resolves which workspaces the caller can reach and settles on
 // one. It must run before loadMeta: every other request is scoped to the result.
@@ -128,7 +167,8 @@ export async function switchWorkspace(slug) {
 	activeWorkspace.set(target);
 	activeInitiative.set('');
 	activeProject.set('');
-	activeLabel.set('');
+	activeFilters.set(emptyFilters());
+	savedViews.set([]);
 	issues.set([]);
 	allIssues.set([]);
 	issueQuery.set('');
@@ -150,7 +190,10 @@ export async function switchWorkspace(slug) {
 		if (e?.status !== 401) notify("Couldn't load the workspace: " + (e?.message || e));
 		return;
 	}
-	if (gen === wsGen) refreshInbox().catch(() => {});
+	if (gen === wsGen) {
+		refreshInbox().catch(() => {});
+		loadViews();
+	}
 }
 
 // loadMeta loads the workspace's states, epics, initiatives, labels and config
@@ -192,11 +235,9 @@ export async function loadMeta() {
 export async function loadIssues(refreshAll = false) {
 	const initiative = get(activeInitiative);
 	const project = get(activeProject);
-	const label = get(activeLabel);
 	const f = {};
 	if (initiative) f.initiative = initiative;
 	else if (project) f.project = project;
-	if (label) f.label = label;
 	const filtered = Object.keys(f).length > 0;
 	const gen = wsGen;
 	const mine = ++issuesGen;
@@ -255,7 +296,6 @@ export function applyEvent(ev) {
 			workspaceId: wsId,
 			project: get(activeProject),
 			initiative: get(activeInitiative),
-			label: get(activeLabel),
 			projects: get(projects)
 		});
 		issues.update((l) => upsert(l, ev.issue, fits));
@@ -340,36 +380,3 @@ export const PRIORITIES = [
 	{ value: 3, label: 'Medium' },
 	{ value: 4, label: 'Low' }
 ];
-
-// ---- Board-only filters: priority + a couple of client-side "saved views".
-// Layered on top of visibleIssues (search, already shared with every issue
-// view) rather than folded into it, so List/Tasks/Links keep their current
-// behaviour untouched.
-export const activePriority = writable(''); // '' = all, else 1..4
-export const activeSavedView = writable(''); // '' | 'my-review' | 'blocked'
-
-export const SAVED_VIEWS = [
-	{ id: 'my-review', label: 'My In Review' },
-	{ id: 'blocked', label: 'Blocked' }
-];
-
-export const boardVisibleIssues = derived(
-	[visibleIssues, activePriority, activeSavedView, states, me],
-	([list, pri, view, sts, meUser]) => {
-		let out = list;
-		if (pri !== '') out = out.filter((i) => i.priority === Number(pri));
-		if (view === 'blocked') {
-			const s = sts.find((x) => x.name.toLowerCase() === 'blocked');
-			out = out.filter((i) => i.stateId === s?.id);
-		} else if (view === 'my-review') {
-			const s = sts.find((x) => x.name.toLowerCase() === 'in review');
-			out = out.filter((i) => i.stateId === s?.id && meUser && i.assigneeId === meUser.id);
-		}
-		return out;
-	}
-);
-
-export function clearBoardFilters() {
-	activePriority.set('');
-	activeSavedView.set('');
-}

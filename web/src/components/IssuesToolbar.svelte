@@ -1,18 +1,23 @@
 <script>
-	// The controls above every issue view — search, scope, labels and
-	// the Board / List / By epic / Links switch — laid out like Paperclip's Tasks bar.
-	// The priority filter, saved views and the active-filter chip row are
-	// Board-only additions (boardVisibleIssues); the other views keep reading
-	// visibleIssues, untouched.
+	// The controls above every issue view: search, scope, the State / Priority /
+	// Label filters, Save view, and the Board / List / By epic / Links switch.
+	// The filters live in the page URL, so a copied link opens the same list,
+	// and "Save view" keeps one under Views in the sidebar (PP-205).
+	import { onMount, untrack } from 'svelte';
+	import { get } from 'svelte/store';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { autohide } from '$lib/autohide.js';
 	import {
-		issueQuery, projects, initiatives, activeProject, activeInitiative, activeLabel, labels,
-		loadIssues, PRIORITIES, activePriority, activeSavedView, SAVED_VIEWS, clearBoardFilters
+		issueQuery, projects, initiatives, activeProject, activeInitiative, activeFilters, savedViews,
+		states, labels, loadIssues, PRIORITIES, filterQuery, applyFilterQuery
 	} from '$lib/store.js';
+	import { api } from '$lib/api.js';
+	import { hasFilterParams, parseFilters, serializeFilters, emptyFilters, toggle } from '$lib/filters.js';
+	import { showToast } from '$lib/ui.js';
 	import ProjectSwitcher from './ProjectSwitcher.svelte';
-	import LabelFilter from './LabelFilter.svelte';
-	import { Search, List, Layers, Columns3, GitFork, ListChecks, Star, ChevronDown, X } from '@lucide/svelte';
+	import MultiFilter from './MultiFilter.svelte';
+	import { Search, List, Layers, Columns3, GitFork, ListChecks, Bookmark, X } from '@lucide/svelte';
 
 	// Board · List · By epic · Tasks · Links. List is state-grouped rows,
 	// By epic is the Project → Epic → Issue tree, Tasks is grouped by day.
@@ -24,46 +29,111 @@
 		{ href: '/links', label: 'Links', icon: GitFork }
 	];
 
-	const onBoard = $derived($page.url.pathname === '/board');
+	const path = $derived($page.url.pathname);
+	// The query the filters amount to now; reading the stores keeps it current.
+	const query = $derived.by(() => {
+		$activeFilters;
+		$activeProject;
+		$issueQuery;
+		return filterQuery();
+	});
+	const withQuery = (href) => (query ? `${href}?${query}` : href);
 
-	let priOpen = $state(false);
-	let viewsOpen = $state(false);
+	// A URL that names filters sets them (a shared link, a saved view, a reload);
+	// otherwise the filters already in effect stay as they are.
+	$effect(() => {
+		const search = $page.url.search;
+		if (hasFilterParams(search)) untrack(() => applyFilterQuery(search));
+	});
+	// And the URL follows the filters, replacing the entry so Back is not flooded.
+	let urlTimer;
+	$effect(() => {
+		const want = query;
+		const search = untrack(() => $page.url.search);
+		const have = hasFilterParams(search) ? serializeFilters(parseFilters(search)) : '';
+		if (have === want) return;
+		clearTimeout(urlTimer);
+		urlTimer = setTimeout(() => {
+			// Re-read: another navigation may have landed in the meantime.
+			if (filterQuery() === want) goto(withQuery(untrack(() => $page.url.pathname)), { replaceState: true, keepFocus: true, noScroll: true });
+		}, 150);
+	});
+	onMount(() => () => clearTimeout(urlTimer));
 
-	function pickPriority(v) {
-		activePriority.set(v);
-		priOpen = false;
+	const stateOptions = $derived($states.map((s) => ({ value: s.name, name: s.name, color: s.color })));
+	const priorityOptions = PRIORITIES.map((p) => ({ value: p.value, name: p.label }));
+	const labelOptions = $derived($labels.map((l) => ({ value: l.id, name: l.name, color: l.color })));
+
+	function setFilter(key, values) {
+		activeFilters.update((f) => ({ ...f, [key]: values }));
 	}
-	function pickSavedView(id) {
-		activeSavedView.set(id);
-		viewsOpen = false;
-	}
 
-	const priLabel = $derived(
-		$activePriority === '' ? 'Priority' : (PRIORITIES.find((p) => p.value === Number($activePriority))?.label ?? 'Priority')
-	);
-	const viewLabel = $derived(SAVED_VIEWS.find((v) => v.id === $activeSavedView)?.label ?? '');
-
-	// Active-filter chips — epic/project scope, label, priority, saved view.
-	// Each independently removable. Only on the Board, and only once something
-	// is active (filter chip only appears when it means something).
-	const epicChip = $derived(
-		$activeProject
-			? $projects.find((p) => p.id === $activeProject)?.name
+	// Chips for everything in effect, each removable on its own.
+	const chips = $derived([
+		...$activeFilters.states.map((v) => ({ id: 's' + v, text: v, clear: () => setFilter('states', toggle($activeFilters.states, v)) })),
+		...$activeFilters.priorities.map((v) => ({
+			id: 'p' + v,
+			text: PRIORITIES.find((p) => p.value === v)?.label ?? String(v),
+			clear: () => setFilter('priorities', toggle($activeFilters.priorities, v))
+		})),
+		...$activeFilters.labels.map((v) => ({
+			id: 'l' + v,
+			text: $labels.find((l) => l.id === v)?.name ?? 'Label',
+			clear: () => setFilter('labels', toggle($activeFilters.labels, v))
+		})),
+		...($activeProject
+			? [{ id: 'epic', text: $projects.find((p) => p.id === $activeProject)?.name ?? 'Epic', clear: clearEpic }]
 			: $activeInitiative
-				? $initiatives.find((i) => i.id === $activeInitiative)?.name
-				: null
-	);
-	const labelChip = $derived($labels.find((l) => l.id === $activeLabel)?.name ?? null);
-	const hasChips = $derived(onBoard && (epicChip || labelChip || $activePriority !== '' || $activeSavedView));
-
+				? [{ id: 'ini', text: $initiatives.find((i) => i.id === $activeInitiative)?.name ?? 'Project', clear: clearEpic }]
+				: [])
+	]);
 	function clearEpic() {
 		activeProject.set('');
 		activeInitiative.set('');
 		loadIssues();
 	}
-	function clearLabel() {
-		activeLabel.set('');
-		loadIssues();
+	function clearAll() {
+		activeFilters.set(emptyFilters());
+		issueQuery.set('');
+		if (get(activeProject) || get(activeInitiative)) clearEpic();
+	}
+
+	// Save view: name the filters in effect and keep them in the sidebar.
+	let saving = $state(false);
+	let viewName = $state('');
+	let viewError = $state('');
+	let nameEl = $state(null);
+	const canSave = $derived(!!query);
+	function openSave() {
+		saving = true;
+		viewName = '';
+		viewError = '';
+		queueMicrotask(() => nameEl?.focus());
+	}
+	async function saveView() {
+		const name = viewName.trim();
+		if (!name || name.length > 60) {
+			viewError = name ? 'Keep the name under 60 characters.' : 'Give the view a name.';
+			return;
+		}
+		try {
+			const v = await api.post('/views', { name, query: filterQuery(), layout: path === '/board' ? 'board' : 'list' });
+			savedViews.update((l) => [...l, v]);
+			saving = false;
+			showToast(`View "${v.name}" saved`);
+		} catch (e) {
+			viewError = e.message || 'Could not save the view';
+		}
+	}
+	function saveKey(e) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			saveView();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			e.stopPropagation();
+			saving = false;
+		}
 	}
 </script>
 
@@ -73,37 +143,30 @@
 		<input bind:value={$issueQuery} placeholder="Search tasks…" />
 	</label>
 	<ProjectSwitcher />
-	<LabelFilter />
-	{#if onBoard}
-		<div class="dd">
-			<button class="btn sd" class:on={$activePriority !== ''} onclick={() => (priOpen = !priOpen)}>
-				{priLabel}<ChevronDown size={13} strokeWidth={2.4} class="car" />
-			</button>
-			{#if priOpen}
-				<div class="dd-bd" role="presentation" onclick={() => (priOpen = false)}></div>
-				<div class="dd-menu">
-					<button class="dd-item" class:on={$activePriority === ''} onclick={() => pickPriority('')}>All priorities</button>
-					{#each PRIORITIES as p (p.value)}
-						<button class="dd-item" class:on={$activePriority === String(p.value)} onclick={() => pickPriority(String(p.value))}>{p.label}</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	{/if}
+	<MultiFilter label="State" options={stateOptions} selected={$activeFilters.states} onchange={(v) => setFilter('states', v)} />
+	<MultiFilter label="Priority" options={priorityOptions} selected={$activeFilters.priorities} onchange={(v) => setFilter('priorities', v)} />
+	<MultiFilter label="Label" options={labelOptions} selected={$activeFilters.labels} onchange={(v) => setFilter('labels', v)} searchable />
 	<div class="spacer"></div>
-	{#if onBoard}
+	{#if canSave}
 		<div class="dd">
-			<button class="btn sd" class:on={!!$activeSavedView} onclick={() => (viewsOpen = !viewsOpen)}>
-				<Star size={13} strokeWidth={2.2} />{viewLabel || 'Saved views'}<ChevronDown size={13} strokeWidth={2.4} class="car" />
+			<button class="btn sd" onclick={() => (saving ? (saving = false) : openSave())} aria-haspopup="true" aria-expanded={saving}>
+				<Bookmark size={13} strokeWidth={2.2} />Save view
 			</button>
-			{#if viewsOpen}
-				<div class="dd-bd" role="presentation" onclick={() => (viewsOpen = false)}></div>
-				<div class="dd-menu">
-					<div class="dd-head">Saved views</div>
-					<button class="dd-item" class:on={!$activeSavedView} onclick={() => pickSavedView('')}>All issues</button>
-					{#each SAVED_VIEWS as v (v.id)}
-						<button class="dd-item" class:on={$activeSavedView === v.id} onclick={() => pickSavedView(v.id)}>{v.label}</button>
-					{/each}
+			{#if saving}
+				<div class="dd-bd" role="presentation" onclick={() => (saving = false)}></div>
+				<div class="dd-menu save">
+					<input
+						bind:this={nameEl}
+						bind:value={viewName}
+						oninput={() => (viewError = '')}
+						onkeydown={saveKey}
+						class="input"
+						placeholder="View name"
+						aria-label="View name"
+						maxlength="60"
+					/>
+					{#if viewError}<div class="verr" role="alert">{viewError}</div>{/if}
+					<button class="btn primary" onclick={saveView}>Save</button>
 				</div>
 			{/if}
 		</div>
@@ -111,27 +174,19 @@
 	<div class="vtoggle" role="tablist">
 		{#each views as v (v.label)}
 			{@const Icon = v.icon}
-			<a href={v.href} class="vt" class:on={$page.url.pathname === v.href} aria-label={v.label}>
+			<a href={withQuery(v.href)} class="vt" class:on={path === v.href} aria-label={v.label}>
 				<Icon size={14} strokeWidth={2} /><span class="vt-txt">{v.label}</span>
 			</a>
 		{/each}
 	</div>
 </div>
 
-{#if hasChips}
+{#if chips.length}
 	<div class="chiprow">
-		{#if epicChip}
-			<button class="fchip" onclick={clearEpic} title="Clear epic filter">{epicChip}<span class="x"><X size={10} strokeWidth={2.6} /></span></button>
-		{/if}
-		{#if labelChip}
-			<button class="fchip" onclick={clearLabel} title="Clear label filter">{labelChip}<span class="x"><X size={10} strokeWidth={2.6} /></span></button>
-		{/if}
-		{#if $activePriority !== ''}
-			<button class="fchip" onclick={() => pickPriority('')} title="Clear priority filter">{priLabel}<span class="x"><X size={10} strokeWidth={2.6} /></span></button>
-		{/if}
-		{#if $activeSavedView}
-			<button class="fchip" onclick={() => pickSavedView('')} title="Clear saved view">{viewLabel}<span class="x"><X size={10} strokeWidth={2.6} /></span></button>
-		{/if}
+		{#each chips as c (c.id)}
+			<button class="fchip" onclick={c.clear} title="Clear this filter">{c.text}<span class="x"><X size={10} strokeWidth={2.6} /></span></button>
+		{/each}
+		{#if chips.length > 1}<button class="clearall" onclick={clearAll}>Clear all</button>{/if}
 	</div>
 {/if}
 
@@ -196,10 +251,6 @@
 		border-color: var(--line-strong);
 		color: var(--ink);
 	}
-	.btn.sd.on {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
 	.btn :global(.car) {
 		color: var(--ink-3);
 		margin-left: 1px;
@@ -228,33 +279,24 @@
 		max-height: 300px;
 		overflow-y: auto;
 	}
-	.dd-head {
-		font-size: var(--t-xs);
-		color: var(--ink-3);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		padding: 6px 8px 7px;
-		font-family: var(--mono);
+	.dd-menu.save {
+		width: 240px;
+		gap: 8px;
+		padding: 8px;
 	}
-	.dd-item {
-		display: flex;
-		align-items: center;
+	.verr {
+		font-size: var(--t-sm);
+		color: var(--danger);
+	}
+	.clearall {
 		background: none;
 		border: none;
-		color: var(--ink-2);
-		text-align: left;
-		padding: 7px 9px;
-		border-radius: var(--r-sm);
-		font-size: var(--t-base);
+		color: var(--ink-3);
+		font-size: var(--t-sm);
+		padding: 0 6px;
 	}
-	.dd-item:hover {
-		background: var(--hover);
+	.clearall:hover {
 		color: var(--ink);
-	}
-	.dd-item.on {
-		background: var(--accent-soft);
-		color: var(--accent);
-		font-weight: 500;
 	}
 	.vtoggle {
 		display: flex;

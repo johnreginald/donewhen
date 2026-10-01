@@ -1,6 +1,6 @@
 <script>
 	import { dndzone } from 'svelte-dnd-action';
-	import { states, boardVisibleIssues, issueQuery, issues, moveIssueTo, activeWorkspace } from '$lib/store.js';
+	import { states, visibleIssues, issueQuery, issues, moveIssueTo, activeWorkspace } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { gateFailure, gateSummary } from '$lib/gate.js';
 	import { showToast, blockedReasonFor } from '$lib/ui.js';
@@ -78,7 +78,7 @@
 	// Rebuild columns from live data, except while a drag is in flight.
 	$effect(() => {
 		const st = $states;
-		const is = $boardVisibleIssues;
+		const is = $visibleIssues;
 		if (dragging) return;
 		cols = st.map((s) => ({
 			id: s.id,
