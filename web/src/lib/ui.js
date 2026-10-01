@@ -8,6 +8,8 @@ export const archiveTarget = writable(null); // an epic awaiting archive confirm
 export const quickCapture = writable(false); // the "C" one-line issue composer
 export const shortcutHelp = writable(false); // the "?" keyboard-shortcut overlay
 export const connectionLost = writable(false); // true while the SSE stream is erroring
+// '' | 'connecting' | 'live' | 'reconnecting' | 'offline' — the sidebar dot
+export const streamStatus = writable('');
 export const toasts = writable([]); // stack of { id, message, kind, actionLabel, onAction }
 // liveEvent is the latest server event, for views that follow one thing (a
 // ticket's runs) rather than the issue list the layout already keeps current.

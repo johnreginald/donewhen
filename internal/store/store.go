@@ -485,6 +485,7 @@ type IssuePatch struct {
 	SetAssignee   bool
 	Priority      *int
 	Position      *float64
+	Rank          *Rank   // place between two neighbours; computes the position in the same tx
 	ParentKey     *string // epic key; nil pointer + SetParent clears it
 	SetParent     bool
 	LabelIDs      []string // when non-nil, replaces label set
@@ -523,6 +524,7 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		sets = append(sets, fmt.Sprintf("%s=$%d", col, n))
 		args = append(args, v)
 	}
+	targetState := "" // the column the issue ends up in, when it moves
 	if p.Title != nil {
 		set("title", *p.Title)
 	}
@@ -555,6 +557,14 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 			}
 		}
 		set("state_id", resolved)
+		targetState = resolved
+	}
+	if p.Rank != nil {
+		pos, err := s.rankTx(ctx, tx, wsID, id, targetState, *p.Rank)
+		if err != nil {
+			return models.Issue{}, err
+		}
+		set("position", pos)
 	}
 	if p.SetProject {
 		set("project_id", p.ProjectID)

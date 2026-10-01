@@ -8,12 +8,13 @@
 		activeProject,
 		activeInitiative,
 		loadIssues,
-		issues,
+		allIssues,
 		inboxCount,
+		refreshInbox,
 		activeWorkspace,
 		me
 	} from '$lib/store.js';
-	import { paletteOpen, openComposer, askArchive } from '$lib/ui.js';
+	import { paletteOpen, openComposer, askArchive, streamStatus, showToast } from '$lib/ui.js';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import {
 		FileText, Box, Plus, Archive, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
@@ -32,6 +33,13 @@
 	];
 
 	let { onnavigate = () => {} } = $props();
+
+	const LIVE_LABEL = {
+		connecting: 'Connecting…',
+		live: 'Live',
+		reconnecting: 'Reconnecting…',
+		offline: 'Offline'
+	};
 
 	// Sidebar / rail — collapsed to a 64px icon strip, remembered per device.
 	// The rail is a desktop affordance; below 720px this is a slide-in drawer
@@ -74,22 +82,12 @@
 		wsOpen = !wsOpen;
 	}
 
-	// Full issue set (filter-independent) for the per-epic totals in the badge.
-	let allIssues = $state([]);
-	async function refreshCounts() {
-		allIssues = (await api.issues()) || [];
-		try {
-			const r = await api.inbox();
-			inboxCount.set((r?.needsReview || []).length + (r?.waiting || []).length);
-		} catch {
+	// Per-epic totals come from the store's unfiltered list, which live events
+	// keep current; moving a card never refetches anything here.
+	onMount(() => {
+		refreshInbox().catch(() => {
 			/* not logged in yet / offline — leave badge as-is */
-		}
-	}
-	onMount(refreshCounts);
-	// re-pull when issues change (create / move / delete via the board or SSE)
-	$effect(() => {
-		$issues;
-		refreshCounts();
+		});
 	});
 
 	// Edit / delete an Epic (DoneWhen "project").
@@ -115,7 +113,7 @@
 	// The workspace (top left) already names the project, so the sidebar
 	// lists its epics directly, each with how many tasks it holds.
 	const epics = $derived(
-		$projects.map((p) => ({ ...p, count: allIssues.filter((is) => is.projectId === p.id).length }))
+		$projects.map((p) => ({ ...p, count: $allIssues.filter((is) => is.projectId === p.id).length }))
 	);
 
 	// Epics fold away; the choice is kept per browser.
@@ -141,7 +139,15 @@
 
 	let userOpen = $state(false);
 	async function logout() {
-		await api.logout();
+		try {
+			await api.logout();
+		} catch (e) {
+			// 401 means the session is already gone, which is what was asked for.
+			if (e?.status !== 401) {
+				showToast("Couldn't log out: " + (e?.message || e), 'error');
+				return;
+			}
+		}
 		goto('/login');
 	}
 </script>
@@ -158,7 +164,10 @@
 
 	<div class="ws">
 		<button class="ws-btn" bind:this={wsBtn} onclick={toggleWs} title="Switch workspace">
-			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}</span>
+			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}<span
+					class="live {$streamStatus}"
+					title={LIVE_LABEL[$streamStatus] || ''}
+				></span></span>
 			<span class="ws-text">
 				<span class="ws-name">{$activeWorkspace?.name || 'DoneWhen'}</span>
 				<span class="ws-key">{$activeWorkspace?.keyPrefix || ''}</span>
@@ -402,6 +411,7 @@
 		color: var(--ink);
 	}
 	.logo {
+		position: relative;
 		width: 24px;
 		height: 24px;
 		border-radius: var(--r);
@@ -563,6 +573,25 @@
 		border-radius: 999px;
 		padding: 1px 6px;
 		line-height: 1.4;
+	}
+	.live {
+		position: absolute;
+		right: -3px;
+		bottom: -3px;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		border: 1.5px solid var(--sunken);
+		background: var(--ink-3);
+	}
+	.live.live {
+		background: var(--st-done);
+	}
+	.live.reconnecting {
+		background: var(--st-progress);
+	}
+	.live.offline {
+		background: var(--danger);
 	}
 	.dotbadge {
 		position: absolute;

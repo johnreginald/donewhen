@@ -1,7 +1,7 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { get } from 'svelte/store';
-	import { aiName, states, projectById, inboxCount, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
+	import { aiName, states, projectById, inboxCount, inboxTotal, refreshInbox, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { openIssue, onLive, paletteOpen } from '$lib/ui.js';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -14,6 +14,7 @@
 	let loading = $state(true); // the full-page skeleton — only for the first load
 	let error = $state(null); // full-page error, set only by a non-background load
 	let needsReview = $state([]);
+	let waiting = $state([]); // counts toward the badge, shown nowhere on this page
 	let blockedList = $state([]);
 	let recent = $state([]);
 	let seenAt = $state(null);
@@ -46,28 +47,21 @@
 	// good data on a transient failure, or re-stamp "seen" (that would erase the
 	// new-since-last-visit marks moments after they appear).
 	async function load({ background = false } = {}) {
+		let ok = false;
 		if (!background) {
 			loading = true;
 			error = null;
 		}
 		try {
-			const r = (await api.inbox()) || {};
+			const r = (await refreshInbox()) || {}; // also sets the sidebar badge
 			needsReview = r.needsReview || [];
+			waiting = r.waiting || [];
 			recent = r.recent || [];
 			seenAt = r.seenAt || null;
-			inboxCount.set(needsReview.length);
 			clampSelection();
 
 			await Promise.all([loadCriteria(needsReview), loadBlocked()]);
-
-			if (!seenStamped) {
-				seenStamped = true;
-				try {
-					await api.inboxSeen();
-				} catch {
-					seenStamped = false; // let the next successful load retry the stamp
-				}
-			}
+			ok = true;
 		} catch (e) {
 			if (background) {
 				flashToast("Couldn't refresh the inbox.", 'error');
@@ -76,6 +70,17 @@
 			}
 		} finally {
 			if (!background) loading = false;
+		}
+		// Stamp "seen" only once the list has been drawn, and only if it loaded:
+		// a failed load must not mark unseen activity as seen.
+		if (ok && !seenStamped) {
+			seenStamped = true;
+			await tick();
+			try {
+				await api.inboxSeen();
+			} catch {
+				seenStamped = false; // let the next successful load retry the stamp
+			}
 		}
 	}
 
@@ -160,7 +165,7 @@
 		try {
 			await api.updateIssue(item.id, { stateId: doneState.id });
 			needsReview = needsReview.filter((x) => x.id !== item.id);
-			inboxCount.set(needsReview.length);
+			inboxCount.set(inboxTotal({ needsReview, waiting }));
 			clampSelection();
 			flashToast('→ Done · by you', 'info', {
 				mono: item.key,
@@ -212,7 +217,7 @@
 			await api.updateIssue(item.id, { stateId: progState.id });
 			if (text) await api.addComment(item.id, text);
 			needsReview = needsReview.filter((x) => x.id !== item.id);
-			inboxCount.set(needsReview.length);
+			inboxCount.set(inboxTotal({ needsReview, waiting }));
 			cancelBounce();
 			clampSelection();
 			flashToast(`${item.key} → In Progress${text ? ' · comment posted' : ''}`);

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "check:ds": "node scripts/check-ds.mjs",
-    "test": "node --test src/lib/url.test.mjs",
+    "test": "node --test src/lib/*.test.mjs",
     "build": "npm run check:ds && vite build",
     "preview": "vite preview"
   },

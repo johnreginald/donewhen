@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
+	import { safeNext } from '$lib/url.js';
 
 	let phase = $state('loading'); // loading | login | setup1 | setup2
 
@@ -29,7 +30,7 @@
 			try {
 				const s = await api.authStatus();
 				if (s.authenticated) {
-					goto('/');
+					goto(safeNext(location.search));
 					return;
 				}
 				phase = s.setupRequired ? 'setup1' : 'login';
@@ -46,7 +47,7 @@
 		busy = true;
 		try {
 			await api.login(email, password);
-			location.href = '/';
+			location.href = safeNext(location.search); // back to the page the session expired on
 		} catch (err) {
 			if (err.status === 429) {
 				rateLimited = true;

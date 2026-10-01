@@ -12,14 +12,15 @@
 	import ToastStack from '$components/ToastStack.svelte';
 	import Composer from '$components/Composer.svelte';
 	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
-	import { api } from '$lib/api.js';
+	import { api, expireSession, setNotifier } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount, workspaces, switchWorkspace } from '$lib/store.js';
+	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, catchUp, me, activeWorkspace, workspaces, switchWorkspace, switching } from '$lib/store.js';
 	import {
 		paletteOpen,
 		quickCapture,
 		shortcutHelp,
 		connectionLost,
+		streamStatus,
 		composer,
 		showToast,
 		flashIssue,
@@ -40,7 +41,7 @@
 	let { children } = $props();
 	let ready = $state(false);
 	let noWorkspace = $state(false);
-	let disconnect;
+	let bootFailed = $state(false); // the server could not be reached, or errored, while starting
 
 	const isLogin = $derived($page.url.pathname === '/login');
 
@@ -50,15 +51,24 @@
 		boot();
 		return () => {
 			window.removeEventListener('keydown', globalKeys);
-			disconnect && disconnect();
 		};
 	});
 
+	// After boot, a network failure is a toast and the screen keeps its data. At
+	// most one every few seconds: a dead server fails many calls at once.
+	let lastNetToast = 0;
+	function toastNetwork(message) {
+		if (Date.now() - lastNetToast < 5000) return;
+		lastNetToast = Date.now();
+		showToast(message, 'error');
+	}
+
 	async function boot() {
+		bootFailed = false;
 		try {
 			const status = await api.authStatus();
 			if (!status.authenticated) {
-				goto('/login');
+				expireSession();
 				return;
 			}
 			me.set(status.user);
@@ -70,9 +80,9 @@
 				return;
 			}
 			await loadMeta();
-			await loadIssues();
-			disconnect = connectSSE(handleEvent, handleSSEStatus);
+			if (!(await loadIssues())) throw new Error("Couldn't load issues");
 			ready = true;
+			setNotifier(toastNetwork);
 		} catch (e) {
 			if (e?.status === 403) {
 				// Not a member of the stored workspace; api.js already cleared
@@ -81,19 +91,27 @@
 				ready = true;
 				return;
 			}
-			goto('/login');
+			// A 401 is already on its way to the login page. Anything else (the
+			// server is down, a 5xx) is not a logout: offer a retry instead.
+			if (e?.status !== 401) bootFailed = true;
 		}
 	}
 
-	// The SSE stream is bound to the workspace it opened with, so it has to be
-	// torn down and reopened whenever the active workspace changes.
-	let streamFor = $state(null);
+	// The SSE stream is bound to the workspace it opened with. This effect owns
+	// it: exactly one stream per workspace, closed while a switch is in flight
+	// and reopened once the server has recorded the new workspace.
+	const streamWs = $derived($activeWorkspace?.id);
 	$effect(() => {
-		const wsp = $activeWorkspace;
-		if (!ready || !wsp || streamFor === wsp.id) return;
-		streamFor = wsp.id;
-		disconnect && disconnect();
-		disconnect = connectSSE(handleEvent, handleSSEStatus);
+		if (!ready || !streamWs || $switching) return;
+		const close = connectSSE(streamWs, {
+			onEvent: handleEvent,
+			onStatus: handleSSEStatus,
+			onCatchUp: () => catchUp().catch(() => {})
+		});
+		return () => {
+			close();
+			streamStatus.set('');
+		};
 	});
 
 	function handleEvent(ev) {
@@ -106,10 +124,10 @@
 		}
 	}
 
-	// Drives the connection-lost banner (PP-209): EventSource retries on its
-	// own, we just surface whether the stream is currently up.
+	// Drives the sidebar dot and the connection-lost banner (PP-209).
 	function handleSSEStatus(status) {
-		connectionLost.set(status === 'error');
+		streamStatus.set(status);
+		connectionLost.set(status === 'reconnecting' || status === 'offline');
 	}
 
 	function isTypingTarget(el) {
@@ -151,6 +169,12 @@
 
 {#if isLogin}
 	{@render children()}
+{:else if bootFailed}
+	<div class="empty-shell">
+		<h1>Can't reach DoneWhen</h1>
+		<p>The server did not answer. Your session is still valid; check the connection and try again.</p>
+		<button class="btn" onclick={boot}>Retry</button>
+	</div>
 {:else if noWorkspace}
 	<div class="empty-shell">
 		<h1>No workspace</h1>

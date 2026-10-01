@@ -28,21 +28,55 @@ export function setWorkspace(slug) {
 	}
 }
 
+// The shell registers a notifier (a toast) once boot has finished; before that
+// a network failure must reach boot() as an error, not as a toast.
+let notifier = null;
+export function setNotifier(fn) {
+	notifier = fn;
+}
+export function notify(message) {
+	notifier?.(message);
+}
+
+// Calls that are allowed to answer 401 without it meaning "session expired".
+const PUBLIC_PATHS = ['/auth/login', '/auth/setup', '/auth/status'];
+let leaving = false;
+
+// expireSession sends the user to the login page, which brings them back to
+// the page they were on.
+export function expireSession() {
+	if (leaving || typeof location === 'undefined' || location.pathname === '/login') return;
+	leaving = true;
+	location.assign('/login?next=' + encodeURIComponent(location.pathname + location.search));
+}
+
 async function request(method, path, body, wsOverride) {
 	const headers = {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('donewhen_csrf');
 	const wsp = wsOverride || getWorkspace();
 	if (wsp) headers['X-Workspace'] = wsp;
-	const res = await fetch('/api' + path, {
-		method,
-		headers,
-		credentials: 'include',
-		body: body !== undefined ? JSON.stringify(body) : undefined
-	});
+	let res;
+	try {
+		res = await fetch('/api' + path, {
+			method,
+			headers,
+			credentials: 'include',
+			body: body !== undefined ? JSON.stringify(body) : undefined
+		});
+	} catch {
+		// The server could not be reached at all (offline, restarting). Not a
+		// logout: the caller keeps its data and the shell says so.
+		const err = new Error("Can't reach DoneWhen");
+		err.network = true;
+		err.status = 0;
+		notify(err.message);
+		throw err;
+	}
 	if (res.status === 401) {
 		const err = new Error('unauthorized');
 		err.status = 401;
+		if (!PUBLIC_PATHS.some((p) => path.startsWith(p))) expireSession();
 		throw err;
 	}
 	if (res.status === 403) {
@@ -137,6 +171,8 @@ export const api = {
 	createIssue: (b) => request('POST', '/issues', b),
 	updateIssue: (id, b) => request('PATCH', `/issues/${id}`, b),
 	deleteIssue: (id) => request('DELETE', `/issues/${id}`),
+	// One request for a board drag: new column plus the neighbours at the drop point.
+	moveIssue: (id, b) => request('POST', `/issues/${id}/move`, b),
 	comments: (id) => request('GET', `/issues/${id}/comments`),
 	addComment: (id, bodyMd) => request('POST', `/issues/${id}/comments`, { bodyMd }),
 	issueActivity: (id) => request('GET', `/issues/${id}/activity`),
