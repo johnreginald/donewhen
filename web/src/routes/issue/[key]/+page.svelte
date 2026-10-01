@@ -34,6 +34,20 @@
 	const doneCrit = $derived(criteria.filter((c) => c.done).length);
 	// judgment criteria are advisory — shown, but never the reason a move is blocked.
 	const blockingOpen = $derived(criteria.filter((c) => !c.done && c.kind !== 'judgment').length);
+	// The Approve banner: shown while the issue waits in In Review.
+	const inReview = $derived($states.find((x) => x.id === issue?.stateId)?.name === 'In Review');
+	const doneStateId = $derived($states.find((x) => x.name === 'Done')?.id);
+	const approveBlocked = $derived(!doneStateId || criteria.length === 0 || blockingOpen > 0);
+	let approving = $state(false);
+	async function approve() {
+		if (approveBlocked || approving) return;
+		approving = true;
+		try {
+			await patch({ stateId: doneStateId });
+		} finally {
+			approving = false;
+		}
+	}
 	// A criterion unticked after the issue moved to In Review/Done (allowed): warn.
 	const reopened = $derived(
 		blockingOpen > 0 && ['in review', 'done'].includes($states.find((s) => s.id === issue?.stateId)?.name?.toLowerCase())
@@ -525,6 +539,21 @@
 			</div>
 		{/if}
 
+		{#if inReview}
+			<div class="conflict-banner top-conflict" role="status">
+				<span class="btext">
+					<b>In review.</b>
+					{#if criteria.length === 0}No done-when criteria yet.
+					{:else if blockingOpen > 0}{blockingOpen} done-when item{blockingOpen === 1 ? '' : 's'} still open.
+					{:else}All done-when items are done. Read the code, then approve.{/if}
+				</span>
+				<span class="sp"></span>
+				<button class="btn primary sm" onclick={approve} disabled={approveBlocked || approving}>
+					{approving ? 'Approving…' : 'Approve'}
+				</button>
+			</div>
+		{/if}
+
 		{#if loadError}
 			<div class="load-error" role="status">{loadError}</div>
 		{/if}
@@ -998,7 +1027,7 @@
 		font-size: var(--t-base);
 	}
 	.top-conflict {
-		margin: 0 0 12px;
+		margin: 12px 24px;
 	}
 	.load-error {
 		margin: 0 0 12px;
