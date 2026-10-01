@@ -34,3 +34,31 @@ export function usd(n) {
 	if (!n) return '$0.00';
 	return n < 0.01 ? '$' + n.toFixed(4) : '$' + n.toFixed(2);
 }
+
+// One-line description of a history event, shared by the Activity timeline and the issue peek.
+export function activityVerb(a) {
+	switch (a.kind) {
+		case 'created':
+			return `created${a.to ? ' in ' + a.to : ''}`;
+		case 'state_changed':
+			return `${a.from} → ${a.to}`;
+		case 'priority_changed':
+			return `priority ${a.from} → ${a.to}`;
+		case 'epic_changed':
+			return `epic ${a.from} → ${a.to}`;
+		case 'title_changed':
+			return 'renamed the issue';
+		case 'artifact_written':
+			return `wrote artifact “${a.detail}”`;
+		case 'epic_archived':
+			return a.detail ? `archived epic “${a.detail}”` : 'archived an epic';
+		case 'epic_unarchived':
+			return a.detail ? `unarchived epic “${a.detail}”` : 'unarchived an epic';
+		case 'deleted':
+			return 'deleted';
+		default: {
+			const k = a.kind.replace(/_/g, ' ');
+			return a.detail ? `${k}: ${a.detail}` : k;
+		}
+	}
+}

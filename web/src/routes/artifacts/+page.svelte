@@ -5,8 +5,9 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
+	import IssuePeek from '$components/IssuePeek.svelte';
 	import { projects, initiatives, issues, labels as allLabels } from '$lib/store.js';
-	import { showToast, openIssue, onLive } from '$lib/ui.js';
+	import { showToast, onLive } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
 	import { rel } from '$lib/format.js';
@@ -205,11 +206,69 @@
 		}
 	}
 
+	// ---- linked issue + peek ----
+	// $issues follows the board filters, so a filtered-out issue is loaded by id
+	// once and cached here; the link must never depend on the filters.
+	let issueCache = $state({});
+	// Every id is requested at most once; at most 4 requests run at a time.
+	const requested = new Set();
+	const queue = [];
+	let running = 0;
+	function pump() {
+		while (running < 4 && queue.length) {
+			const id = queue.shift();
+			running++;
+			api.issue(id)
+				.then((is) => (issueCache[id] = is))
+				.catch(() => {})
+				.finally(() => {
+					running--;
+					pump();
+				});
+		}
+	}
+	function ensureIssues(ids, first = false) {
+		const fresh = [...new Set(ids)].filter((id) => id && !requested.has(id) && !issueCache[id] && !$issues.some((i) => i.id === id));
+		fresh.forEach((id) => requested.add(id));
+		if (first) queue.unshift(...fresh);
+		else queue.push(...fresh);
+		pump();
+	}
+	$effect(() => {
+		ensureIssues(docs.map((d) => d.issueId));
+	});
+	$effect(() => {
+		if (sel?.issueId) ensureIssues([sel.issueId], true);
+	});
+
+	const peekKey = $derived($page.url.searchParams.get('peek') || null);
+	let peekPushed = false;
+	function peekUrl(key) {
+		const q = new URLSearchParams($page.url.searchParams);
+		if (key) q.set('peek', key);
+		else q.delete('peek');
+		const s = q.toString();
+		return '/artifacts' + (s ? '?' + s : '');
+	}
+	function openPeek(e, key) {
+		// Cmd/Ctrl/Shift-click keep the browser default (new tab / window).
+		if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		e.preventDefault();
+		peekPushed = true;
+		goto(peekUrl(key), { keepFocus: true, noScroll: true });
+	}
+	function closePeek() {
+		if (peekPushed) {
+			peekPushed = false;
+			history.back();
+		} else goto(peekUrl(null), { replaceState: true, keepFocus: true, noScroll: true });
+	}
+
 	function attachOf(d) {
 		if (d.initiativeId) return { icon: '◈', label: $initiatives.find((i) => i.id === d.initiativeId)?.name ?? 'Project', kind: 'initiative' };
 		if (d.projectId) return { icon: '▢', label: $projects.find((p) => p.id === d.projectId)?.name ?? 'Epic', kind: 'project' };
 		if (d.issueId) {
-			const is = $issues.find((i) => i.id === d.issueId);
+			const is = $issues.find((i) => i.id === d.issueId) || issueCache[d.issueId];
 			return { icon: '◦', label: is ? is.key : 'Issue', kind: 'issue', issue: is };
 		}
 		return null;
@@ -278,7 +337,7 @@
 							{#if sel.author === 'ai'}<span class="ai">✦ Written by {$aiName}</span>{:else}<span>Written by you</span>{/if}
 							{#if attachOf(sel) && attachOf(sel).kind === 'issue' && attachOf(sel).issue}
 								<span class="sep">·</span>
-								<span>Attached to <button class="lnk mono" onclick={() => openIssue(attachOf(sel).issue.key)}>{attachOf(sel).issue.key}</button></span>
+								<span>Attached to <a class="lnk mono" href={`/issue/${attachOf(sel).issue.key}`} onclick={(e) => openPeek(e, attachOf(sel).issue.key)}>{attachOf(sel).issue.key}</a></span>
 							{/if}
 							<span class="sep">·</span><span>Created {fmtDate(sel.createdAt)}</span>
 							<span class="sep">·</span><span>Updated {rel(sel.updatedAt)}</span>
@@ -334,6 +393,9 @@
 								</div>
 							{/if}
 						</div>
+							{#if attachOf(sel)?.issue}
+								<a class="peeklnk mono" href={`/issue/${attachOf(sel).issue.key}`} onclick={(e) => openPeek(e, attachOf(sel).issue.key)}>Peek {attachOf(sel).issue.key} ↗</a>
+							{/if}
 					</div>
 					<div>
 						<div class="rh">Labels</div>
@@ -370,9 +432,9 @@
 					{#if showGaps}
 						<div class="gaps-list">
 							{#each missing as m (m.id)}
-								<button class="gaps-item" onclick={() => openIssue(m.key)}>
+								<a class="gaps-item" href={`/issue/${m.key}`} onclick={(e) => openPeek(e, m.key)}>
 									<span class="k mono">{m.key}</span><span class="gaps-t">{m.title}</span>
-								</button>
+								</a>
 							{/each}
 						</div>
 					{/if}
@@ -467,6 +529,10 @@
 	</div>
 </div>
 
+{#if peekKey}
+	<IssuePeek issueKey={peekKey} onclose={closePeek} />
+{/if}
+
 <style>
 	.artifacts { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
@@ -483,7 +549,7 @@
 	.gaps-h .gdot { color: var(--st-progress); font-size: var(--t-sm); }
 	.gaps-h .n { font-family: var(--mono); font-weight: 500; color: var(--st-progress); background: color-mix(in srgb, var(--st-progress) 16%, var(--surface)); border-radius: 999px; padding: 0 8px; height: 18px; display: inline-flex; align-items: center; font-size: var(--t-xs); }
 	.gaps-list { display: flex; flex-direction: column; gap: 1px; max-height: 220px; overflow-y: auto; }
-	.gaps-item { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: var(--r-sm); font-size: var(--t-sm); color: var(--ink-2); background: none; border: none; text-align: left; }
+	.gaps-item { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: var(--r-sm); font-size: var(--t-sm); color: var(--ink-2); background: none; border: none; text-align: left; text-decoration: none; }
 	.gaps-item:hover { background: var(--hover); color: var(--ink); }
 	.gaps-item .k { color: var(--ink-3); font-size: var(--t-xs); flex: none; width: 54px; }
 	.gaps-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -562,7 +628,9 @@
 	.rmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 16px; margin-bottom: 6px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); color: var(--ink-2); }
 	.rmeta .sep { color: var(--ink-3); }
 	.rmeta .ai { color: var(--accent); }
-	.lnk { background: none; border: none; color: var(--ink-2); padding: 0; font-size: inherit; }
+	.peeklnk { display: inline-block; margin-top: 8px; font-size: var(--t-xs); color: var(--ink-2); text-decoration: none; }
+	.peeklnk:hover { color: var(--accent); }
+	.lnk { text-decoration: none; background: none; border: none; color: var(--ink-2); padding: 0; font-size: inherit; }
 	.lnk:hover { color: var(--accent); }
 	.rlabels { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
 	.lbtn { background: none; border: none; padding: 0; display: inline-flex; align-items: center; }
