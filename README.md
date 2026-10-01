@@ -7,7 +7,7 @@
 <p align="center">
   <a href="docs/showreel/donewhen-showreel.mp4"><img src="docs/images/showreel.gif" width="860" alt="A 39-second tour of DoneWhen: track the work, understand it at a glance, a human holds the gate, check it again later"></a>
 </p>
-<p align="center"><sub>A 39-second tour. <a href="docs/showreel/donewhen-showreel.mp4">Watch it with sound (MP4)</a>.</sub></p>
+<p align="center"><sub>A 39-second tour. <a href="docs/showreel/donewhen-showreel.mp4">Watch it with sound (MP4)</a> · <a href="docs/showreel/donewhen-showreel-vertical.mp4">vertical version (9:16)</a>.</sub></p>
 
 ## What and why
 

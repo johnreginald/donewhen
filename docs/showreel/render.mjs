@@ -1,6 +1,7 @@
 // Renders showreel.html frame by frame with headless Chrome.
 //   node render.mjs stills out/stills 0.4 1.2 3.0      (single frames, for review)
 //   node render.mjs video  out/frames [workers]        (all frames, 1920x1080 @ 30fps)
+//   VERTICAL=1 node render.mjs ...                     (9:16, 1080x1920)
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -10,7 +11,9 @@ const require = createRequire(process.env.PUPPETEER_FROM || '/tmp/shots/');
 const puppeteer = require('puppeteer-core');
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const here = path.dirname(new URL(import.meta.url).pathname);
-const url = pathToFileURL(path.join(here, 'showreel.html')).href;
+const VERT = process.env.VERTICAL === '1';
+const url = pathToFileURL(path.join(here, 'showreel.html')).href + (VERT ? '?v=1' : '');
+const VW = VERT ? 1080 : 1920, VH = VERT ? 1920 : 1080;
 const T = JSON.parse(readFileSync(path.join(here, 'timeline.js'), 'utf8').replace(/^window\.T = /, '').replace(/;\s*$/, ''));
 
 const [mode, outDir, ...rest] = process.argv.slice(2);
@@ -18,7 +21,7 @@ mkdirSync(outDir, { recursive: true });
 
 async function open(browser) {
   const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
+  await page.setViewport({ width: VW, height: VH, deviceScaleFactor: 1 });
   await page.goto(url, { waitUntil: 'networkidle0' });
   await page.evaluate(() => window.ready);
   return page;

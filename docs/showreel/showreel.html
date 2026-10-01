@@ -169,6 +169,29 @@
   .wp { position: absolute; inset: 0; z-index: 50; display: none; }
   #vig { position: absolute; inset: 0; z-index: 60; pointer-events: none; box-shadow: inset 0 0 240px rgba(0,0,0,.18); }
   #bar { position: absolute; left: 0; bottom: 0; height: 5px; background: oklch(0.72 0.1 255); z-index: 70; width: 0; }
+
+  /* ---------- vertical (9:16) layout: ?v=1 ---------- */
+  html.v, html.v body { width: 1080px; height: 1920px; } .v #root { width: 1080px; height: 1920px; }
+  .v .h { width: 1080px; padding: 0 30px; font-size: 104px !important; }
+  .v #h2 { top: 150px !important; } .v #h3 { top: 110px !important; } .v #h4 { top: 125px !important; font-size: 92px !important; } .v #h5 { top: 150px !important; }
+  .v #t1 { width: 1080px; height: 1920px; font-size: 250px; flex-wrap: wrap; align-content: center; gap: 0 .24em; }
+  .v #q1 { width: 1080px; height: 1920px; } .v #q1 .a { font-size: 130px; } .v #q1 .b { font-size: 215px; }
+  .v #counter b { font-size: 120px; }
+  .v #card { left: 60px; top: 330px; width: 960px; height: 700px; } .v #cardBody { padding: 40px 48px; }
+  .v .c-title { font-size: 62px; } .v .c-note { font-size: 27px; max-width: 820px; } .v .rows li { font-size: 28px; }
+  .v #term { left: 60px; top: 1070px; width: 960px; height: 520px; } .v #pring { left: 440px; top: 1650px; }
+  .v #doc { left: 60px; top: 480px; width: 960px; height: 700px; padding: 36px 48px; } .v #doc h3 { font-size: 52px; } .v #dg { width: 850px; height: 351px; }
+  .v #act { left: 60px; top: 1215px; width: 960px; }
+  .v #tags { width: 1080px; top: 376px; gap: 12px; } .v .tag { font-size: 25px; padding: 10px 20px; }
+  .v #bgb { width: 1080px; height: 1920px; } .v .bcol { top: 380px; width: 320px; height: 1440px; } .v .bcard { left: 18px; width: 284px; }
+  .v #bigno { font-size: 330px; width: 1080px; top: 190px; }
+  .v #gate { left: 100px; top: 1240px; width: 880px; height: 40px; } .v .gh { top: 9px; left: auto; width: 430px; height: 22px; } .v #gt { left: 0; } .v #gb { right: 0; bottom: auto; } .v #gl { left: 370px; top: -52px; width: 140px; }
+  .v #rvp { left: 60px; top: 1190px; width: 960px; } .v #keycap { left: 60px; top: 1800px; } .v #toast { left: 60px; top: 1720px; }
+  .v #scrub { left: 60px; top: 330px; width: 960px; } .v #scrub .ln { width: 960px; }
+  .v #days { left: 0; width: 1080px; top: 1400px; text-align: center; } .v #days b { font-size: 300px; }
+  .v #logoBox { width: 1080px; height: 1920px; } .v #wm { width: 1080px; text-align: center; font-size: 150px; }
+  .v #tagwrap { left: 0 !important; width: 1080px; text-align: center; } .v #tagA { font-size: 50px; } .v #url { width: 1080px; text-align: center; font-size: 25px; }
+  .v #cap { left: 60px; top: 60px; }
 </style>
 </head>
 <body>
@@ -223,6 +246,8 @@
 
 <script>
 /* Every frame is a pure function of time: window.render(t). */
+const V = location.search.includes('v=1'); if (V) document.documentElement.classList.add('v');
+const W = V ? 1080 : 1920, H = V ? 1920 : 1080;
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const E = {
   lin: t => t, out3: t => 1 - Math.pow(1 - t, 3), out5: t => 1 - Math.pow(1 - t, 5),
@@ -266,21 +291,22 @@ const DECOR = {};
   const sc = $(id); const aur = document.createElement('div'); aur.className = 'aur'; aur.innerHTML = '<i class="bl b1"></i><i class="bl b2"></i><i class="bl b3"></i>';
   const dots = document.createElement('div'); dots.className = 'dots'; const fl = document.createElement('div'); fl.className = 'fl';
   const kinds = ['ring', 'plus', 'sq', 'dot']; const items = [];
-  for (let i = 0; i < 16; i++) { const d = document.createElement('i'); const k = kinds[Math.floor(rnd(si * 31 + i) * 4)]; d.className = 'fs ' + k; const s = 14 + rnd(si * 17 + i + 3) * 30; d.style.width = d.style.height = s + 'px'; fl.appendChild(d); items.push({ d, x: rnd(si * 13 + i + 7) * 1920, y: rnd(si * 19 + i + 9) * 1080, sp: 10 + rnd(i + si) * 26, rot: (rnd(i * 3 + si) - .5) * 40, ph: rnd(i + 50) * 6.28, z: .4 + rnd(i + 70) * .9 }); }
+  for (let i = 0; i < 16; i++) { const d = document.createElement('i'); const k = kinds[Math.floor(rnd(si * 31 + i) * 4)]; d.className = 'fs ' + k; const s = 14 + rnd(si * 17 + i + 3) * 30; d.style.width = d.style.height = s + 'px'; fl.appendChild(d); items.push({ d, x: rnd(si * 13 + i + 7) * W, y: rnd(si * 19 + i + 9) * H, sp: 10 + rnd(i + si) * 26, rot: (rnd(i * 3 + si) - .5) * 40, ph: rnd(i + 50) * 6.28, z: .4 + rnd(i + 70) * .9 }); }
   sc.prepend(fl); sc.prepend(dots); sc.prepend(aur); DECOR[id] = { aur: [...aur.children], items, dots };
 });
 function decor(id, t) {
   const D = DECOR[id]; const b = D.aur; const w = [[.18, .22, 260, 160, 0], [.78, .74, -220, 120, 2], [.62, .1, 180, -140, 4]];
-  b.forEach((el, i) => { const [fx, fy, ax, ay, ph] = w[i]; el.style.transform = `translate(${fx * 1920 - 500 + Math.sin(t * .35 + ph) * ax}px,${fy * 1080 - 500 + Math.cos(t * .28 + ph) * ay}px) scale(${1 + .12 * Math.sin(t * .5 + ph)})`; });
+  b.forEach((el, i) => { const [fx, fy, ax, ay, ph] = w[i]; el.style.transform = `translate(${fx * W - 500 + Math.sin(t * .35 + ph) * ax}px,${fy * H - 500 + Math.cos(t * .28 + ph) * ay}px) scale(${1 + .12 * Math.sin(t * .5 + ph)})`; });
   D.dots.style.backgroundPosition = `${-t * 18}px ${-t * 11}px`;
-  D.items.forEach(o => { const y = ((o.y - t * o.sp * o.z) % 1200 + 1200) % 1200 - 60; o.d.style.transform = `translate(${o.x + Math.sin(t * .4 + o.ph) * 30}px,${y}px) rotate(${t * o.rot}deg) scale(${o.z})`; o.d.style.opacity = .5 + .5 * Math.sin(t * .7 + o.ph); });
+  D.items.forEach(o => { const y = ((o.y - t * o.sp * o.z) % (H + 120) + H + 120) % (H + 120) - 60; o.d.style.transform = `translate(${o.x + Math.sin(t * .4 + o.ph) * 30}px,${y}px) rotate(${t * o.rot}deg) scale(${o.z})`; o.d.style.opacity = .5 + .5 * Math.sin(t * .7 + o.ph); });
 }
 
 /* ---------- scene content ---------- */
 const BUB = ['Done ✓', 'All set! ✓', 'Finished ✓', 'Done! ✓✓', 'Shipped ✓', 'Fixed ✓', 'Complete ✓', 'Merged ✓', 'Ready ✓', 'All done ✓', 'Done ✓', 'Done!! ✓', 'Shipped ✓', 'Done ✓'];
+const BXV = [120, 430, 250, 520, 160, 380, 300, 540, 140, 460, 220, 500, 180, 400];
 const BX = [840, 1350, 1100, 1560, 920, 1250, 1450, 1010, 1600, 780, 1180, 1500, 960, 1330];
 BUB.forEach((s, i) => { const d = document.createElement('div'); d.className = 'bub'; d.id = 'b' + i; d.innerHTML = `<i class="av">✦</i><span>${s}</span>`; $('bubbles').appendChild(d); });
-const ROWS = ['Reset link expires after 30 minutes', 'Same reply for every request, so accounts stay private', 'The failure path is covered by a test'];
+const ROWS = ['Reset link expires after 30 minutes', V ? 'Same reply for everyone, so accounts stay private' : 'Same reply for every request, so accounts stay private', 'The failure path is covered by a test'];
 ROWS.forEach((s, i) => { const li = document.createElement('li'); li.id = 'r' + i; li.innerHTML = `<svg class="box" viewBox="0 0 42 42"><rect x="2" y="2" width="38" height="38" rx="11"/><rect class="fill" id="rf${i}" x="2" y="2" width="38" height="38" rx="11"/><path id="rc${i}" d="M11 22 L18.5 29.5 L31.5 13" pathLength="1"/></svg><span>${s}</span>`; $('rows').appendChild(li); });
 const TERM = ['<span class="ar">▸</span> <span class="fn">save_issue</span>  PP-12 <span class="dim">→</span> In Progress', '<span class="ar">▸</span> <span class="fn">check_criterion</span> 1  <span class="ok">✓</span> <span class="dim">expires 30 min</span>', '<span class="ar">▸</span> <span class="fn">link_commit</span>  <span class="dim">9db0fb4</span>', '<span class="ar">▸</span> <span class="fn">check_criterion</span> 2  <span class="ok">✓</span> <span class="dim">same reply</span>'];
 TERM.forEach((s, i) => { const d = document.createElement('div'); d.className = 'tl'; d.id = 'tl' + i; d.innerHTML = s; $('termLines').appendChild(d); });
@@ -296,7 +322,7 @@ const EDGES = [[0, 1, 'h'], [1, 2, 'h'], [2, 3, 'h'], [2, 4, 'v']]; const PULSES
   $('dg').innerHTML = `<defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--ink-3)"/></marker></defs>` + h;
 })();
 (function () { // faint kanban drifting behind the document (scene 3)
-  const root = $('bgb'); for (let c = 0; c < 4; c++) { const col = document.createElement('div'); col.className = 'bcol'; col.style.left = (60 + c * 460) + 'px'; for (let r = 0; r < 6; r++) { const k = document.createElement('div'); k.className = 'bcard'; k.dataset.r = r; k.dataset.c = c; col.appendChild(k); } root.appendChild(col); }
+  const root = $('bgb'); for (let c = 0; c < (V ? 3 : 4); c++) { const col = document.createElement('div'); col.className = 'bcol'; col.style.left = (V ? 40 + c * 350 : 60 + c * 460) + 'px'; for (let r = 0; r < (V ? 12 : 6); r++) { const k = document.createElement('div'); k.className = 'bcard'; k.dataset.r = r; k.dataset.c = c; col.appendChild(k); } root.appendChild(col); }
 })();
 const SQ = (function () { let o = []; for (let i = 0; i < 200; i++) { const t = 2 * Math.PI * i / 200, c = Math.cos(t), s = Math.sin(t); o.push(`${(256 + 256 * Math.sign(c) * Math.pow(Math.abs(c), 2 / 5)).toFixed(1)} ${(256 + 256 * Math.sign(s) * Math.pow(Math.abs(s), 2 / 5)).toFixed(1)}`); } return 'M' + o.join(' L') + ' Z'; })();
 $('logoBox').innerHTML = `<svg id="logoSvg" width="560" height="560" viewBox="0 0 512 512" style="position:absolute;left:680px;top:260px;overflow:visible">
@@ -304,7 +330,9 @@ $('logoBox').innerHTML = `<svg id="logoSvg" width="560" height="560" viewBox="0 
   <path id="tile" d="${SQ}" fill="#39659b"/><path id="dg6" d="M208 112 H266 A144 144 0 0 1 266 400 H208" pathLength="1" fill="none" stroke="#fdfcf9" stroke-width="66"/>
   <circle id="tr0" cx="62" cy="256" r="13" fill="#fdfcf9"/><circle id="tr1" cx="100" cy="256" r="21" fill="#fdfcf9"/><circle id="tr2" cx="152" cy="256" r="31" fill="#fdfcf9"/>
   <rect id="stk" x="0" y="248" width="0" height="16" rx="8" fill="url(#streak)"/><circle id="mdot" cx="152" cy="256" r="31" fill="#fdfcf9"/></svg>`;
-(function () { const L = [['Oct 1', 0], ['Nov 1', .27], ['Dec 1', .62], ['Dec 14', 1]]; $('ticks').innerHTML = L.map(([s, f]) => `<div class="tk" style="left:${f * 1400}px">${s}</div>`).join(''); })();
+if (V) { $('logoSvg').style.left = '260px'; $('logoSvg').style.top = '680px'; }
+const SW = V ? 960 : 1400;
+(function () { const L = [['Oct 1', 0], ['Nov 1', .27], ['Dec 1', .62], ['Dec 14', 1]]; $('ticks').innerHTML = L.map(([s, f]) => `<div class="tk" style="left:${f * SW}px">${s}</div>`).join(''); })();
 const CAPS = { 1: ['01', 'Track'], 2: ['02', 'Understand'], 3: ['03', 'Gate'], 4: ['04', 'Check again'] };
 const SCENES = ['s1', 's2', 's3', 's4', 's5', 's6'];
 const WPAL = [['oklch(0.72 0.1 255)', '#1b1a18', '#f4f2ec'], ['#1b1a18', 'oklch(0.5 0.1 255)', '#a9c6ea'], ['oklch(0.5 0.1 255)', '#1b1a18', '#fdfcf9'], ['#1b1a18', 'oklch(0.5 0.1 255)', '#a9c6ea'], ['oklch(0.5 0.1 255)', '#1b1a18', '#79a7e2']];
@@ -315,7 +343,7 @@ const FX = {};
   const host = $('fx'); const mk = n => Array.from({ length: n }, () => { const d = document.createElement('div'); host.appendChild(d); return d; });
   FX.conf = mk(40); FX.spark = mk(22); FX.shat = mk(16);
   FX.ripple = document.createElement('div'); host.appendChild(FX.ripple);
-  FX.flash = document.createElement('div'); FX.flash.style.cssText = 'left:0;top:0;width:1920px;height:1080px'; host.appendChild(FX.flash);
+  FX.flash = document.createElement('div'); FX.flash.style.cssText = `left:0;top:0;width:${W}px;height:${H}px`; host.appendChild(FX.flash);
 })();
 function burst(list, t, t0, life, ox, oy, speed, g, colors, shape, r0 = 0) {
   const dt = t - t0;
@@ -338,16 +366,22 @@ function flash(t, t0, life, color, peak) { const f = FX.flash, k = clamp((t - t0
 function setTick(i, k) { $('rf' + i).style.opacity = clamp(k * 3); draw($('rc' + i), clamp((k - .15) / .85)); }
 function cardLayout(t) {
   let x = 0, y = 0, s = 1, rx = 0, ry = 0, o = 1;
+  if (V) { if (t < C[2]) { const cin = p(t, T.cardIn, .9, E.spring); return { x: 0, y: (1 - cin) * 200, s: 1, rx: (1 - cin) * 26, ry: 0, o: clamp(p(t, T.cardIn, .3, E.lin)) }; } if (t < C[4]) { const cin = p(t, T.cardIn4, .8, E.spring); return { x: 0, y: (1 - cin) * 170, s: 1, rx: (1 - cin) * 22, ry: 0, o: clamp(p(t, T.cardIn4, .3, E.lin)) }; } return { x: 0, y: 190 * p(t, C[4] + .05, .7, E.inOut5), s: 1, rx: 0, ry: 0, o: 1 }; }
   if (t < C[2]) { const cin = p(t, T.cardIn, .9, E.spring); y = (1 - cin) * 200; rx = (1 - cin) * 26; ry = (1 - cin) * -10; o = clamp(p(t, T.cardIn, .3, E.lin)); const k = p(t, T.termIn, .7, E.inOut5); x = -330 * k; s = 1 - .18 * k; }
   else if (t < C[4]) { const cin = p(t, T.cardIn4, .8, E.spring); y = (1 - cin) * 170; rx = (1 - cin) * 22; o = clamp(p(t, T.cardIn4, .3, E.lin)); const k = p(t, T.split, .7, E.inOut5); x = -330 * k; s = 1 - .18 * k; }
   else { const k = p(t, C[4] + .05, .7, E.inOut5); x = -330 * (1 - k); s = .82 + .08 * k; y = 52 * k; }
   return { x, y, s, rx, ry, o };
 }
-const chipPos = (t) => { // the "→ Done" chip: A bounces off the gate, B passes through
+const chipPosV = (t) => {
+  if (t < T.hit + .9) { const ap = p(t, T.chipAppr, T.hit - T.chipAppr, E.in3); const after = t >= T.hit ? p(t, T.hit, .7, E.out5) : 0; return { x: 430, y: lerp(1960, 1330, ap) + after * 300, r: after * 24, o: t < T.chipAppr ? 0 : 1 - (t >= T.hit ? p(t, T.hit + .25, .5, E.lin) : 0) }; }
+  const k = p(t, T.passChip, .62, E.out3); return { x: 430, y: lerp(1960, 1000, k), r: 0, o: t < T.passChip ? 0 : 1 - p(t, T.passChip + .5, .18, E.lin) };
+};
+const chipPosL = (t) => { // the "→ Done" chip: A bounces off the gate, B passes through
   if (t < T.hit + .9) { const ap = p(t, T.chipAppr, T.hit - T.chipAppr, E.in3); const after = t >= T.hit ? p(t, T.hit, .7, E.out5) : 0; return { x: lerp(1930, 1700, ap) + after * 300, y: 360 + (t >= T.hit ? p(t, T.hit, .7, E.out3) * 110 : 0), r: after * 34, o: t < T.chipAppr ? 0 : 1 - (t >= T.hit ? p(t, T.hit + .25, .5, E.lin) : 0) }; }
   const k = p(t, T.passChip, .62, E.out3); return { x: lerp(1930, 1160, k), y: lerp(360, 330, k), r: 0, o: t < T.passChip ? 0 : 1 - p(t, T.passChip + .5, .18, E.lin) };
 };
 
+const chipPos = null;
 window.render = function (t) {
   t = clamp(t, 0, T.dur - 1e-3);
   let si = 0; for (let i = 0; i < 6; i++) if (t >= C[i]) si = i;
@@ -362,9 +396,9 @@ window.render = function (t) {
   if (si === 0) {
     typeIn($('t1'), t, T.titleStart, T.titleGap, .6);
     const k = p(t, T.shrink, .7, E.inOut5);
-    tf($('t1'), { x: -640 * k, y: -440 * k, s: 1 - .66 * k, o: 1 - p(t, T.askQ - .1, .35) });
+    tf($('t1'), { x: (V ? -250 : -640) * k, y: (V ? -790 : -440) * k, s: 1 - .66 * k, o: 1 - p(t, T.askQ - .1, .35) });
     const blur = p(t, T.askQ, .6, E.out3);
-    BUB.forEach((_, i) => { const el = $('b' + i), t0 = T.bubbles[i], dt = t - t0; if (dt < 0) { el.style.opacity = 0; return; } const sc = 330 * dt + .5 * 380 * dt * dt, pop = E.back(clamp(dt / .3)); tf(el, { x: BX[i] - 120, y: 930 - sc, s: .4 + .6 * pop, o: clamp(dt / .12) * (1 - .8 * blur), blur: 16 * blur }); });
+    BUB.forEach((_, i) => { const el = $('b' + i), t0 = T.bubbles[i], dt = t - t0; if (dt < 0) { el.style.opacity = 0; return; } const sc = 330 * dt + .5 * 380 * dt * dt, pop = E.back(clamp(dt / .3)); tf(el, { x: V ? BXV[i] : BX[i] - 120, y: (V ? 1780 : 930) - sc * (V ? 1.5 : 1), s: .4 + .6 * pop, o: clamp(dt / .12) * (1 - .8 * blur), blur: 16 * blur }); });
     $('cnt').textContent = Math.floor(47 * p(t, T.bubbleStart, 1.4, E.out3));
     tf($('counter'), { o: p(t, T.bubbleStart, .4, E.lin) * (1 - p(t, T.askQ, .3)), y: (1 - p(t, T.bubbleStart, .5)) * -30 });
     typeIn($('q1a'), t, T.askQ, .05, .5); typeIn($('q1b'), t, T.askQ + .25, .06, .6);
@@ -373,10 +407,10 @@ window.render = function (t) {
   /* ---------------- 2 track */
   if (si === 1) {
     typeIn($('h2'), t, T.h2, .04, .55);
-    const k = p(t, T.termIn, .7, E.inOut5); tf($('term'), { x: (1 - k) * 900, o: clamp(k * 2), ry: (1 - k) * -14 });
+    const k = p(t, T.termIn, .7, E.inOut5); tf($('term'), V ? { y: (1 - k) * 700, o: clamp(k * 2) } : { x: (1 - k) * 900, o: clamp(k * 2), ry: (1 - k) * -14 });
     TERM.forEach((_, i) => { const l = $('tl' + i), kk = clamp((t - T.term[i]) / .55); l.style.opacity = kk > 0 ? 1 : 0; l.style.clipPath = `inset(0 ${(1 - E.out3(kk)) * 100}% 0 0)`; });
     // orbiting chips around the ticket (they flow away when the terminal arrives)
-    [0, 1, 2].forEach(i => { const a = i * 2.1 + (t - T.orbit) * .9 + .6; const x = 960 + Math.cos(a) * 760 - 120, y = 590 + Math.sin(a) * 400 - 30; const depth = .85 + .15 * Math.sin(a); const o = p(t, T.orbit + i * .12, .4, E.lin) * (1 - p(t, T.termIn - .2, .4, E.lin)); tf($('oc' + i), { x, y, s: depth * p(t, T.orbit + i * .12, .5, E.back), o }); });
+    [0, 1, 2].forEach(i => { const a = i * 2.1 + (t - T.orbit) * .9 + .6; const x = (V ? 540 : 960) + Math.cos(a) * (V ? 470 : 760) - 120, y = (V ? 680 : 590) + Math.sin(a) * (V ? 470 : 400) - 30; const depth = .85 + .15 * Math.sin(a); const o = p(t, T.orbit + i * .12, .4, E.lin) * (1 - p(t, T.termIn - .2, .4, E.lin)); tf($('oc' + i), { x, y, s: depth * p(t, T.orbit + i * .12, .5, E.back), o }); });
     // progress ring
     const done = (t >= T.tick[0] + .1 ? 1 : 0) + (t >= T.tick[1] + .1 ? 1 : 0);
     const rv = (E.out3(clamp((t - T.tick[0]) / .5)) + E.out3(clamp((t - T.tick[1]) / .5))) / 3; $('pr').style.strokeDasharray = 1; $('pr').style.strokeDashoffset = 1 - rv; $('pn').textContent = done + '/3';
@@ -392,11 +426,11 @@ window.render = function (t) {
     EDGES.forEach(([, b], i) => { const e = $('ed' + i); const k = p(t, T.diagram[b] - .4, .4, E.out3); e.style.strokeDasharray = 1; e.style.strokeDashoffset = 1 - k; e.style.opacity = k > 0 ? 1 : 0;
       const pu = $('pu' + i); const L = e.getTotalLength(); const u = ((t - T.diagram[b]) * .7 + i * .25) % 1; if (t > T.diagram[b] && k >= 1) { const pt = e.getPointAtLength(L * u); pu.setAttribute('cx', pt.x); pu.setAttribute('cy', pt.y); pu.setAttribute('opacity', Math.sin(u * Math.PI)); } else pu.setAttribute('opacity', 0); });
     EV.forEach((_, i) => { const k = p(t, T.activity[i], .55, E.expo); tf($('ev' + i), { x: (1 - k) * 70, o: clamp(k * 1.6) }); });
-    const ak = p(t, C[2] + .7, .8, E.spring); tf($('act'), { x: (1 - ak) * 160, o: clamp(ak * 2) });
+    const ak = p(t, C[2] + .7, .8, E.spring); tf($('act'), V ? { y: (1 - ak) * 120, o: clamp(ak * 2) } : { x: (1 - ak) * 160, o: clamp(ak * 2) });
     const glow = (el, t0) => { const f = clamp(1 - Math.abs(t - t0 - .55) / .8); el.style.boxShadow = f > 0 ? `0 0 0 ${(f * 5).toFixed(1)}px color-mix(in srgb, var(--accent) 35%, transparent)` : 'none'; };
     glow($('dgwrap'), T.tags[0]); glow($('act'), T.tags[1]); glow($('docnote'), T.tags[2]);
     // a faint board drifting in the background
-    document.querySelectorAll('.bcol').forEach((col, c) => { col.style.transform = `translateY(${Math.sin(t * .6 + c) * 18}px)`; col.querySelectorAll('.bcard').forEach(k => { const r = +k.dataset.r; k.style.transform = `translateY(${((r * 112 + 24 + (t - C[2]) * (14 + c * 6) * (c % 2 ? -1 : 1)) % 700 + 700) % 700 - 20}px)`; k.style.top = '0px'; }); });
+    document.querySelectorAll('.bcol').forEach((col, c) => { col.style.transform = `translateY(${Math.sin(t * .6 + c) * 18}px)`; col.querySelectorAll('.bcard').forEach(k => { const r = +k.dataset.r; k.style.transform = `translateY(${((r * 112 + 24 + (t - C[2]) * (14 + c * 6) * (c % 2 ? -1 : 1)) % (V ? 1400 : 700) + (V ? 1400 : 700)) % (V ? 1400 : 700) - 20}px)`; k.style.top = '0px'; }); });
     tf($('bgb'), { o: .45 * p(t, C[2] + .3, .8, E.lin) });
   }
 
@@ -433,14 +467,14 @@ window.render = function (t) {
     // the gate: a glowing barrier that refuses, then splits open
     const gi = p(t, T.gateIn, .5, E.back), open = p(t, T.open, .55, E.inOut5), hitK = t >= T.hit ? clamp(1 - (t - T.hit) / .6) : 0;
     const gcol = t >= T.open ? 'oklch(0.58 0.11 150)' : (hitK > 0 ? `color-mix(in srgb, oklch(0.54 0.15 25) ${(hitK * 100).toFixed(0)}%, var(--accent))` : 'var(--accent)');
-    const gate = $('gate'); gate.style.opacity = clamp(gi * 2) * (1 - p(t, T.open + .8, .4, E.lin)); gate.style.transform = `scaleY(${gi}) translateX(${t >= T.hit && t < T.hit + .35 ? (rnd(Math.floor(t * 80)) - .5) * 14 : 0}px)`;
-    $('gt').style.transform = `translateY(${-open * 230}px)`; $('gb').style.transform = `translateY(${open * 230}px)`;
+    const gate = $('gate'); gate.style.opacity = clamp(gi * 2) * (1 - p(t, T.open + .8, .4, E.lin)); const gs = t >= T.hit && t < T.hit + .35 ? (rnd(Math.floor(t * 80)) - .5) * 14 : 0; gate.style.transform = V ? `scaleX(${gi}) translateY(${gs}px)` : `scaleY(${gi}) translateX(${gs}px)`;
+    $('gt').style.transform = V ? `translateX(${-open * 300}px)` : `translateY(${-open * 230}px)`; $('gb').style.transform = V ? `translateX(${open * 300}px)` : `translateY(${open * 230}px)`;
     gate.style.filter = `drop-shadow(0 0 ${14 + hitK * 30}px ${gcol})`; $('gl').style.color = gcol;
     // chips with echo trails
     const mkChip = id => { let c = $(id); if (!c) { c = document.createElement('div'); c.id = id; c.className = 'abs pill'; c.style.cssText = 'left:0;top:0;z-index:5;font-size:34px;padding:12px 30px 12px 20px;box-shadow:var(--shadow)'; c.innerHTML = '<i style="background:var(--st-done);width:20px;height:20px;border-radius:50%;display:block"></i>→ Done'; $('s4').appendChild(c); } return c; };
-    [0, .035, .07, .105].forEach((lag, i) => { const c = mkChip('chip' + i); const q = chipPos(t - lag); const vis = t >= T.chipAppr && q.o > .01; c.style.display = vis ? 'inline-flex' : 'none'; tf(c, { x: q.x, y: q.y, r: q.r, o: q.o * (i === 0 ? 1 : .32 / i), blur: i * 2 }); });
+    [0, .035, .07, .105].forEach((lag, i) => { const c = mkChip('chip' + i); const q = (V ? chipPosV : chipPosL)(t - lag); const vis = t >= T.chipAppr && q.o > .01; c.style.display = vis ? 'inline-flex' : 'none'; tf(c, { x: q.x, y: q.y, r: q.r, o: q.o * (i === 0 ? 1 : .32 / i), blur: i * 2 }); });
     const rp = p(t, T.inboxIn, .8, E.spring), ap2 = p(t, T.approve, .6, E.inOut5);
-    tf($('rvp'), { x: (1 - rp) * 140, o: clamp(rp * 2) }); tf($('rv'), { x: ap2 * 1000, o: 1 - ap2, r: ap2 * 4 });
+    tf($('rvp'), V ? { y: (1 - rp) * 100, o: clamp(rp * 2) } : { x: (1 - rp) * 140, o: clamp(rp * 2) }); tf($('rv'), { x: ap2 * 1000, o: 1 - ap2, r: ap2 * 4 });
     const fa = clamp(1 - Math.abs(t - T.approve - .05) / .3); $('rv').style.boxShadow = fa > 0 ? `0 0 0 ${(fa * 10).toFixed(1)}px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow)` : 'var(--shadow)';
     $('rvcount').textContent = t >= T.count ? '0' : '1';
     const kp = clamp(1 - Math.abs(t - T.key - .05) / .12); $('kc').style.transform = `translateY(${kp * 6}px) scale(${1 - kp * .06})`; $('kc').style.borderBottomWidth = (7 - kp * 5) + 'px'; $('kc').style.background = t >= T.key ? 'color-mix(in srgb, var(--accent) 30%, var(--surface))' : 'var(--surface)';
@@ -452,7 +486,7 @@ window.render = function (t) {
   if (si === 4) {
     typeIn($('h5'), t, T.h5, .04, .5);
     const sk = p(t, T.scrubIn, .6, E.expo); tf($('scrub'), { y: (1 - sk) * -40, o: sk });
-    const g = p(t, T.scrubGo, T.scrubEnd - T.scrubGo, E.inOut3); $('ph').style.left = (g * 1400) + 'px'; $('scrubfl').style.width = (g * 1400) + 'px';
+    const g = p(t, T.scrubGo, T.scrubEnd - T.scrubGo, E.inOut3); $('ph').style.left = (g * SW) + 'px'; $('scrubfl').style.width = (g * SW) + 'px';
     const days = Math.round(g * 74); const d0 = new Date(2026, 9, 1 + days); $('phl').textContent = d0.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     $('dn').textContent = days; tf($('days'), { o: p(t, T.scrubGo, .4, E.lin), y: (1 - p(t, T.scrubGo, .6)) * 40 });
   }
@@ -460,26 +494,26 @@ window.render = function (t) {
   /* ---------------- 6 logo */
   if (si === 5) {
     const L = $('logoSvg'), pop = p(t, T.logo, .8, E.spring), move = p(t, T.word - .3, .8, E.inOut5);
-    L.style.transform = `translate3d(${-548 * move}px,0,0) scale(${(.15 + .85 * pop) * (1 - .3 * move)}) rotate(${(1 - pop) * -14}deg)`; L.style.opacity = clamp(pop * 3);
+    L.style.transform = `translate3d(${V ? 0 : -548 * move}px,${V ? -230 * move : 0}px,0) scale(${(.15 + .85 * pop) * (1 - (V ? .25 : .3) * move)}) rotate(${(1 - pop) * -14}deg)`; L.style.opacity = clamp(pop * 3);
     T.trail.forEach((tt, i) => { const k = p(t, tt, .45, E.back); const c = $('tr' + i); c.style.transformOrigin = `${[62, 100, 152][i]}px 256px`; c.style.transform = `scale(${k})`; c.style.opacity = [.28, .5, .82][i] * clamp(k * 2); });
     draw($('dg6'), p(t, T.dDraw, .8, E.inOut3));
     const m = $('mdot'), k = p(t, T.pass, .9, E.inOut5); const cxm = lerp(152, 324, k); m.setAttribute('cx', cxm); m.setAttribute('r', lerp(31, 50, k));
     m.style.fill = k > .55 ? 'rgb(169,198,234)' : '#fdfcf9'; m.style.opacity = t < T.pass ? 0 : 1;
     const sp = Math.sin(k * Math.PI); const len = 170 * sp; $('stk').setAttribute('x', cxm - len); $('stk').setAttribute('width', len); $('stk').setAttribute('y', 256 - lerp(8, 12, k)); $('stk').style.opacity = k > 0 && k < 1 ? 1 : 0;
     $('tr2').style.opacity = .82 * clamp(p(t, T.trail[2], .45, E.back) * 2);
-    const cx = 960 - 548 * move;
+    const cx = V ? 540 : 960 - 548 * move, cy = V ? 960 - 230 * move : 540;
     // bloom behind the mark, and two rings that leave it
-    const bl = $('bloom'), bk = p(t, T.bloom - .5, 1.2, E.out3); const bsz = 1; tf(bl, { x: cx - 500, y: 540 - 500, s: .4 + .9 * bk, o: .85 * (1 - p(t, T.bloom + .9, 1.0, E.lin)) * clamp((t - (T.pass + .7)) / .3) });
-    [0, 1].forEach(i => { const r = $('ring' + i), rk = clamp((t - T.pass - .9 - i * .15) / .9); r.style.opacity = rk > 0 && rk < 1 ? (1 - rk) * (i ? .35 : .6) : 0; const sz = 380 + (520 + i * 260) * E.out3(rk); r.style.width = r.style.height = sz + 'px'; r.style.left = (cx - sz / 2) + 'px'; r.style.top = (540 - sz / 2) + 'px'; });
-    $('wm').style.left = '664px'; $('wm').style.top = '432px'; typeIn($('wm'), t, T.word, .05, .5);
-    TAGS.forEach((_, i) => typeIn($('tg6_' + i), t, T.tag[i], .012, .45)); $('tagwrap').style.top = '652px'; $('url').style.left = '672px'; $('url').style.top = '884px'; typeIn($('url'), t, T.url, .008, .4);
+    const bl = $('bloom'), bk = p(t, T.bloom - .5, 1.2, E.out3); const bsz = 1; tf(bl, { x: cx - 500, y: cy - 500, s: .4 + .9 * bk, o: .85 * (1 - p(t, T.bloom + .9, 1.0, E.lin)) * clamp((t - (T.pass + .7)) / .3) });
+    [0, 1].forEach(i => { const r = $('ring' + i), rk = clamp((t - T.pass - .9 - i * .15) / .9); r.style.opacity = rk > 0 && rk < 1 ? (1 - rk) * (i ? .35 : .6) : 0; const sz = 380 + (520 + i * 260) * E.out3(rk); r.style.width = r.style.height = sz + 'px'; r.style.left = (cx - sz / 2) + 'px'; r.style.top = (cy - sz / 2) + 'px'; });
+    $('wm').style.left = V ? '0px' : '664px'; $('wm').style.top = V ? '1010px' : '432px'; typeIn($('wm'), t, T.word, .05, .5);
+    TAGS.forEach((_, i) => typeIn($('tg6_' + i), t, T.tag[i], .012, .45)); $('tagwrap').style.top = V ? '1210px' : '652px'; $('url').style.left = V ? '0px' : '672px'; $('url').style.top = V ? '1580px' : '884px'; typeIn($('url'), t, T.url, .008, .4);
   }
 
   /* ---------------- effects */
-  burst(FX.conf, t, T.approve + .02, 1.2, 1480, 520, 760, 1400, ['oklch(0.5 0.1 255)', 'oklch(0.58 0.11 150)', 'oklch(0.62 0.13 50)', '#a9c6ea'], 'rect');
-  burst(FX.spark, t, T.pass + .9, .8, 960, 540, 230, 0, ['#79a7e2', '#bcd3ef', '#fdfcf9'], 'line', 290);
+  burst(FX.conf, t, T.approve + .02, 1.2, V ? 540 : 1480, V ? 1380 : 520, 760, 1400, ['oklch(0.5 0.1 255)', 'oklch(0.58 0.11 150)', 'oklch(0.62 0.13 50)', '#a9c6ea'], 'rect');
+  burst(FX.spark, t, T.pass + .9, .8, V ? 540 : 960, V ? 740 : 540, 230, 0, ['#79a7e2', '#bcd3ef', '#fdfcf9'], 'line', 290);
   const bx = $('rf1').getBoundingClientRect(); burst(FX.shat, t, T.untick, .7, bx.left + bx.width / 2, bx.top + bx.height / 2, 240, 900, ['oklch(0.5 0.1 255)', '#a9c6ea'], 'rect');
-  if (t >= T.open && t < T.open + 1.0) ripple(t, T.open, .9, 1660, 530, 260, 1500, 'oklch(0.58 0.11 150)', 6); else FX.ripple.style.display = 'none';
+  if (t >= T.open && t < T.open + 1.0) ripple(t, T.open, .9, V ? 540 : 1660, V ? 1260 : 530, 260, 1500, 'oklch(0.58 0.11 150)', 6); else FX.ripple.style.display = 'none';
   if (t >= T.hit && t < T.hit + .55) flash(t, T.hit, .5, 'oklch(0.54 0.15 25)', .2); else FX.flash.style.display = 'none';
   if (si === 3 && t >= T.hit && t < T.hit + .45) { const m = 1 - (t - T.hit) / .45; $('s4').style.transform = `translate(${(rnd(Math.floor(t * 60)) - .5) * 26 * m}px,${(rnd(Math.floor(t * 60) + 4) - .5) * 16 * m}px) scale(${drift})`; }
 
@@ -499,7 +533,7 @@ window.render = function (t) {
   }
   $('bar').style.width = (100 * t / T.dur) + '%';
 };
-window.ready = document.fonts.ready.then(() => Promise.all([document.fonts.load('400 100px Newsreader'), document.fonts.load('italic 400 100px Newsreader'), document.fonts.load('400 20px "IBM Plex Mono"'), document.fonts.load('500 20px "IBM Plex Sans"')]));
+window.ready = document.fonts.ready.then(() => Promise.all([document.fonts.load('400 100px Newsreader'), document.fonts.load('italic 400 100px Newsreader'), document.fonts.load('400 20px "IBM Plex Mono"'), document.fonts.load('500 20px "IBM Plex Sans"'), document.fonts.load('400 20px "IBM Plex Sans"'), document.fonts.load('600 20px "IBM Plex Sans"'), document.fonts.load('500 20px "IBM Plex Mono"'), document.fonts.load('500 100px Newsreader')]));
 </script>
 </body>
 </html>

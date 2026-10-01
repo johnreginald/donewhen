@@ -12,7 +12,8 @@ and always match.
 | `showreel.html` | All six scenes, drawn with HTML, CSS and SVG from `render(t)` |
 | `render.mjs` | Renders `render(t)` to PNG frames with headless Chrome (needs `puppeteer-core`) |
 | `audio.py` | Synthesizes the soundtrack from `timeline.js` (needs `numpy`) |
-| `donewhen-showreel.mp4` | The finished video, 1080p, with sound |
+| `donewhen-showreel.mp4` | The finished video, 1920x1080, with sound |
+| `donewhen-showreel-vertical.mp4` | The same reel in 9:16 (1080x1920) for phones and social feeds |
 
 Rebuild it:
 
@@ -24,6 +25,9 @@ ffmpeg -framerate 30 -i out/frames/f%04d.png -i out/audio.wav \
   -c:v libx264 -preset slow -crf 17 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest \
   -movflags +faststart donewhen-showreel.mp4
 ```
+
+The vertical cut uses the same timeline and sound with a tall layout: run the render with `VERTICAL=1`
+(`VERTICAL=1 node render.mjs video out/frames-v 4`) and encode `out/frames-v` the same way.
 
 `node render.mjs stills out/stills 8.2 26.5` renders single frames for review. Set
 `PUPPETEER_FROM=/path/to/` if `puppeteer-core` is not installed next to this folder.
