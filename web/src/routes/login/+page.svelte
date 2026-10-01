@@ -219,7 +219,7 @@
 				<input
 					id="ws2-name"
 					class="input settings-input-wide"
-					placeholder="Platform"
+					placeholder="My Workspace"
 					bind:value={wsName}
 					required
 				/>

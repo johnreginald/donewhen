@@ -39,7 +39,7 @@ docker compose up -d --build
 docker compose exec raenil /app/raenil user you@example.com 'a-strong-password'
 docker compose exec raenil /app/raenil token claude   # copy the token
 # Optional: pin a token to one workspace so an agent sees only that tracker
-docker compose exec raenil /app/raenil token globex-agent globex
+docker compose exec raenil /app/raenil token acme-agent acme
 ```
 
 Open `https://tracker.yourdomain.com`, sign in, and (Settings → Notifications)

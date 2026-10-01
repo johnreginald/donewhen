@@ -15,17 +15,17 @@ import (
 // or five labels a ticket carries under the exclusive-group taxonomy.
 func realisticIssue(n int) models.Issue {
 	project := "3f0c2a4e-8d6b-4c1a-9e2f-5b7d8a9c0e1f"
-	parent := "API-100"
+	parent := "ACM-100"
 	grp := "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
 	labels := make([]models.Label, 0, 5)
-	for _, name := range []string{"api-server", "feature", "api", "ready-for-agent", "opencode"} {
+	for _, name := range []string{"acme-server", "feature", "api", "ready-for-agent", "opencode"} {
 		labels = append(labels, models.Label{ID: "c28a2dc0-4d73-4226-97c1-785f6c0c9b24", GroupID: &grp, Name: name, Color: "#94a3b8"})
 	}
 	return models.Issue{
 		ID:            "9d1e2f3a-4b5c-4d6e-8f7a-1b2c3d4e5f6a",
 		WorkspaceID:   "7a8b9c0d-1e2f-4a3b-9c4d-5e6f7a8b9c0d",
 		Number:        n,
-		Key:           fmt.Sprintf("API-%d", n),
+		Key:           fmt.Sprintf("ACM-%d", n),
 		Title:         "Let a check see its own repository's test database",
 		DescriptionMD: strings.Repeat("A paragraph of spec text with `code` and a ```mermaid block. ", 80),
 		StateID:       "s-ready",
@@ -62,7 +62,7 @@ func TestIssueListIsSmall(t *testing.T) {
 			t.Errorf("slim rows contain %q", leaked)
 		}
 	}
-	for _, want := range []string{`"key":"API-100"`, `"state":"Ready"`, `"labels":["api-server","feature"`, `"updated":"2026-09-24"`} {
+	for _, want := range []string{`"key":"ACM-100"`, `"state":"Ready"`, `"labels":["acme-server","feature"`, `"updated":"2026-09-24"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("slim rows lack %s", want)
 		}
@@ -111,11 +111,11 @@ func TestLabelCatalogMergesWorkspaces(t *testing.T) {
 	labels := []models.Label{
 		{ID: "1", GroupID: &repoA, Name: "raenil"},
 		{ID: "2", GroupID: &repoB, Name: "raenil"},
-		{ID: "3", GroupID: &repoB, Name: "api-server"},
+		{ID: "3", GroupID: &repoB, Name: "acme-server"},
 		{ID: "4", Name: "api"},
 	}
 	text := resultText(t, labelCatalog(labels, groups))
-	want := `{"":{"labels":["api"]},"repo":{"exclusive":true,"labels":["api-server","raenil"]}}`
+	want := `{"":{"labels":["api"]},"repo":{"exclusive":true,"labels":["acme-server","raenil"]}}`
 	if text != want {
 		t.Errorf("catalog = %s\nwant      %s", text, want)
 	}

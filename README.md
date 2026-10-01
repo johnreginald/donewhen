@@ -80,12 +80,12 @@ checked on whatever comes back, so deriving can never reach a workspace the
 account is not in.
 
 The one genuinely ambiguous case is creating something with no parent to inherit
-from. There, pass `workspace: "globex"` (or belong to a single workspace).
+from. There, pass `workspace: "acme"` (or belong to a single workspace).
 
 Pin a token when an agent should be confined to one repo's tracker:
 
 ```bash
-raenil token globex-agent globex    # sees only the 'globex' workspace
+raenil token acme-agent acme    # sees only the 'acme' workspace
 ```
 
 A pinned token needs no argument at all and is refused any other workspace.
@@ -104,14 +104,14 @@ workspace's open issues grouped by epic. It reads the REST API directly, so it
 costs no model tokens to fetch.
 
 ```
-Platform · 37 open
+Acme · 18 open
 
-Raenil — Data integrity                 0/7 done
-  ○ PP-181  Backlog      save_project and save_initiative update only the fields sent
-  ◐ PP-185  In Progress  Issue page updates live and refuses to overwrite a newer edit
+Platform — Data integrity               0/3 done
+  ○ ACM-12  Backlog      Update only the fields that were sent
+  ◐ ACM-15  In Progress  Issue page refuses to overwrite a newer edit
 
-Raenil — Realtime & tests               0/6 done
-  ○ PP-197  Backlog      Web live stream sends its workspace and catches up…  ⊘ PP-196
+Platform — Realtime                     0/2 done
+  ○ ACM-19  Backlog      Catch up after a reconnect  ⊘ ACM-18
 ```
 
 Install it from this repo, which is its own marketplace:
@@ -126,14 +126,14 @@ workspace for you:
 
 ```bash
 export RAENIL_TOKEN=raenil_…                     # required
-export RAENIL_URL=https://tracker.example.com     # optional, this is the default
+export RAENIL_URL=https://tracker.example.com    # required: your Raenil server
 ```
 
 Give each repo a default workspace, and optionally a default project, in
 `.claude/raenil.json`:
 
 ```json
-{ "workspace": "platform", "project": "Platform" }
+{ "workspace": "platform", "project": "Core" }
 ```
 
 Usage:
@@ -149,8 +149,8 @@ project. `▸` marks the current default:
 
 ```
   Workspace                 Prefix  Open  Projects
-▸ platform          PP        70  Platform (62)
-  acme-engineering          ACM      139  Acme Engineering (101)
+▸ platform                  PLT       70  Core (62)
+  engineering               ENG      139  Engineering (101)
   unsorted                  UNS        2  —
 ```
 

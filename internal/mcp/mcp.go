@@ -35,7 +35,7 @@ type deps struct {
 // genuinely ambiguous.
 func wsArg() mcp.ToolOption {
 	return mcp.WithString("workspace",
-		mcp.Description("Workspace slug, id or key prefix (e.g. 'globex'). Optional — reads span all your workspaces and writes infer it from the issue/epic you name. Needed only when creating something with no parent."))
+		mcp.Description("Workspace slug, id or key prefix (e.g. 'acme'). Optional — reads span all your workspaces and writes infer it from the issue/epic you name. Needed only when creating something with no parent."))
 }
 
 // caller returns the account behind this tool call. The stdio transport carries

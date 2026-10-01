@@ -24,7 +24,7 @@ type ImportProject struct {
 }
 
 type ImportIssue struct {
-	ID          string `json:"id"` // human key, e.g. "PP-155" — preserved verbatim
+	ID          string `json:"id"` // human key, e.g. "ACM-155" — preserved verbatim
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Priority    struct {

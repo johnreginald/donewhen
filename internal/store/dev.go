@@ -201,7 +201,7 @@ func (s *Store) DeleteCriterion(ctx context.Context, wsID, id string) error {
 // This is the reverse of AddCommit, and it exists so a code-intelligence
 // tool can start from a commit SHA — the one identifier both systems
 // already record — and recover the intent behind it. Raenil knows WHY code
-// was written; a tool like Globex knows WHAT it actually does. Matching the
+// was written; a code-analysis tool knows WHAT it actually does. Matching the
 // two is what turns "the ticket says it is done" into "the code shows it is
 // done".
 type CommitOwner struct {

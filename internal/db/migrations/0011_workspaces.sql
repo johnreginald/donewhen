@@ -33,7 +33,7 @@ CREATE TABLE workspaces (
     -- suffix (ACM-288). number_seq feeds issues.number, which was a GLOBAL
     -- sequence before workspaces existed and is now unique per workspace — so a
     -- brand new workspace whose issues carry high legacy numbers can still hand
-    -- out GLX-1 rather than GLX-501.
+    -- out BCO-1 rather than BCO-501.
     issue_seq  bigint NOT NULL DEFAULT 0,
     number_seq bigint NOT NULL DEFAULT 0,
     position   int  NOT NULL DEFAULT 0,
@@ -355,7 +355,7 @@ ALTER TABLE activity        ALTER COLUMN workspace_id SET NOT NULL;
 ALTER TABLE workflow_states ADD CONSTRAINT workflow_states_ws_name_key UNIQUE (workspace_id, name);
 ALTER TABLE labels          ADD CONSTRAINT labels_ws_name_key          UNIQUE (workspace_id, name);
 ALTER TABLE label_groups    ADD CONSTRAINT label_groups_ws_name_key    UNIQUE (workspace_id, name);
--- Per-workspace sequences collide by design (ACM-1 and GLX-1 are both number 1).
+-- Per-workspace sequences collide by design (ACM-1 and BCO-1 are both number 1).
 ALTER TABLE issues          ADD CONSTRAINT issues_ws_number_key        UNIQUE (workspace_id, number);
 
 CREATE INDEX initiatives_workspace_idx     ON initiatives(workspace_id);

@@ -10,7 +10,6 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const DEFAULT_URL = 'https://tracker.example.com';
 const TIMEOUT_MS = 5000;
 const MIN_WIDTH = 100;
 
@@ -304,7 +303,8 @@ export async function run(argv, env, cwd, fetchImpl = fetch, ctx = {}) {
 	}
 	const token = env.RAENIL_TOKEN;
 	if (!token) return 'Set RAENIL_TOKEN (mint one: raenil token <name> [workspace])';
-	const url = env.RAENIL_URL || DEFAULT_URL;
+	const url = env.RAENIL_URL;
+	if (!url) return 'Set RAENIL_URL (the address of your Raenil server, e.g. https://tracker.example.com)';
 	const cfg = findConfig(cwd, home);
 	const get = client(url, token, fetchImpl);
 
@@ -383,7 +383,7 @@ async function explain(e, url, workspace, get) {
 			return '';
 		}
 	};
-	if (e instanceof Unreachable) return `Raenil unreachable at ${url} — is Tailscale on?`;
+	if (e instanceof Unreachable) return `Raenil unreachable at ${url} — is the server running and reachable?`;
 	if (e instanceof ApiError) {
 		if (e.status === 401) return 'Token rejected — mint a new one';
 		if (e.status === 400 && /workspace/i.test(e.message)) {

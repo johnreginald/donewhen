@@ -138,4 +138,4 @@ The checklist lives in the ticket's criteria, not its description. 3–6 items, 
 
 ## Full example
 
-MYINF-255 "Profile updates and staff roles" in Raenil is the reference ticket for this format.
+The examples above show the format. Follow them for every ticket.

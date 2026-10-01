@@ -1,3 +1,0 @@
-service: demo
-port: 8080
-replicas: 2

@@ -38,7 +38,7 @@ func (s *Store) GetWorkspace(ctx context.Context, id string) (models.Workspace, 
 }
 
 // ResolveWorkspace accepts either a uuid or a slug, so callers can say
-// "globex" as readily as the id.
+// "acme" as readily as the id.
 func (s *Store) ResolveWorkspace(ctx context.Context, ref string) (models.Workspace, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {

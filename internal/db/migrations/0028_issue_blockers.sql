@@ -10,7 +10,7 @@ CREATE TABLE issue_blockers (
 CREATE INDEX issue_blockers_blocker_idx ON issue_blockers(blocker_id);
 
 -- Tickets written before this say who blocks them in a structured line:
---   **Blocked by:** MYINF-47 (WEB-02), MYINF-52 (WEB-07)
+--   **Blocked by:** ACM-47 (WEB-02), ACM-52 (WEB-07)
 -- Those keys become links, within the same workspace. Prose ("blocked by the
 -- models ticket") and keys that do not exist are left alone.
 INSERT INTO issue_blockers (issue_id, blocker_id)

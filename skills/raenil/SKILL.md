@@ -1,12 +1,12 @@
 ---
 name: raenil
-description: Work with Raenil, the user's self-hosted issue tracker, over its MCP tools (mcp__raenil__*). Use whenever creating, writing, updating, moving or finishing a ticket, epic or project in Raenil; turning a spec or plan into tickets; writing or ticking done-when criteria; or recording commits and documents on a ticket.
-argument-hint: "What to do in Raenil, e.g. 'turn .scratch/x/spec.md into tickets' or 'finish MYINF-42'"
+description: Work with Raenil, a self-hosted issue tracker, over its MCP tools (mcp__raenil__*). Use whenever creating, writing, updating, moving or finishing a ticket, epic or project in Raenil; turning a spec or plan into tickets; writing or ticking done-when criteria; or recording commits and documents on a ticket.
+argument-hint: "What to do in Raenil, e.g. 'turn specs/x.md into tickets' or 'finish ACM-42'"
 ---
 
 # Raenil
 
-Raenil is the user's tracker and record-keeper at `https://tracker.example.com/mcp` (tailnet-only: Tailscale must be on). Its tools are `mcp__raenil__*`; if they are deferred, load the ones you need with ToolSearch in one call.
+Raenil is a self-hosted tracker and record-keeper. Its MCP endpoint is `<your-server>/mcp` (see the README for `claude mcp add`). Its tools are `mcp__raenil__*`; if they are deferred, load the ones you need with ToolSearch in one call.
 
 The hard rules (confirm before creating, the checklist gates In Review and Done, `repo` labels) are in CLAUDE.md and always apply. This skill is the how.
 
@@ -14,7 +14,7 @@ The hard rules (confirm before creating, the checklist gates In Review and Done,
 
 - Hierarchy: **Workspace → Initiative → Epic → Issue → Sub-issue**. The UI calls initiatives "Projects" and projects "Epics"; the tools say `initiative` and `project`.
 - States: Triage → Backlog → Aligning → Ready → In Progress → Blocked → In Review → Done → Canceled.
-- An issue key's prefix names its workspace (`MYINF-42` → myinfluencer). Tools infer the workspace from a key; pass `workspace` only when creating something with no parent.
+- An issue key's prefix names its workspace (`ACM-42` → the workspace with prefix ACM). Tools infer the workspace from a key; pass `workspace` only when creating something with no parent.
 - Per-project wiring (label values, epic names) lives in that project's memory. First use in a project: ask once, save it there.
 
 ## Tools, like the Linear MCP
@@ -32,11 +32,11 @@ The hard rules (confirm before creating, the checklist gates In Review and Done,
 
 ## Writing a ticket
 
-Read [TICKETS.md](TICKETS.md) before writing or rewriting any ticket, and follow it strictly. Any ```mermaid``` block in a ticket, comment or document follows [MERMAID.md](MERMAID.md). Reference ticket: MYINF-255.
+Read [TICKETS.md](TICKETS.md) before writing or rewriting any ticket, and follow it strictly. Any ```mermaid``` block in a ticket, comment or document follows [MERMAID.md](MERMAID.md).
 
 ## From a spec to tickets
 
-1. Read the spec (`.scratch/<feature>/spec.md`) and the project's memory for its labels and epics.
+1. Read the spec (wherever it lives, for example `specs/<feature>.md`) and the project's memory for its labels and epics.
 2. Split by feature: one ticket per feature end to end, one per UI screen. A multi-ticket feature gets an epic.
 3. Propose the list — titles, epic, `blockedBy` links, labels — and confirm with the user before creating anything.
 4. Create each ticket with `save_issue` in the TICKETS.md format, with its labels (a `repo` label on every ticket when the project has more than one repository) and `blockedBy`.

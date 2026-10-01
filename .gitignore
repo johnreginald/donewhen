@@ -29,3 +29,9 @@ web/.env
 
 # local MCP config (contains token)
 .mcp.json
+
+# private working notes and local agent state
+.scratch/
+.alumnium/
+.claude/raenil.json
+.claude/worktrees/
