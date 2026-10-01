@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/johnreginald/donewhen/internal/auth"
@@ -65,7 +66,7 @@ func (s *Server) handleGetDocument(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, d)
 }
 
-type docSaveReq struct {
+type docCreateReq struct {
 	Title        string   `json:"title"`
 	BodyMd       string   `json:"bodyMd"`
 	Type         string   `json:"type"`
@@ -77,7 +78,7 @@ type docSaveReq struct {
 }
 
 func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
-	var req docSaveReq
+	var req docCreateReq
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
@@ -90,20 +91,9 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 		Title:  req.Title,
 		BodyMD: req.BodyMd,
 		Type:   req.Type,
-	}
-	if id := r.PathValue("id"); id != "" {
-		d.ID = id
-		// Preserve type on curate when the client didn't send one.
-		if d.Type == "" {
-			if cur, err := s.store.GetDocument(r.Context(), ws(r), id); err == nil {
-				d.Type = cur.Type
-			}
-		}
-	} else {
 		// New docs are attributed to whoever created them (MCP bearer => ai).
-		d.Author = auth.ActorFrom(r.Context())
+		Author: auth.ActorFrom(r.Context()),
 	}
-	// Empty string detaches; a value attaches; absent (nil) leaves default.
 	if req.ProjectId != nil {
 		d.ProjectID = strPtr(*req.ProjectId)
 	}
@@ -113,18 +103,56 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 	if req.IssueId != nil {
 		d.IssueID = strPtr(*req.IssueId)
 	}
-	saved, err := s.store.SaveDocument(r.Context(), ws(r), d)
+	// The document and its labels commit together.
+	saved, err := s.store.CreateDocument(r.Context(), ws(r), d, store.DocLabels{
+		Set: req.LabelIds != nil || req.LabelNames != nil, IDs: req.LabelIds, Names: req.LabelNames,
+	})
 	if handleStoreErr(w, err) {
 		return
 	}
-	if req.LabelIds != nil || req.LabelNames != nil {
-		if err := s.store.SetDocumentLabels(r.Context(), ws(r), saved.ID, req.LabelIds, req.LabelNames); err != nil {
-			internalErr(w, err)
+	// Live: every connected client refreshes its document list on this.
+	s.bus.Publish(events.Event{Type: events.DocumentSaved, WorkspaceID: ws(r), Actor: saved.Author, Document: &saved})
+	writeJSON(w, 200, saved)
+}
+
+// handleUpdateDocument is PATCH: only the fields present in the body change. A
+// null or empty projectId/initiativeId/issueId detaches that link; absent keeps it.
+func (s *Server) handleUpdateDocument(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Title        *string         `json:"title"`
+		BodyMd       *string         `json:"bodyMd"`
+		Type         *string         `json:"type"`
+		ProjectId    json.RawMessage `json:"projectId"`
+		InitiativeId json.RawMessage `json:"initiativeId"`
+		IssueId      json.RawMessage `json:"issueId"`
+		LabelIds     []string        `json:"labelIds"`
+		LabelNames   []string        `json:"labelNames"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if req.Title != nil && *req.Title == "" {
+		writeErr(w, http.StatusBadRequest, "title required")
+		return
+	}
+	var ids [3]*string
+	for i, raw := range []json.RawMessage{req.ProjectId, req.InitiativeId, req.IssueId} {
+		v, ok := patchString(raw)
+		if !ok {
+			writeErr(w, http.StatusBadRequest, "projectId, initiativeId and issueId must be strings or null")
 			return
 		}
-		saved, _ = s.store.GetDocument(r.Context(), ws(r), saved.ID)
+		ids[i] = v
 	}
-	// Live: every connected client refreshes its document list on this.
+	saved, err := s.store.UpdateDocument(r.Context(), ws(r), r.PathValue("id"), store.DocumentPatch{
+		Title: req.Title, BodyMD: req.BodyMd, Type: req.Type,
+		ProjectID: ids[0], InitiativeID: ids[1], IssueID: ids[2],
+		Labels: store.DocLabels{Set: req.LabelIds != nil || req.LabelNames != nil, IDs: req.LabelIds, Names: req.LabelNames},
+	})
+	if handleStoreErr(w, err) {
+		return
+	}
 	s.bus.Publish(events.Event{Type: events.DocumentSaved, WorkspaceID: ws(r), Actor: saved.Author, Document: &saved})
 	writeJSON(w, 200, saved)
 }

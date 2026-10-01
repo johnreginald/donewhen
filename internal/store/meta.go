@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -169,7 +168,7 @@ func (s *Store) resolveLabelIDsTx(ctx context.Context, tx pgx.Tx, wsID string, i
 		err := tx.QueryRow(ctx,
 			`SELECT id, group_id FROM labels WHERE id=$1 AND workspace_id=$2`, id, wsID).Scan(&got.id, &got.groupID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("label id %q not found in this workspace", id)
+			return nil, invalid("label id %q not found in this workspace", id)
 		}
 		if err != nil {
 			return nil, err

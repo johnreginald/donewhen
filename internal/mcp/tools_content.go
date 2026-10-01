@@ -160,31 +160,51 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
-		issueID := req.GetString("issue", "")
-		if issueID != "" {
-			if is, err := d.resolveIssueRef(ctx, wsID, issueID); err == nil {
-				issueID = is.ID
-			}
-		}
-		doc := models.Document{
-			ID:           req.GetString("id", ""),
-			Title:        req.GetString("title", ""),
-			BodyMD:       req.GetString("body", ""),
-			Type:         req.GetString("type", "change"),
-			Author:       "ai",
-			ProjectID:    strp(req.GetString("project", "")),
-			IssueID:      strp(issueID),
-			InitiativeID: strp(req.GetString("initiative", "")),
-		}
-		saved, err := d.store.SaveDocument(ctx, wsID, doc)
-		if err != nil {
-			return toolErr(err), nil
-		}
-		if labels := stringSlice(req, "labels"); labels != nil {
-			if err := d.store.SetDocumentLabels(ctx, wsID, saved.ID, nil, labels); err != nil {
+		// An issue ref that does not resolve is an error: the raw key must never
+		// reach the store as an id.
+		var issueID *string
+		if raw := req.GetString("issue", ""); raw != "" {
+			is, err := d.resolveIssueRef(ctx, wsID, raw)
+			if err != nil {
 				return toolErr(err), nil
 			}
-			saved, _ = d.store.GetDocument(ctx, wsID, saved.ID)
+			issueID = &is.ID
+		} else if argString(req, "issue") != nil {
+			issueID = argString(req, "issue") // "": detach
+		}
+		var labels store.DocLabels
+		if names := stringSlice(req, "labels"); names != nil {
+			labels = store.DocLabels{Set: true, Names: names}
+		}
+		var saved models.Document
+		if id := req.GetString("id", ""); id != "" {
+			// Update: only the keys actually sent are changed.
+			saved, err = d.store.UpdateDocument(ctx, wsID, id, store.DocumentPatch{
+				Title:        argString(req, "title"),
+				BodyMD:       argString(req, "body"),
+				Type:         argString(req, "type"),
+				IssueID:      issueID,
+				ProjectID:    argString(req, "project"),
+				InitiativeID: argString(req, "initiative"),
+				Labels:       labels,
+			})
+		} else {
+			typ := req.GetString("type", "")
+			if typ == "" {
+				typ = "change"
+			}
+			saved, err = d.store.CreateDocument(ctx, wsID, models.Document{
+				Title:        req.GetString("title", ""),
+				BodyMD:       req.GetString("body", ""),
+				Type:         typ,
+				Author:       "ai",
+				ProjectID:    strp(req.GetString("project", "")),
+				IssueID:      issueID,
+				InitiativeID: strp(req.GetString("initiative", "")),
+			}, labels)
+		}
+		if err != nil {
+			return toolErr(err), nil
 		}
 		// Live: the web Artifacts list refreshes on this without a reload.
 		d.svc.Bus.Publish(events.Event{Type: events.DocumentSaved, WorkspaceID: wsID, Actor: saved.Author, Document: &saved})

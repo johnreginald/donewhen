@@ -263,7 +263,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/documents", s.wsGuard(s.handleListDocuments))
 	mux.HandleFunc("POST /api/documents", s.wsGuard(s.handleSaveDocument))
 	mux.HandleFunc("GET /api/documents/{id}", s.wsGuard(s.handleGetDocument))
-	mux.HandleFunc("PATCH /api/documents/{id}", s.wsGuard(s.handleSaveDocument))
+	mux.HandleFunc("PATCH /api/documents/{id}", s.wsGuard(s.handleUpdateDocument))
 	mux.HandleFunc("DELETE /api/documents/{id}", s.wsGuard(s.handleDeleteDocument))
 
 	// Push.
