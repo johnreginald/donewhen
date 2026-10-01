@@ -161,6 +161,18 @@ func (s *Server) pathAdminOnly(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
+// adminSessionOnly is adminOnly for a browser session: a bearer token is
+// refused even when its owner is an admin.
+func (s *Server) adminSessionOnly(next http.HandlerFunc) http.HandlerFunc {
+	return s.adminOnly(func(w http.ResponseWriter, r *http.Request) {
+		if auth.IsBearer(r.Context()) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		next(w, r)
+	})
+}
+
 // Handler builds the full HTTP handler (routes + auth middleware + static).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -256,8 +268,10 @@ func (s *Server) Handler() http.Handler {
 
 	// Push.
 	// bulk import (external tracker → DoneWhen)
-	mux.HandleFunc("POST /api/import", s.wsGuard(s.handleImport))
-	mux.HandleFunc("POST /api/import/descriptions", s.wsGuard(s.handleUpdateDescriptions))
+	// Admin-only and session-only: an import rewrites keys and descriptions
+	// workspace-wide, so neither a member nor a bearer token may run one.
+	mux.HandleFunc("POST /api/import", s.adminSessionOnly(s.handleImport))
+	mux.HandleFunc("POST /api/import/descriptions", s.adminSessionOnly(s.handleUpdateDescriptions))
 
 	mux.HandleFunc("POST /api/push/subscribe", s.guard(s.handlePushSubscribe))
 	mux.HandleFunc("POST /api/push/unsubscribe", s.guard(s.handlePushUnsubscribe))
@@ -274,7 +288,7 @@ func (s *Server) Handler() http.Handler {
 	// Static PWA + SPA fallback for everything else.
 	mux.HandleFunc("/", s.serveStatic)
 
-	return s.auth.Middleware(mux)
+	return requestID(s.auth.Middleware(mux))
 }
 
 // serveStatic serves files from the build dir, falling back to index.html so

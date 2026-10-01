@@ -238,11 +238,13 @@ func TestIsDestructive(t *testing.T) {
 	}
 }
 
-func TestOnly0036IsMarked(t *testing.T) {
+func TestOnlyKnownMigrationsAreMarked(t *testing.T) {
+	// 0036 drops the agent tables; 0039 deletes unsafe push subscriptions.
+	marked := map[string]bool{"0036_plain_tracker.sql": true, "0039_security_cleanup.sql": true}
 	names, _ := migrationNames()
 	for _, n := range names {
 		b, _ := migrationFS.ReadFile("migrations/" + n)
-		if got, want := IsDestructive(string(b)), n == "0036_plain_tracker.sql"; got != want {
+		if got, want := IsDestructive(string(b)), marked[n]; got != want {
 			t.Errorf("%s destructive = %v, want %v", n, got, want)
 		}
 	}

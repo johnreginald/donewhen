@@ -26,15 +26,15 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, issueRef(ref))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, ref)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		comments, err := d.store.ListComments(ctx, wsID, is.ID)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(comments)
 	})
@@ -55,15 +55,15 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, issueRef(ref))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, ref)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		c, err := d.svc.AddComment(ctx, wsID, is.ID, body, auth.ActorAI)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(c)
 	})
@@ -81,17 +81,17 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		issueID := req.GetString("issue", "")
 		if issueID != "" && !isUUID(issueID) {
 			wsID, err := d.scopeOne(ctx, req, issueRef(issueID))
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return toolErr(err), nil
 			}
 			is, err := d.resolveIssueRef(ctx, wsID, issueID)
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return toolErr(err), nil
 			}
 			issueID = is.ID
 		}
@@ -102,7 +102,7 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			InitiativeID: req.GetString("initiative", ""),
 		})
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		limit := listLimit(req)
 		if req.GetBool("verbose", false) {
@@ -122,11 +122,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, documentRef(id))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		doc, err := d.store.GetDocument(ctx, wsID, id)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(doc)
 	})
@@ -158,7 +158,7 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		wsID, err := d.scopeOne(ctx, req, documentRef(req.GetString("id", "")), issueRef(req.GetString("issue", "")),
 			projectRef(req.GetString("project", "")), iniRef(req.GetString("initiative", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		issueID := req.GetString("issue", "")
 		if issueID != "" {
@@ -178,11 +178,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 		}
 		saved, err := d.store.SaveDocument(ctx, wsID, doc)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		if labels := stringSlice(req, "labels"); labels != nil {
 			if err := d.store.SetDocumentLabels(ctx, wsID, saved.ID, nil, labels); err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return toolErr(err), nil
 			}
 			saved, _ = d.store.GetDocument(ctx, wsID, saved.ID)
 		}
@@ -201,11 +201,11 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		issues, err := d.store.IssuesMissingDocs(ctx, wsIDs)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		// The gap worth closing is the one just made. Issue numbers are per
 		// workspace, so only the update time orders them across workspaces.
@@ -219,7 +219,7 @@ func (d *deps) registerContent(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		u, err := d.store.FirstUser(ctx)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(u)
 	})

@@ -22,11 +22,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		items, err := d.store.ListProjectsAcross(ctx, wsIDs, req.GetString("initiative", ""), req.GetString("archived", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		if req.GetBool("verbose", false) {
 			return jsonResult(items)
@@ -47,11 +47,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, projectRef(id))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		p, err := d.store.ArchiveProject(ctx, wsID, id, req.GetBool("archived", true), auth.ActorAI)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(p)
 	})
@@ -67,11 +67,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, projectRef(id))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		p, err := d.store.GetProject(ctx, wsID, id)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(p)
 	})
@@ -86,7 +86,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, projectRef(req.GetString("id", "")), iniRef(req.GetString("initiative", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		p := models.Project{
 			ID:            req.GetString("id", ""),
@@ -96,7 +96,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		saved, err := d.store.SaveProject(ctx, wsID, p)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(saved)
 	})
@@ -113,11 +113,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, iniRef(id))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		it, err := d.store.GetInitiative(ctx, wsID, id)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(it)
 	})
@@ -128,11 +128,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		items, err := d.store.ListInitiativesAcross(ctx, wsIDs)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(items)
 	})
@@ -146,7 +146,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, iniRef(req.GetString("id", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		i := models.Initiative{
 			ID:            req.GetString("id", ""),
@@ -155,7 +155,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		saved, err := d.store.SaveInitiative(ctx, wsID, i)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(saved)
 	})
@@ -167,11 +167,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		states, err := d.store.ListStatesAcross(ctx, wsIDs)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(states)
 	})
@@ -187,11 +187,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, stateRef(id))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		st, err := d.store.GetState(ctx, wsID, id)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(st)
 	})
@@ -205,11 +205,11 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		labels, err := d.store.ListLabelsAcross(ctx, wsIDs)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		groups, _ := d.store.ListLabelGroupsAcross(ctx, wsIDs)
 		if req.GetBool("verbose", false) {
@@ -227,7 +227,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		name, err := req.RequireString("name")
 		if err != nil {
@@ -235,7 +235,7 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 		}
 		l, err := d.store.CreateLabel(ctx, wsID, name, req.GetString("color", ""), req.GetString("group", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(l)
 	})

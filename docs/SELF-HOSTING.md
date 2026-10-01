@@ -266,6 +266,7 @@ Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` set to `raenil` in `
   ```
 
 - The value is a comma-separated list of migration names. Remove the line after the migration is applied.
+- `0039_security_cleanup.sql` deletes old push subscriptions that point at non-https or private addresses, and clears issue project or parent links that cross workspaces. Each change is logged as `migration 0039: ...`. If you run tests against a database that already has data, confirm it the same way.
 - `make migrate` does both steps, but it runs the local `./donewhen` binary. It needs Go on the machine and `DONEWHEN_DATABASE_URL` pointing at a database it can reach. Compose does not publish Postgres, so on a Compose install use the steps above.
 
 ### Upgrading an old install to workspaces

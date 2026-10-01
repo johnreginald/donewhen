@@ -29,15 +29,15 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		c, err := d.store.AddCommit(ctx, wsID, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		_ = d.store.RecordActivity(ctx, wsID, models.Activity{
 			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: "ai",
@@ -59,11 +59,11 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		owner, err := d.store.IssueByCommit(ctx, wsIDs, req.GetString("sha", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(owner)
 	})
@@ -78,15 +78,15 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		upd, err := d.store.SetIssueDev(ctx, wsID, is.ID, strp(req.GetString("gitBranch", "")), strp(req.GetString("prUrl", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(upd)
 	})
@@ -100,15 +100,15 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		items, err := d.store.ListCriteria(ctx, wsID, is.ID)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		if items == nil {
 			items = []models.Criterion{}
@@ -152,11 +152,11 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		// Reconcile in place against the existing rows (ordered by position): update
 		// slot i, append new slots, delete the tail. Ticking one item off re-sends the
@@ -172,19 +172,19 @@ func (d *deps) registerDev(s *server.MCPServer) {
 				}
 				c, err := d.store.UpdateCriterion(ctx, wsID, existing[i].ID, &body, &done, &kind, it.check, nil)
 				if err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
+					return toolErr(err), nil
 				}
 				out = append(out, c)
 				continue
 			}
 			c, err := d.store.AddCriterion(ctx, wsID, is.ID, it.text, it.kind, it.check)
 			if err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				return toolErr(err), nil
 			}
 			if it.done {
 				done := true
 				if c, err = d.store.UpdateCriterion(ctx, wsID, c.ID, nil, &done, nil, nil, nil); err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
+					return toolErr(err), nil
 				}
 			}
 			out = append(out, c)
@@ -211,15 +211,15 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		items, err := d.store.ListCriteria(ctx, wsID, is.ID)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		var target *models.Criterion
 		if idx := req.GetInt("index", 0); idx >= 1 && idx <= len(items) {
@@ -242,7 +242,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		}
 		c, err := d.store.UpdateCriterion(ctx, wsID, target.ID, nil, &done, nil, nil, evidence)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(c)
 	})
@@ -255,15 +255,15 @@ func (d *deps) registerDev(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, issueRef(req.GetString("issue", "")))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		acts, err := d.store.ListActivity(ctx, wsID, is.ID)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(acts)
 	})
