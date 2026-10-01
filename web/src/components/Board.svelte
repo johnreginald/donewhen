@@ -2,6 +2,7 @@
 	import { dndzone } from 'svelte-dnd-action';
 	import { states, boardVisibleIssues, issueQuery, issues, loadIssues, activeWorkspace } from '$lib/store.js';
 	import { api } from '$lib/api.js';
+	import { gateFailure, gateSummary } from '$lib/gate.js';
 	import { showToast } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
 	import StateIcon from './StateIcon.svelte';
@@ -135,7 +136,11 @@
 			await api.updateIssue(it.id, { stateId: col.id, position: newPos });
 			if (moved) showToast(`${it.key} → ${col.name}`);
 		} catch (err) {
-			showToast('Move failed: ' + err.message, 'error');
+			const g = gateFailure(err);
+			showToast(
+				g ? gateSummary(g, it.key) + ' ' + g.open.map((o) => `${o.index}. ${o.text}`).join('; ') : 'Move failed: ' + err.message,
+				'error'
+			);
 			it.stateId = prevStateId;
 			it.position = prevPos;
 			await loadIssues();

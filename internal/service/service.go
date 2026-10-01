@@ -77,10 +77,14 @@ func excerpt(s string, n int) string {
 
 // CreateIssue persists a new issue and publishes issue.created.
 func (s *Service) CreateIssue(ctx context.Context, wsID string, in store.IssueInput, actor string) (models.Issue, error) {
+	var gate store.GateOutcome
+	in.ForceGate = in.ForceGate && actor != "ai" // AI callers never force
+	in.GateOut = &gate
 	is, err := s.Store.CreateIssue(ctx, wsID, in)
 	if err != nil {
 		return is, err
 	}
+	defer s.logOverride(ctx, wsID, is, gate, actor)
 	s.Bus.Publish(events.Event{
 		Type:        events.IssueCreated,
 		WorkspaceID: wsID,
@@ -102,10 +106,14 @@ func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.Issu
 	if err != nil {
 		return models.Issue{}, err
 	}
+	var gate store.GateOutcome
+	p.ForceGate = p.ForceGate && actor != "ai" // AI callers never force
+	p.GateOut = &gate
 	is, err := s.Store.UpdateIssue(ctx, wsID, id, p)
 	if err != nil {
 		return is, err
 	}
+	defer s.logOverride(ctx, wsID, is, gate, actor)
 	if before.StateID != is.StateID {
 		s.Bus.Publish(events.Event{
 			Type:        events.IssueStateChanged,
@@ -150,6 +158,19 @@ func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.Issu
 		s.logActivity(ctx, wsID, e)
 	}
 	return is, nil
+}
+
+// logOverride records a forced move past the done-when gate.
+func (s *Service) logOverride(ctx context.Context, wsID string, is models.Issue, g store.GateOutcome, actor string) {
+	if !g.Overridden {
+		return
+	}
+	s.logActivity(ctx, wsID, models.Activity{
+		IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: actor,
+		Kind: "gate_overridden", Field: "status",
+		ToVal:  s.stateName(ctx, wsID, is.StateID),
+		Detail: g.Err.Error(),
+	})
 }
 
 // DeleteIssue removes an issue and publishes issue.deleted.

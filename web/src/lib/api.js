@@ -63,6 +63,12 @@ async function request(method, path, body, wsOverride) {
 	if (!res.ok) {
 		const err = new Error((data && data.error) || res.statusText);
 		err.status = res.status;
+		// A refused done-when gate (PP-203) says which criteria are open.
+		if (data && data.code) {
+			err.code = data.code;
+			err.state = data.state;
+			err.open = data.open;
+		}
 		throw err;
 	}
 	return data;

@@ -65,6 +65,12 @@ type issueCreateReq struct {
 	ParentKey     string   `json:"parentKey"`
 	LabelIds      []string `json:"labelIds"`
 	LabelNames    []string `json:"labelNames"`
+	Force         bool     `json:"force"` // see issueUpdateReq.Force
+}
+
+// canForceGate reports whether this caller may override the done-when gate.
+func canForceGate(r *http.Request) bool {
+	return !auth.IsBearer(r.Context()) && canAdmin(r)
 }
 
 func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +94,7 @@ func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		ParentKey:     strPtr(req.ParentKey),
 		LabelIDs:      req.LabelIds,
 		LabelNames:    req.LabelNames,
+		ForceGate:     req.Force && canForceGate(r),
 	}
 	is, err := s.svc.CreateIssue(r.Context(), ws(r), in, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
@@ -108,6 +115,9 @@ type issueUpdateReq struct {
 	ParentKey     *string  `json:"parentKey"`
 	LabelIds      []string `json:"labelIds"`
 	LabelNames    []string `json:"labelNames"`
+	// Force skips the done-when gate. Honoured only for an owner/admin browser
+	// session; a bearer token's value is ignored.
+	Force bool `json:"force"`
 }
 
 func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
@@ -123,6 +133,7 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		StateName:     req.StateName,
 		Priority:      req.Priority,
 		Position:      req.Position,
+		ForceGate:     req.Force && canForceGate(r),
 	}
 	// Empty string clears the relation; a value sets it; absent leaves unchanged.
 	if req.ProjectId != nil {

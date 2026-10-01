@@ -30,6 +30,11 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
 	}
+	var ge *store.GateError
+	if errors.As(err, &ge) {
+		writeGateErr(w, ge)
+		return true
+	}
 	if errors.Is(err, store.ErrNotMember) {
 		writeErr(w, http.StatusForbidden, "not a member of this workspace")
 		return true
@@ -48,6 +53,17 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 	}
 	internalErr(w, err)
 	return true
+}
+
+// writeGateErr answers 409 with the stable code and the open criteria, so a
+// client can show them without parsing the message.
+func writeGateErr(w http.ResponseWriter, ge *store.GateError) {
+	writeJSON(w, http.StatusConflict, map[string]any{
+		"error": ge.Error(),
+		"code":  ge.Code,
+		"state": ge.State,
+		"open":  orEmpty(ge.Open),
+	})
 }
 
 // internalErr answers 500 with a plain message. Driver and SQL detail can leak

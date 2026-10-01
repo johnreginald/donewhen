@@ -54,6 +54,8 @@ export function activityVerb(a) {
 			return a.detail ? `archived epic “${a.detail}”` : 'archived an epic';
 		case 'epic_unarchived':
 			return a.detail ? `unarchived epic “${a.detail}”` : 'unarchived an epic';
+		case 'gate_overridden':
+			return `forced past the done-when gate to ${a.to}`;
 		case 'deleted':
 			return 'deleted';
 		default: {
