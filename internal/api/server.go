@@ -99,10 +99,26 @@ func (s *Server) sessionOnly(next http.HandlerFunc) http.HandlerFunc {
 // on and proves membership before the handler runs. Everything that reads or
 // writes tenant data goes through here.
 func (s *Server) wsGuard(next http.HandlerFunc) http.HandlerFunc {
+	return s.resolveGuard(next, auth.RequestedWorkspace, false)
+}
+
+// pathGuard is wsGuard for routes that name their workspace in the URL
+// (`/api/workspaces/{id}/…`): it acts on {id}, never the active workspace, and
+// answers 404 for an unknown workspace or one the caller is not a member of,
+// so it does not reveal which workspaces exist.
+func (s *Server) pathGuard(next http.HandlerFunc) http.HandlerFunc {
+	return s.resolveGuard(next, func(r *http.Request) string { return r.PathValue("id") }, true)
+}
+
+func (s *Server) resolveGuard(next http.HandlerFunc, requested func(*http.Request) string, hide bool) http.HandlerFunc {
 	return s.guard(func(w http.ResponseWriter, r *http.Request) {
 		user, _ := auth.UserFrom(r.Context())
-		wsp, role, err := s.auth.ResolveWorkspace(r.Context(), user, auth.RequestedWorkspace(r))
+		wsp, role, err := s.auth.ResolveWorkspace(r.Context(), user, requested(r))
 		if err != nil {
+			if hide && (errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrNotMember)) {
+				writeErr(w, http.StatusNotFound, "workspace not found")
+				return
+			}
 			switch {
 			case errors.Is(err, auth.ErrNoWorkspace):
 				writeErr(w, http.StatusForbidden, "no workspace available for this account")
@@ -134,6 +150,17 @@ func (s *Server) adminOnly(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
+// pathAdminOnly is adminOnly for routes that act on the workspace in the URL.
+func (s *Server) pathAdminOnly(next http.HandlerFunc) http.HandlerFunc {
+	return s.pathGuard(func(w http.ResponseWriter, r *http.Request) {
+		if !canAdmin(r) {
+			writeErr(w, http.StatusForbidden, "requires workspace owner or admin")
+			return
+		}
+		next(w, r)
+	})
+}
+
 // Handler builds the full HTTP handler (routes + auth middleware + static).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -157,9 +184,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/workspaces", s.sessionOnly(s.handleCreateWorkspace))
 	mux.HandleFunc("POST /api/workspaces/{id}/activate", s.sessionOnly(s.handleActivateWorkspace))
 	mux.HandleFunc("PATCH /api/workspaces/{id}", s.adminOnly(s.handleUpdateWorkspace))
-	mux.HandleFunc("GET /api/workspaces/{id}/members", s.wsGuard(s.handleListMembers))
-	mux.HandleFunc("POST /api/workspaces/{id}/members", s.adminOnly(s.handleAddMember))
-	mux.HandleFunc("DELETE /api/workspaces/{id}/members/{userId}", s.adminOnly(s.handleRemoveMember))
+	mux.HandleFunc("GET /api/workspaces/{id}/members", s.pathGuard(s.handleListMembers))
+	mux.HandleFunc("POST /api/workspaces/{id}/members", s.pathAdminOnly(s.handleAddMember))
+	mux.HandleFunc("DELETE /api/workspaces/{id}/members/{userId}", s.pathAdminOnly(s.handleRemoveMember))
 
 	// API tokens.
 	mux.HandleFunc("GET /api/tokens", s.sessionOnly(s.handleListTokens))

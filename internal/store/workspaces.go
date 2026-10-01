@@ -18,6 +18,9 @@ import (
 // workspace that demonstrably exists.
 var ErrNotMember = errors.New("not a member of this workspace")
 
+// ErrLastOwner is returned when a change would leave a workspace with no owner.
+var ErrLastOwner = errors.New("a workspace needs at least one owner")
+
 const workspaceCols = `id, slug, name, key_prefix, position, created_at, updated_at, ai_name`
 
 func scanWorkspace(row pgx.Row) (models.Workspace, error) {
@@ -133,8 +136,29 @@ func (s *Store) ListMembers(ctx context.Context, wsID string) ([]models.Member, 
 	return out, rows.Err()
 }
 
+// lockOwners locks the workspace's owner rows for the rest of tx and returns
+// their user ids. Two concurrent owner changes serialise here, so the second
+// one sees the first one's result and cannot also drop the owner count to zero.
+func lockOwners(ctx context.Context, tx pgx.Tx, wsID string) (map[string]bool, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT user_id FROM workspace_members WHERE workspace_id=$1 AND role='owner' FOR UPDATE`, wsID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	owners := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		owners[id] = true
+	}
+	return owners, rows.Err()
+}
+
 // AddMember grants a user access to a workspace (idempotent: re-adding updates
-// the role).
+// the role). Demoting the last owner is refused with ErrLastOwner.
 func (s *Store) AddMember(ctx context.Context, wsID, userID, role string) error {
 	if role == "" {
 		role = models.RoleMember
@@ -142,13 +166,29 @@ func (s *Store) AddMember(ctx context.Context, wsID, userID, role string) error 
 	if role != models.RoleOwner && role != models.RoleAdmin && role != models.RoleMember {
 		return fmt.Errorf("unknown role %q", role)
 	}
-	_, err := s.pool.Exec(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	owners, err := lockOwners(ctx, tx, wsID)
+	if err != nil {
+		return err
+	}
+	if owners[userID] && role != models.RoleOwner && len(owners) <= 1 {
+		return ErrLastOwner
+	}
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1,$2,$3)
-		ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role`, wsID, userID, role)
-	return err
+		ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role`, wsID, userID, role); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-// RemoveMember revokes access, refusing to strand a workspace with no owner.
+// RemoveMember revokes access, refusing (ErrLastOwner) to strand a workspace
+// with no owner.
 func (s *Store) RemoveMember(ctx context.Context, wsID, userID string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -156,6 +196,10 @@ func (s *Store) RemoveMember(ctx context.Context, wsID, userID string) error {
 	}
 	defer tx.Rollback(ctx)
 
+	owners, err := lockOwners(ctx, tx, wsID)
+	if err != nil {
+		return err
+	}
 	var role string
 	err = tx.QueryRow(ctx,
 		`SELECT role FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`, wsID, userID).Scan(&role)
@@ -165,15 +209,8 @@ func (s *Store) RemoveMember(ctx context.Context, wsID, userID string) error {
 	if err != nil {
 		return err
 	}
-	if role == models.RoleOwner {
-		var owners int
-		if err := tx.QueryRow(ctx,
-			`SELECT count(*) FROM workspace_members WHERE workspace_id=$1 AND role='owner'`, wsID).Scan(&owners); err != nil {
-			return err
-		}
-		if owners <= 1 {
-			return errors.New("cannot remove the last owner of a workspace")
-		}
+	if owners[userID] && len(owners) <= 1 {
+		return ErrLastOwner
 	}
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`, wsID, userID); err != nil {
