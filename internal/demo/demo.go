@@ -8,6 +8,7 @@ package demo
 
 import (
 	"context"
+	"crypto/sha1"
 	"errors"
 	"fmt"
 
@@ -89,9 +90,7 @@ var issues = []issue{
 			{"human", "Looks good. Merged."},
 		},
 		Commits: []string{"Add email sign-up and verification links"},
-		Doc: &doc{Title: "Sign-up and email verification", Type: "change", Body: `# Sign-up and email verification
-
-## Summary
+		Doc: &doc{Title: "Sign-up and email verification", Type: "change", Body: `## Summary
 A visitor signs up with an email and password. Acme sends a verification link. The account stays locked until the link is opened.
 
 ## How it works
@@ -130,9 +129,7 @@ sequenceDiagram
 		},
 		Comments: []comment{{"ai", "Used the server-side renderer. Totals are computed once and reused by the screen and the PDF."}},
 		Commits:  []string{"Render invoices as PDF"},
-		Doc: &doc{Title: "Invoice PDF rendering", Type: "change", Body: `# Invoice PDF rendering
-
-## Summary
+		Doc: &doc{Title: "Invoice PDF rendering", Type: "change", Body: `## Summary
 Invoices can be downloaded as PDF. The screen and the PDF read the same totals, so they cannot disagree.
 
 ## How it works
@@ -163,9 +160,7 @@ flowchart LR
 		},
 		Comments: []comment{{"ai", "Streams rows straight from the query to the response."}},
 		Commits:  []string{"Stream report rows as CSV"},
-		Doc: &doc{Title: "CSV export", Type: "feature", Body: `# CSV export
-
-## Summary
+		Doc: &doc{Title: "CSV export", Type: "feature", Body: `## Summary
 Every report has an Export button. The file streams from the database, so big reports do not use much memory.
 
 ## How it works
@@ -302,6 +297,7 @@ sequenceDiagram
 			{"Report groups tax by country and month", false},
 			{"Report can be exported to CSV", false},
 		},
+		Comments: []comment{{"ai", "Cannot start until VAT numbers are stored. Picking this up after that ships."}},
 	},
 
 	// ---- Ready ----
@@ -418,7 +414,7 @@ func Seed(ctx context.Context, svc *service.Service, ownerID, slug string) (Resu
 
 	keys := map[string]string{} // ref -> issue key
 	ids := map[string]string{}  // ref -> issue id
-	for n, it := range issues {
+	for _, it := range issues {
 		in := store.IssueInput{
 			Title: it.Title, DescriptionMD: it.Desc, Priority: it.Priority,
 			LabelNames: it.Labels,
@@ -455,7 +451,7 @@ func Seed(ctx context.Context, svc *service.Service, ownerID, slug string) (Resu
 			}
 		}
 		for _, msg := range it.Commits {
-			sha := fmt.Sprintf("%07x%033x", 0xd3a0000+n*7919, n+1)
+			sha := fmt.Sprintf("%x", sha1.Sum([]byte(created.Key+msg)))
 			if _, err := st.AddCommit(ctx, ws.ID, created.ID, sha, msg, nil); err != nil {
 				return res, err
 			}
