@@ -291,10 +291,13 @@
 		padding: 10px 6px;
 		overflow-y: visible;
 	}
+	/* Fixed, not absolute: the sidebar clips horizontal overflow, which cut
+	   the half of the button that hangs over its edge. Desktop only (hidden
+	   on phones), where the sidebar always starts at the left edge. */
 	.railtoggle {
-		position: absolute;
+		position: fixed;
 		top: 18px;
-		right: -11px;
+		left: calc(240px - 11px);
 		width: 22px;
 		height: 22px;
 		border-radius: 50%;
@@ -313,6 +316,7 @@
 	}
 	.sidebar.collapsed .railtoggle {
 		display: flex;
+		left: calc(64px - 11px);
 	}
 	.railtoggle:hover {
 		color: var(--ink);
