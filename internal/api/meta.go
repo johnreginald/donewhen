@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // ---- states ----

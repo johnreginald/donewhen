@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"raenil/internal/auth"
-	"raenil/internal/config"
-	"raenil/internal/events"
-	"raenil/internal/push"
-	"raenil/internal/service"
-	"raenil/internal/sse"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/events"
+	"github.com/johnreginald/donewhen/internal/push"
+	"github.com/johnreginald/donewhen/internal/service"
+	"github.com/johnreginald/donewhen/internal/sse"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 type Server struct {
@@ -228,7 +228,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/documents/{id}", s.wsGuard(s.handleDeleteDocument))
 
 	// Push.
-	// bulk import (external tracker → Raenil)
+	// bulk import (external tracker → DoneWhen)
 	mux.HandleFunc("POST /api/import", s.wsGuard(s.handleImport))
 	mux.HandleFunc("POST /api/import/descriptions", s.wsGuard(s.handleUpdateDescriptions))
 
@@ -277,7 +277,7 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	// Frontend not built yet.
 	writeJSON(w, http.StatusOK, map[string]string{
-		"service": "raenil",
+		"service": "donewhen",
 		"note":    "frontend not built; run the web build. API is under /api",
 	})
 }

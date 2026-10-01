@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"raenil/internal/auth"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // ---- simple in-memory login rate limiter (per client IP) ----
@@ -91,7 +91,7 @@ func (rl *rateLimiter) run(ctx context.Context, interval time.Duration) {
 
 // clientIP names the caller for rate limiting. Headers are attacker-controlled
 // unless a proxy we trust sets them, so by default only the TCP peer counts.
-// With RAENIL_TRUSTED_PROXY_HEADER set, that one header is believed instead:
+// With DONEWHEN_TRUSTED_PROXY_HEADER set, that one header is believed instead:
 // X-Forwarded-For contributes its right-most entry (the one our proxy appended;
 // everything left of it came from the client), any other header (for example
 // CF-Connecting-IP) is taken as the address itself. A missing or malformed
@@ -124,7 +124,7 @@ var (
 	dummyHash     string
 )
 
-const dummyPassword = "raenil-dummy-password-never-matches"
+const dummyPassword = "donewhen-dummy-password-never-matches"
 
 func loginDummyHash() string {
 	dummyHashOnce.Do(func() {
@@ -310,7 +310,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		internalErr(w, err)
 		return
 	}
-	plaintext := "raenil_" + raw
+	plaintext := auth.TokenPrefix + raw
 	t, err := s.store.CreateAPIToken(r.Context(), u.ID, body.Name, auth.HashToken(plaintext), pin)
 	if handleStoreErr(w, err) {
 		return

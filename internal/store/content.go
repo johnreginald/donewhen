@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // ---- Comments ----

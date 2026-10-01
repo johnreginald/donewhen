@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 const activityCols = `a.id, a.issue_id, coalesce(a.issue_key,''), coalesce(a.issue_title,''),

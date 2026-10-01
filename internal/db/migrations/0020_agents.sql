@@ -1,7 +1,7 @@
 -- Agents, the machines that run them, and the work queued between the two.
 --
--- Raenil runs on one machine and the agents on another (where the repos and
--- the logged-in CLIs are). So Raenil never runs an agent itself: it queues a
+-- DoneWhen runs on one machine and the agents on another (where the repos and
+-- the logged-in CLIs are). So DoneWhen never runs an agent itself: it queues a
 -- job, a runner host claims it, and reports back. The host also reports what
 -- it can run, so the UI shows a connection as what a machine has proved, not
 -- as a stored credential.

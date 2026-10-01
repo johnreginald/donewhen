@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

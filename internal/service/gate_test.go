@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"github.com/johnreginald/donewhen/internal/config"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"raenil/internal/db"
-	"raenil/internal/events"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/events"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 var wsSeq atomic.Int64
@@ -27,9 +27,9 @@ type gateEnv struct {
 
 func newGateEnv(t *testing.T) *gateEnv {
 	t.Helper()
-	dsn := os.Getenv("RAENIL_TEST_DATABASE_URL")
+	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("set RAENIL_TEST_DATABASE_URL to run service tests")
+		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run service tests")
 	}
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)

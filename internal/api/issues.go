@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 func (s *Server) handleListIssues(w http.ResponseWriter, r *http.Request) {

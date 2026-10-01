@@ -1,9 +1,8 @@
-// Package config loads Raenil configuration from environment variables.
+// Package config loads DoneWhen configuration from environment variables.
 package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -28,7 +27,7 @@ type Config struct {
 const DevSessionSecret = "dev-insecure-session-secret-do-not-use-in-prod"
 
 // IsProd reports whether this is a production run. Only the exact value "dev"
-// is development; any other RAENIL_ENV (prod, production, a typo) counts as
+// is development; any other DONEWHEN_ENV (prod, production, a typo) counts as
 // prod, so a mistyped value fails safe instead of accepting the dev secret.
 func (c Config) IsProd() bool { return c.Env != "dev" }
 
@@ -44,7 +43,7 @@ func (c Config) PushEnabled() bool {
 }
 
 func env(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := Getenv(key); v != "" {
 		return v
 	}
 	return def
@@ -53,28 +52,28 @@ func env(key, def string) string {
 // Load reads configuration from the environment, applying defaults.
 func Load() (Config, error) {
 	c := Config{
-		BaseURL:            env("RAENIL_BASE_URL", "http://localhost:8080"),
-		ListenAddr:         env("RAENIL_LISTEN_ADDR", ":8080"),
-		DatabaseURL:        env("RAENIL_DATABASE_URL", "postgres://raenil:raenil@localhost:5432/raenil?sslmode=disable"),
-		Env:                strings.ToLower(strings.TrimSpace(env("RAENIL_ENV", "dev"))),
-		SessionSecret:      os.Getenv("RAENIL_SESSION_SECRET"),
-		IssuePrefix:        env("RAENIL_ISSUE_PREFIX", "R"),
-		TrustedProxyHeader: strings.TrimSpace(os.Getenv("RAENIL_TRUSTED_PROXY_HEADER")),
-		VAPIDPublic:        os.Getenv("RAENIL_VAPID_PUBLIC"),
-		VAPIDPrivate:       os.Getenv("RAENIL_VAPID_PRIVATE"),
-		VAPIDSubject:       env("RAENIL_VAPID_SUBJECT", "mailto:admin@localhost"),
+		BaseURL:            env("DONEWHEN_BASE_URL", "http://localhost:8080"),
+		ListenAddr:         env("DONEWHEN_LISTEN_ADDR", ":8080"),
+		DatabaseURL:        env("DONEWHEN_DATABASE_URL", "postgres://donewhen:donewhen@localhost:5432/donewhen?sslmode=disable"),
+		Env:                strings.ToLower(strings.TrimSpace(env("DONEWHEN_ENV", "dev"))),
+		SessionSecret:      Getenv("DONEWHEN_SESSION_SECRET"),
+		IssuePrefix:        env("DONEWHEN_ISSUE_PREFIX", "R"),
+		TrustedProxyHeader: strings.TrimSpace(Getenv("DONEWHEN_TRUSTED_PROXY_HEADER")),
+		VAPIDPublic:        Getenv("DONEWHEN_VAPID_PUBLIC"),
+		VAPIDPrivate:       Getenv("DONEWHEN_VAPID_PRIVATE"),
+		VAPIDSubject:       env("DONEWHEN_VAPID_SUBJECT", "mailto:admin@localhost"),
 	}
 	if c.SessionSecret == "" {
 		if c.IsProd() {
-			return c, fmt.Errorf("RAENIL_SESSION_SECRET is required when RAENIL_ENV is not \"dev\" (got %q)", c.Env)
+			return c, fmt.Errorf("DONEWHEN_SESSION_SECRET is required when DONEWHEN_ENV is not \"dev\" (got %q)", c.Env)
 		}
 		c.SessionSecret = DevSessionSecret
 	}
 	if c.IsProd() && c.SessionSecret == DevSessionSecret {
-		return c, fmt.Errorf("RAENIL_SESSION_SECRET must not be the public dev secret when RAENIL_ENV=%q (only \"dev\" may use it)", c.Env)
+		return c, fmt.Errorf("DONEWHEN_SESSION_SECRET must not be the public dev secret when DONEWHEN_ENV=%q (only \"dev\" may use it)", c.Env)
 	}
 	if len(c.SessionSecret) < 16 {
-		return c, fmt.Errorf("RAENIL_SESSION_SECRET must be at least 16 bytes")
+		return c, fmt.Errorf("DONEWHEN_SESSION_SECRET must be at least 16 bytes")
 	}
 	c.BaseURL = strings.TrimRight(c.BaseURL, "/")
 	return c, nil

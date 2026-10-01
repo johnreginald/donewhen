@@ -1,4 +1,4 @@
-module raenil
+module github.com/johnreginald/donewhen
 
 go 1.25.5
 

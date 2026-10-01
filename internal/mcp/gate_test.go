@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // PP-203: save_issue refuses a move into In Review / Done while done-when

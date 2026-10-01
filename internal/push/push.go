@@ -15,10 +15,10 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 
-	"raenil/internal/config"
-	"raenil/internal/events"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/events"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 const (

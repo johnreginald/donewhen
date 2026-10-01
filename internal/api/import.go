@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // handleImport bulk-loads an external tracker export (Linear-native JSON shape)
-// into Raenil, preserving keys/timestamps/state/labels. Auth: any authenticated
+// into DoneWhen, preserving keys/timestamps/state/labels. Auth: any authenticated
 // caller (session or bearer). The body is decoded leniently (Linear objects
 // carry many fields we ignore) with a generous size cap.
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {

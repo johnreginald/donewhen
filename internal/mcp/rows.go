@@ -6,7 +6,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // A list answers "which one?", not "what does it say?". Its rows carry enough

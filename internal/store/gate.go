@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // The done-when gate. An issue may enter a gated state only when its

@@ -8,13 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 const (
-	SessionCookie = "raenil_session"
-	CSRFCookie    = "raenil_csrf"
+	// TokenPrefix starts every newly minted API token. Tokens minted before the
+	// rename start with "raenil_" and keep working: lookup is by hash, never by
+	// prefix.
+	TokenPrefix   = "donewhen_"
+	SessionCookie = "donewhen_session"
+	CSRFCookie    = "donewhen_csrf"
 	CSRFHeader    = "X-CSRF-Token"
 	// WorkspaceHeader names the workspace a request acts on, by id, slug or key
 	// prefix. The ?workspace= query parameter is accepted as an alternative for
@@ -266,7 +270,7 @@ func (m *Manager) NewCSRFCookie() (*http.Cookie, error) {
 }
 
 // CheckCSRF validates the double-submit token: the X-CSRF-Token header must
-// match the raenil_csrf cookie.
+// match the donewhen_csrf cookie.
 func (m *Manager) CheckCSRF(r *http.Request) bool {
 	c, err := r.Cookie(CSRFCookie)
 	if err != nil || c.Value == "" {

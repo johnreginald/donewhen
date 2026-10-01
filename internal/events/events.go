@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // Event types.

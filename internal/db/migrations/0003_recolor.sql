@@ -1,4 +1,4 @@
--- Recolor workflow states + core labels to the refined Raenil palette.
+-- Recolor workflow states + core labels to the refined DoneWhen palette.
 
 UPDATE workflow_states SET color = c.color
 FROM (VALUES

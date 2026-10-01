@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"raenil/internal/config"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // subKeys returns a valid (p256dh, auth) pair so webpush-go can encrypt.

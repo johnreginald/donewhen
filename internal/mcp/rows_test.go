@@ -8,7 +8,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // realisticIssue is shaped like a prod row: a few KB of markdown and the four
@@ -109,13 +109,13 @@ func TestLabelCatalogMergesWorkspaces(t *testing.T) {
 	repoA, repoB := "g-a", "g-b"
 	groups := []models.LabelGroup{{ID: repoA, Name: "repo", Exclusive: true}, {ID: repoB, Name: "repo", Exclusive: true}}
 	labels := []models.Label{
-		{ID: "1", GroupID: &repoA, Name: "raenil"},
-		{ID: "2", GroupID: &repoB, Name: "raenil"},
+		{ID: "1", GroupID: &repoA, Name: "donewhen"},
+		{ID: "2", GroupID: &repoB, Name: "donewhen"},
 		{ID: "3", GroupID: &repoB, Name: "acme-server"},
 		{ID: "4", Name: "api"},
 	}
 	text := resultText(t, labelCatalog(labels, groups))
-	want := `{"":{"labels":["api"]},"repo":{"exclusive":true,"labels":["acme-server","raenil"]}}`
+	want := `{"":{"labels":["api"]},"repo":{"exclusive":true,"labels":["acme-server","donewhen"]}}`
 	if text != want {
 		t.Errorf("catalog = %s\nwant      %s", text, want)
 	}

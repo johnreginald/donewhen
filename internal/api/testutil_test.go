@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"github.com/johnreginald/donewhen/internal/config"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -13,19 +13,19 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"raenil/internal/auth"
-	"raenil/internal/db"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
-// testStore connects to the throwaway Postgres named by RAENIL_TEST_DATABASE_URL
+// testStore connects to the throwaway Postgres named by DONEWHEN_TEST_DATABASE_URL
 // and skips when it is unset, like the store tests.
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
-	dsn := os.Getenv("RAENIL_TEST_DATABASE_URL")
+	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("set RAENIL_TEST_DATABASE_URL to run API tests")
+		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run API tests")
 	}
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)

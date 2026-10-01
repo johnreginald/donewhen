@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 func TestLinkURLsAreHTTPOnly(t *testing.T) {

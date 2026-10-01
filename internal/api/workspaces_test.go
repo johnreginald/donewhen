@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"raenil/internal/config"
+	"github.com/johnreginald/donewhen/internal/config"
 )
 
 // PP-189 on the REST side: PATCH /api/workspaces/{id} rejects blank fields and

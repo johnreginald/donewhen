@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // asUser runs h as u through the real auth middleware (bearer token), so the

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"raenil/internal/auth"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // handleInbox returns the review queue + recent AI activity for the landing

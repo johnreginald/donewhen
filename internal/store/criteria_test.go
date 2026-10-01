@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // A criterion's evidence belongs to its tick. Un-ticking must drop it, or the

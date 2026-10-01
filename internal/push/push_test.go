@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"raenil/internal/events"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/events"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 func TestBuildNamesTheAIActor(t *testing.T) {

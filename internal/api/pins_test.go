@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"raenil/internal/config"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // PP-188 part 1: a bearer caller, pinned or not, can never mint tokens or

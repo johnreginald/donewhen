@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // handleIssueActivity returns one issue's timeline (accepts id or key).

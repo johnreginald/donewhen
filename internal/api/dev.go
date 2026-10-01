@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // ---- commits ----
@@ -188,7 +188,7 @@ func (s *Server) handleDeleteCriterion(w http.ResponseWriter, r *http.Request) {
 // The reverse of POST /api/issues/{id}/commits, and the seam a code
 // intelligence tool needs: both systems already record a commit SHA, so it
 // is the one key that joins "why this was built" to "what the code
-// actually does". Without it, a tool holding a SHA has no way to ask Raenil
+// actually does". Without it, a tool holding a SHA has no way to ask DoneWhen
 // what that commit was supposed to accomplish.
 //
 // 404 when no issue claims the SHA — an ordinary outcome, not an error.

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 func wantInvalid(t *testing.T, err error, code string) {
