@@ -85,6 +85,28 @@ func commitURL(repo, sha string) string {
 
 // ---- commits ----
 
+// NormalizeSHA checks a commit sha and returns it lowercase: 7 to 40 hex
+// characters, nothing else. A prefix match against a stored sha is only
+// meaningful for a real sha, so a malformed one is an error, not an empty result.
+func NormalizeSHA(raw string) (string, error) {
+	sha := strings.ToLower(strings.TrimSpace(raw))
+	if sha == "" {
+		return "", invalid("sha required")
+	}
+	for _, c := range sha {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return "", invalid("sha must be hex")
+		}
+	}
+	if len(sha) < 7 {
+		return "", invalid("sha must be at least 7 characters")
+	}
+	if len(sha) > 40 {
+		return "", invalid("sha must be at most 40 characters")
+	}
+	return sha, nil
+}
+
 // AddCommit links a commit as a human; see AddCommitAs.
 func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message string, url *string) (models.IssueCommit, error) {
 	return s.AddCommitAs(ctx, wsID, issueID, sha, message, url, "")
@@ -93,7 +115,11 @@ func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message strin
 // AddCommitAs links a commit to an issue and records commit_linked on its
 // timeline in the same transaction.
 func (s *Store) AddCommitAs(ctx context.Context, wsID, issueID, sha, message string, url *string, actor string) (models.IssueCommit, error) {
-	url, err := normURL("url", url)
+	sha, err := NormalizeSHA(sha)
+	if err != nil {
+		return models.IssueCommit{}, err
+	}
+	url, err = normURL("url", url)
 	if err != nil {
 		return models.IssueCommit{}, err
 	}
@@ -112,10 +138,22 @@ func (s *Store) AddCommitAs(ctx context.Context, wsID, issueID, sha, message str
 	err = tx.QueryRow(ctx,
 		`INSERT INTO issue_commits (issue_id, sha, message, url)
 		 SELECT $1,$2,$3,$4 FROM issues WHERE id=$1 AND workspace_id=$5
+		 ON CONFLICT (issue_id, sha) DO NOTHING
 		 RETURNING id, issue_id, sha, message, url, created_at`,
 		issueID, sha, message, url, wsID).Scan(&c.ID, &c.IssueID, &c.SHA, &c.Message, &c.URL, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return c, ErrNotFound
+		// Either the issue is not in this workspace, or the commit is already
+		// linked: link_commit is idempotent, so hand back the existing row and
+		// leave the timeline alone.
+		err = tx.QueryRow(ctx, `
+			SELECT ic.id, ic.issue_id, ic.sha, ic.message, ic.url, ic.created_at
+			FROM issue_commits ic JOIN issues i ON i.id = ic.issue_id
+			WHERE ic.issue_id=$1 AND ic.sha=$2 AND i.workspace_id=$3`, issueID, sha, wsID).
+			Scan(&c.ID, &c.IssueID, &c.SHA, &c.Message, &c.URL, &c.CreatedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c, ErrNotFound
+		}
+		return c, err
 	}
 	if err != nil {
 		return c, err
@@ -438,25 +476,33 @@ type CommitOwner struct {
 // IssueByCommit returns the issue that recorded sha, with its acceptance
 // criteria, searched across the given workspaces.
 //
-// Matches on prefix in both directions so a short SHA (git rev-parse
-// --short, which is what most tools record) finds a full one and vice
-// versa. Returns pgx.ErrNoRows when no issue claims the commit — an
-// ordinary outcome, since plenty of commits are not tracked.
+// sha must be 7 to 40 hex characters (any case). It matches stored shas that
+// start with it, so a short sha (git rev-parse --short) finds the full one a
+// ticket recorded. A stored short sha does not match a longer query. Returns
+// ErrNotFound when no issue claims the commit — an ordinary outcome, since
+// plenty of commits are not tracked.
 func (s *Store) IssueByCommit(ctx context.Context, wsIDs []string, sha string) (CommitOwner, error) {
 	var out CommitOwner
+	sha, err := NormalizeSHA(sha)
+	if err != nil {
+		return out, err
+	}
 	var wsID string
-	err := s.pool.QueryRow(ctx, `
+	err = s.pool.QueryRow(ctx, `
 		SELECT i.id, i.key, i.title, COALESCE(ws.name, ''), i.workspace_id,
 		       ic.sha, ic.message, ic.url, ic.created_at
 		FROM issue_commits ic
 		JOIN issues i ON i.id = ic.issue_id
 		LEFT JOIN workflow_states ws ON ws.id = i.state_id
 		WHERE i.workspace_id = ANY($2)
-		  AND (ic.sha = $1 OR ic.sha LIKE $1 || '%' OR $1 LIKE ic.sha || '%')
-		ORDER BY length(ic.sha) DESC, ic.created_at DESC
+		  AND left(ic.sha, length($1)) = $1
+		ORDER BY ic.created_at DESC
 		LIMIT 1
 	`, sha, wsIDs).Scan(&out.IssueID, &out.IssueKey, &out.Title, &out.State, &wsID,
 		&out.SHA, &out.Message, &out.URL, &out.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, ErrNotFound
+	}
 	if err != nil {
 		return out, err
 	}

@@ -239,8 +239,11 @@ func TestIsDestructive(t *testing.T) {
 }
 
 func TestOnlyKnownMigrationsAreMarked(t *testing.T) {
-	// 0036 drops the agent tables; 0039 deletes unsafe push subscriptions.
-	marked := map[string]bool{"0036_plain_tracker.sql": true, "0039_security_cleanup.sql": true}
+	// 0036 drops the agent tables; 0039 deletes unsafe push subscriptions; 0040
+	// deletes duplicate commit links.
+	marked := map[string]bool{
+		"0036_plain_tracker.sql": true, "0039_security_cleanup.sql": true, "0040_commit_links_unique.sql": true,
+	}
 	names, _ := migrationNames()
 	for _, n := range names {
 		b, _ := migrationFS.ReadFile("migrations/" + n)

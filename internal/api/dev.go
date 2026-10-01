@@ -175,12 +175,7 @@ func (s *Server) handleDeleteCriterion(w http.ResponseWriter, r *http.Request) {
 //
 // 404 when no issue claims the SHA — an ordinary outcome, not an error.
 func (s *Server) handleIssueByCommit(w http.ResponseWriter, r *http.Request) {
-	sha := r.PathValue("sha")
-	if sha == "" {
-		writeErr(w, http.StatusBadRequest, "sha required")
-		return
-	}
-	owner, err := s.store.IssueByCommit(r.Context(), []string{ws(r)}, sha)
+	owner, err := s.store.IssueByCommit(r.Context(), []string{ws(r)}, r.PathValue("sha"))
 	if handleStoreErr(w, err) {
 		return
 	}

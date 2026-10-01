@@ -48,10 +48,10 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithDescription("Find the issue that recorded a commit SHA, with its done-when criteria. "+
 			"The reverse of link_commit. Use it when you have a commit and need the intent behind "+
 			"it — e.g. a code-intelligence tool reports what a commit actually changed, and you want "+
-			"to check that against what the ticket said it should do. Matches short and full SHAs "+
-			"in either direction. Returns not-found when no issue claims the commit, which is "+
-			"ordinary: plenty of commits are untracked."),
-		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, short or full")),
+			"to check that against what the ticket said it should do. The sha must be 7 to 40 hex "+
+			"characters and matches stored SHAs that start with it. Returns not-found when no "+
+			"issue claims the commit, which is ordinary: plenty of commits are untracked."),
+		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, 7-40 hex characters")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
