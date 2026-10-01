@@ -1,7 +1,9 @@
 {
   "name": "donewhen",
-  "version": "0.2.0",
-  "description": "DoneWhen tracker helpers for Claude Code: /tasks lists a workspace's open issues grouped by epic.",
-  "author": { "name": "Htet Wai Yan Soe" },
+  "version": "0.3.0",
+  "description": "DoneWhen tracker helpers for Claude Code: /tasks browses a workspace's open issues interactively, grouped by epic.",
+  "author": {
+    "name": "Htet Wai Yan Soe"
+  },
   "repository": "https://github.com/johnreginald/donewhen"
 }

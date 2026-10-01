@@ -50,7 +50,7 @@ const blockers = [
 	{ issueId: 'id-185', blockerId: 'id-187', done: true }
 ];
 const data = { workspaceName: 'Platform', states, initiatives, projects, issues, blockers };
-const opts = (o = {}) => ({ cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false, ...o });
+const opts = (o = {}) => ({ cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false, json: false, ...o });
 
 test('groups open issues by epic, initiative order then epic name, No epic last', () => {
 	const out = render(data, opts());
@@ -357,4 +357,42 @@ test('compat: reads .claude/raenil.json and ~/.config/raenil/default.json; new f
 	mkdirSync(join(home, '.config', 'donewhen'), { recursive: true });
 	writeFileSync(join(home, '.config', 'donewhen', 'default.json'), '{"workspace":"new-user"}');
 	assert.deepEqual(findConfig(bare, home), { workspace: 'new-user' });
+});
+
+// ---- interactive mode: --json and outline ----
+
+test('parseArgs: outline and --json', () => {
+	assert.equal(parseArgs(['outline', 'platform']).cmd, 'outline');
+	assert.equal(parseArgs(['outline', 'platform']).workspace, 'platform');
+	assert.equal(parseArgs(['workspaces', '--json']).json, true);
+	assert.equal(parseArgs(['platform']).json, false);
+});
+
+test('run workspaces --json: slug, prefix, open and projects, most open first, default named', async () => {
+	const r = repo();
+	mkdirSync(join(r.root, '.claude'));
+	writeFileSync(join(r.root, '.claude', 'donewhen.json'), '{"workspace":"acme"}');
+	const data = JSON.parse(await run(['workspaces', '--json'], env, r.root, multiFetch(byWs), r));
+	assert.equal(data.current, 'acme');
+	assert.deepEqual(data.workspaces.map((w) => w.slug), ['platform', 'acme']);
+	assert.equal(data.workspaces[0].open, 6);
+	assert.deepEqual(data.workspaces[1].projects[0], { name: 'Acme', open: 1 });
+});
+
+test('run outline: projects, epics by open count, states and the tickets that need attention', async () => {
+	const r = repo();
+	const o = JSON.parse(await run(['outline', 'platform'], env, r.root, multiFetch(byWs), r));
+	assert.equal(o.open, 6);
+	assert.ok(o.epics.length > 0 && o.epics.every((e) => e.open > 0));
+	assert.deepEqual(o.epics.map((e) => e.open), [...o.epics.map((e) => e.open)].sort((a, b) => b - a));
+	assert.ok(o.states.every((s) => s.open > 0));
+	const rank = { Blocked: 0, 'In Review': 1, 'In Progress': 2 };
+	assert.ok(o.hot.every((h) => h.state in rank));
+	assert.deepEqual(o.hot.map((h) => rank[h.state]), [...o.hot.map((h) => rank[h.state])].sort((a, b) => a - b));
+});
+
+test('run --json: a failure is JSON too, never prose', async () => {
+	const r = repo();
+	const out = await run(['outline', 'nope'], env, r.root, multiFetch(byWs), r);
+	assert.ok(JSON.parse(out).error);
 });

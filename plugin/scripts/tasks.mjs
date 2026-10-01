@@ -16,13 +16,16 @@ const MIN_WIDTH = 100;
 // ---- args ----
 
 // Subcommands: `workspaces` lists every reachable workspace; `use <ws>`
-// switches this repo's default. Anything else is the grouped task view.
+// switches this repo's default; `outline <ws>` lists a workspace's projects,
+// epics and states for menus. Anything else is the grouped task view.
+// `--json` makes `workspaces` and `outline` machine-readable.
 export function parseArgs(argv) {
-	const out = { cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false };
+	const out = { cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false, json: false };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
-		if (i === 0 && (a === 'workspaces' || a === 'use')) out.cmd = a;
+		if (i === 0 && (a === 'workspaces' || a === 'use' || a === 'outline')) out.cmd = a;
 		else if (a === '--all') out.all = true;
+		else if (a === '--json') out.json = true;
 		else if (a === '--project' || a === '--epic' || a === '--state') {
 			const v = argv[++i];
 			if (v === undefined || v.startsWith('--')) throw new UsageError(`${a} needs a value`);
@@ -244,6 +247,37 @@ export function renderWorkspaceTable(rows, currentId) {
 	].join('\n');
 }
 
+// outline is what the interactive command builds its menus from: projects and
+// epics with their open counts, open counts per state, and the tickets that
+// need a person's attention (Blocked first, then In Review, then In Progress).
+export function outline(states, initiatives, projects, issues, workspaceName = '') {
+	const stateById = new Map(states.map((s) => [s.id, s]));
+	const open = issues.filter((i) => !isClosed(stateById.get(i.stateId)));
+	const iniName = new Map(initiatives.map((i) => [i.id, i.name]));
+	const byIni = initiatives.slice().sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+	const rank = { blocked: 0, 'in review': 1, 'in progress': 2 };
+	const hot = open
+		.filter((i) => rank[stateById.get(i.stateId)?.name.toLowerCase()] !== undefined)
+		.sort((a, b) => rank[stateById.get(a.stateId).name.toLowerCase()] - rank[stateById.get(b.stateId).name.toLowerCase()] || a.number - b.number)
+		.map((i) => ({ key: i.key, title: i.title, state: stateById.get(i.stateId).name }));
+	return {
+		workspace: workspaceName,
+		open: open.length,
+		projects: byIni.map((i) => ({ name: i.name, open: open.filter((x) => projects.some((p) => p.id === x.projectId && p.initiativeId === i.id)).length })),
+		epics: projects
+			.map((p) => ({ name: p.name, project: iniName.get(p.initiativeId) || '', open: open.filter((i) => i.projectId === p.id).length }))
+			.filter((e) => e.open > 0)
+			.sort((a, b) => b.open - a.open || a.name.localeCompare(b.name)),
+		states: states
+			.slice()
+			.sort((a, b) => a.position - b.position)
+			.filter((s) => !isClosed(s))
+			.map((s) => ({ name: s.name, open: open.filter((i) => i.stateId === s.id).length }))
+			.filter((s) => s.open > 0),
+		hot
+	};
+}
+
 // openCounts tallies open issues per workspace and per project (initiative).
 export function openCounts(states, initiatives, projects, issues) {
 	const closed = new Set(states.filter(isClosed).map((s) => s.id));
@@ -292,7 +326,8 @@ export function client(baseURL, token, fetchImpl = fetch) {
 }
 
 const USAGE = `Usage: /tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
-       /tasks workspaces
+       /tasks workspaces [--json]
+       /tasks outline <workspace>      (JSON for menus)
        /tasks use <workspace> [--project <text>]`;
 
 // run is the whole command; returns the text to print. Every failure becomes
@@ -314,15 +349,31 @@ export async function run(argv, env, cwd, fetchImpl = fetch, ctx = {}) {
 	const cfg = findConfig(cwd, home);
 	const get = client(url, token, fetchImpl);
 
+	const wantJson = opts.json || opts.cmd === 'outline';
+	const asJson = (out) => (wantJson && !out.trimStart().startsWith('{') ? JSON.stringify({ error: out }) : out);
 	try {
-		if (opts.cmd === 'workspaces') return await workspacesView(get, cfg.workspace);
+		if (opts.cmd === 'workspaces') return opts.json ? JSON.stringify(await workspacesData(get, cfg.workspace)) : await workspacesView(get, cfg.workspace);
 		if (opts.cmd === 'use') return await useWorkspace(get, opts, configTarget(cwd, home, ctx.gitRoot), env);
 		const workspace = opts.workspace || cfg.workspace || '';
+		if (opts.cmd === 'outline') return JSON.stringify(await outlineData(get, workspace));
 		if (!opts.project && !opts.workspace && cfg.project) opts.project = cfg.project;
 		return await tasksView(get, workspace, opts, env);
 	} catch (e) {
-		return explain(e, url, opts.workspace || cfg.workspace || '', get);
+		return asJson(await explain(e, url, opts.workspace || cfg.workspace || '', get));
 	}
+}
+
+async function outlineData(get, workspace) {
+	const [states, initiatives, projects, issues, memberships] = await Promise.all([
+		get('/api/states', workspace),
+		get('/api/initiatives', workspace),
+		get('/api/projects', workspace),
+		get('/api/issues', workspace),
+		get('/api/workspaces')
+	]);
+	const wsId = issues[0]?.workspaceId;
+	const w = memberships.find((m) => m.id === wsId) || findWorkspace(memberships, workspace) || (memberships.length === 1 ? memberships[0] : null);
+	return outline(states, initiatives, projects, issues, w?.name || workspace);
 }
 
 async function tasksView(get, workspace, opts, env) {
@@ -340,7 +391,22 @@ async function tasksView(get, workspace, opts, env) {
 	return render({ workspaceName, states, initiatives, projects, issues, blockers }, opts, width(env));
 }
 
+async function workspacesData(get, currentRef) {
+	const { rows, current } = await workspaceRows(get, currentRef);
+	return {
+		current: current?.slug || '',
+		workspaces: rows
+			.map((r) => ({ slug: r.ws.slug, name: r.ws.name, prefix: r.ws.keyPrefix, open: r.open, projects: r.projects }))
+			.sort((a, b) => b.open - a.open || a.name.localeCompare(b.name))
+	};
+}
+
 async function workspacesView(get, currentRef) {
+	const { rows, current } = await workspaceRows(get, currentRef);
+	return renderWorkspaceTable(rows, current?.id);
+}
+
+async function workspaceRows(get, currentRef) {
 	const memberships = await get('/api/workspaces');
 	const rows = await Promise.all(
 		memberships.map(async (ws) => {
@@ -354,7 +420,7 @@ async function workspacesView(get, currentRef) {
 		})
 	);
 	const current = findWorkspace(memberships, currentRef) || (memberships.length === 1 ? memberships[0] : null);
-	return renderWorkspaceTable(rows, current?.id);
+	return { rows, current };
 }
 
 async function useWorkspace(get, opts, target, env) {

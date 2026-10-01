@@ -144,7 +144,7 @@ Use a pinned token for an agent that works in one repo.
 
 ### The plugin: `/donewhen:tasks`
 
-The plugin adds one command. It lists open issues grouped by epic. It reads the REST API directly, so it costs no model tokens.
+The plugin adds one command. Run it with no arguments and it asks you what to look at: pick a workspace, narrow by epic, state or project, then open any ticket with its done-when checklist. It reads the REST API directly. The menus use a few model tokens. Add `--plain` for the old behaviour: one printed list, no questions, no model tokens.
 
 1. Install it. This repo is its own marketplace.
 
@@ -153,12 +153,13 @@ The plugin adds one command. It lists open issues grouped by epic. It reads the 
    claude plugin install donewhen@donewhen
    ```
 
-2. Set two environment variables, for example in your shell profile.
+2. Set two environment variables. The most reliable place is the `env` block of `~/.claude/settings.json`, because every Claude Code session gets it, however you start it. A shell profile works only when Claude Code is started from that shell.
 
-   ```bash
-   export DONEWHEN_URL=https://tracker.example.com   # your server
-   export DONEWHEN_TOKEN=donewhen_...                # a token from `donewhen token`
+   ```json
+   { "env": { "DONEWHEN_URL": "https://tracker.example.com", "DONEWHEN_TOKEN": "donewhen_..." } }
    ```
+
+   Get a token from `donewhen token <name>`. Restart Claude Code after you change it.
 
 3. Run `/donewhen:tasks` in Claude Code.
 
@@ -171,12 +172,14 @@ A pinned token also picks the workspace for you. Otherwise, set a default for a 
 Usage:
 
 ```
+/donewhen:tasks                                   # interactive: asks what to show
 /donewhen:tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
+/donewhen:tasks <anything> --plain                # print once, no questions
 /donewhen:tasks workspaces
 /donewhen:tasks use <workspace> [--project <text>]
 ```
 
-Done and Canceled issues are hidden unless you pass `--all`.
+In the interactive mode, after each list you choose: narrow it down (epic, state, project, or show Done too), look at a ticket, switch workspace, or stop. Done and Canceled issues are hidden unless you pass `--all` or pick "Show Done and Canceled too".
 
 The repo also has a skill that teaches Claude how to use the tools well. See [skills/README.md](skills/README.md). For the full loop, see [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md).
 

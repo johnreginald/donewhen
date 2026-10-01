@@ -106,8 +106,9 @@ Both are optional. DoneWhen works with any MCP client.
 
 **Plugin** (`plugin/`). It adds one command, `/donewhen:tasks`:
 
+- Run with no arguments, it is interactive: it asks for a workspace, lets you narrow by epic, state or project, and opens any ticket with its done-when checklist. Add `--plain` for one printed list with no questions.
 - It lists a workspace's open issues, grouped by epic. It can also list workspaces (`workspaces`) and set a default (`use <workspace>`).
-- It reads the REST API with a Node script (`plugin/scripts/tasks.mjs`). It has no dependencies. It does not call the model, so it costs no tokens.
+- It reads the REST API with a Node script (`plugin/scripts/tasks.mjs`). It has no dependencies. The script does not call the model. The menus are driven by Claude Code's question prompts, so they cost a few tokens; `--plain` costs none.
 - It needs two environment variables: `DONEWHEN_URL` (your server) and `DONEWHEN_TOKEN` (an API token).
 
 ## One full ticket
