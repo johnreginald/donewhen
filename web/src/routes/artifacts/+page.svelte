@@ -582,7 +582,7 @@
 	.drow:last-child { border-bottom: 0; }
 	.d-top { display: contents; }
 	.d-ic { font-size: var(--t-base); }
-	.d-title { font-family: var(--serif); font-size: var(--t-base); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
+	.d-title { font-family: var(--font); font-weight: 500; font-size: var(--t-base); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
 	.d-title .ai { color: var(--accent); font-size: var(--t-xs); flex: none; }
 	.d-key { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink-3); }
 	.d-epic { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

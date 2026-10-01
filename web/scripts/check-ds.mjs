@@ -1,7 +1,8 @@
 // Design-system drift check. No dependencies.
 // Scans src/app.css and the <style> blocks of every .svelte file under src.
 // Fails (exit 1) on: raw colours outside app.css token declarations,
-// raw px font-size, raw px border-radius (except 50% / 999px / 9999px).
+// raw px font-size, raw px border-radius (except 50% / 999px / 9999px),
+// font-family that is not a token, font-weight outside 400/500/600.
 // A line containing `/* ds-ok: <reason> */` is exempt.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, dirname } from 'node:path';
@@ -35,6 +36,8 @@ function cssLines(file) {
 
 const colour = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/g;
 const fontDecl = /(?<![\w-])(font-size|font)\s*:\s*([^;}]*)/;
+const familyDecl = /font-family\s*:\s*([^;}]*)/;
+const weightDecl = /font-weight\s*:\s*([^;}]*)/;
 const radiusDecl = /border(?:-[a-z]+){0,2}-radius\s*:\s*([^;}]*)/;
 
 const findings = [];
@@ -54,6 +57,10 @@ for (const file of walk(src)) {
 			const val = f[1] === 'font' ? f[2].replace(/\/\s*[^\s/]+/, '') : f[2];
 			for (const v of val.matchAll(/\d*\.?\d+px/g)) findings.push(`${rel}:${line} ${v[0]} (raw font-size)`);
 		}
+		const fam = code.match(familyDecl);
+		if (fam && !/^\s*(var\(--(font|mono|serif)\)|inherit)\s*$/.test(fam[1])) findings.push(`${rel}:${line} ${fam[1].trim()} (raw font-family)`);
+		const wt = code.match(weightDecl);
+		if (wt && !/^\s*(400|500|600|inherit|normal)\s*$/.test(wt[1])) findings.push(`${rel}:${line} ${wt[1].trim()} (font-weight)`);
 		const r = code.match(radiusDecl);
 		if (r) {
 			for (const v of r[1].matchAll(/(\d*\.?\d+)px/g)) {
@@ -68,7 +75,7 @@ if (findings.length) {
 	console.error(findings.join('\n'));
 	const n = (k) => findings.filter((x) => x.includes(`(${k})`)).length;
 	console.error(
-		`\ncheck:ds failed: ${findings.length} finding(s) (${n('raw font-size')} font-size, ${n('raw border-radius')} border-radius, ${n('raw colour')} colour). Use a token, or add /* ds-ok: <reason> */ on the line.`
+		`\ncheck:ds failed: ${findings.length} finding(s) (${n('raw font-size')} font-size, ${n('raw border-radius')} border-radius, ${n('raw colour')} colour, ${n('raw font-family')} font-family, ${n('font-weight')} font-weight). Use a token, or add /* ds-ok: <reason> */ on the line.`
 	);
 	process.exit(1);
 }

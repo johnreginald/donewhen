@@ -104,8 +104,9 @@
 		flex: none;
 	}
 	.ttl-btn {
-		font-family: var(--serif);
-		font-size: var(--t-md);
+		font-family: var(--font);
+		font-weight: 500;
+		font-size: var(--t-base);
 		color: var(--ink);
 		flex: 1;
 		min-width: 0;

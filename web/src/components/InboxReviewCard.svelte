@@ -186,8 +186,9 @@
 		flex: none;
 	}
 	.ttl-btn {
-		font-family: var(--serif);
-		font-size: var(--t-lg);
+		font-family: var(--font);
+		font-weight: 500;
+		font-size: var(--t-base);
 		color: var(--ink);
 		white-space: nowrap;
 		overflow: hidden;
@@ -268,7 +269,8 @@
 		font-size: var(--t-sm);
 	}
 	.ck.done span {
-		color: var(--ink-2);
+		color: var(--ink-3);
+		text-decoration: line-through;
 	}
 	.box {
 		width: 15px;
@@ -281,7 +283,7 @@
 		align-items: center;
 		justify-content: center;
 		font-size: var(--t-xs);
-		font-weight: 700;
+		font-weight: 600;
 		line-height: 1;
 		color: var(--accent-ink);
 		box-sizing: border-box;

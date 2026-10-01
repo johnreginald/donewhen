@@ -993,7 +993,8 @@
 		line-height: 1.45;
 	}
 	.crit-text.done {
-		color: var(--ink-2);
+		color: var(--ink-3);
+		text-decoration: line-through;
 	}
 	.crit-del {
 		opacity: 0;
