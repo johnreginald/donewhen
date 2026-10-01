@@ -8,6 +8,7 @@ import (
 
 	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 func (d *deps) registerMeta(s *server.MCPServer) {
@@ -77,22 +78,43 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	})
 
 	s.AddTool(mcp.NewTool("save_project",
-		mcp.WithDescription("Create (omit id) or update a project (epic)."),
+		mcp.WithDescription("Create (omit id) or update a project (epic). An update changes only the "+
+			"fields you send; an empty string clears description, repoUrl or detaches the initiative."),
 		mcp.WithString("id", mcp.Description("Project id to update; omit to create")),
 		mcp.WithString("name", mcp.Description("Project name")),
 		mcp.WithString("description", mcp.Description("Markdown description")),
-		mcp.WithString("initiative", mcp.Description("Parent initiative id")),
+		mcp.WithString("initiative", mcp.Description("Parent initiative id; empty string detaches")),
+		mcp.WithString("repoUrl", mcp.Description("Default repo URL for commit links; empty string clears")),
+		mcp.WithString("status", mcp.Description("Status, e.g. active or archived")),
+		mcp.WithNumber("position", mcp.Description("Sort position")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, projectRef(req.GetString("id", "")), iniRef(req.GetString("initiative", "")))
 		if err != nil {
 			return toolErr(err), nil
 		}
+		if id := req.GetString("id", ""); id != "" {
+			// Update: only the keys actually sent are changed.
+			saved, err := d.store.UpdateProject(ctx, wsID, id, store.ProjectPatch{
+				Name:          argString(req, "name"),
+				DescriptionMD: argString(req, "description"),
+				InitiativeID:  argString(req, "initiative"),
+				RepoURL:       argString(req, "repoUrl"),
+				Status:        argString(req, "status"),
+				Position:      argInt(req, "position"),
+			})
+			if err != nil {
+				return toolErr(err), nil
+			}
+			return jsonResult(saved)
+		}
 		p := models.Project{
-			ID:            req.GetString("id", ""),
 			Name:          req.GetString("name", ""),
 			DescriptionMD: req.GetString("description", ""),
 			InitiativeID:  strp(req.GetString("initiative", "")),
+			RepoURL:       strp(req.GetString("repoUrl", "")),
+			Status:        req.GetString("status", ""),
+			Position:      req.GetInt("position", 0),
 		}
 		saved, err := d.store.SaveProject(ctx, wsID, p)
 		if err != nil {
@@ -138,20 +160,39 @@ func (d *deps) registerMeta(s *server.MCPServer) {
 	})
 
 	s.AddTool(mcp.NewTool("save_initiative",
-		mcp.WithDescription("Create (omit id) or update an initiative."),
+		mcp.WithDescription("Create (omit id) or update an initiative. An update changes only the "+
+			"fields you send; an empty string clears description or repoUrl."),
 		mcp.WithString("id", mcp.Description("Initiative id to update; omit to create")),
 		mcp.WithString("name", mcp.Description("Initiative name")),
 		mcp.WithString("description", mcp.Description("Markdown description")),
+		mcp.WithString("repoUrl", mcp.Description("Default repo URL for commit links; empty string clears")),
+		mcp.WithString("status", mcp.Description("Status, e.g. active")),
+		mcp.WithNumber("position", mcp.Description("Sort position")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsID, err := d.scopeOne(ctx, req, iniRef(req.GetString("id", "")))
 		if err != nil {
 			return toolErr(err), nil
 		}
+		if id := req.GetString("id", ""); id != "" {
+			saved, err := d.store.UpdateInitiative(ctx, wsID, id, store.InitiativePatch{
+				Name:          argString(req, "name"),
+				DescriptionMD: argString(req, "description"),
+				RepoURL:       argString(req, "repoUrl"),
+				Status:        argString(req, "status"),
+				Position:      argInt(req, "position"),
+			})
+			if err != nil {
+				return toolErr(err), nil
+			}
+			return jsonResult(saved)
+		}
 		i := models.Initiative{
-			ID:            req.GetString("id", ""),
 			Name:          req.GetString("name", ""),
 			DescriptionMD: req.GetString("description", ""),
+			RepoURL:       strp(req.GetString("repoUrl", "")),
+			Status:        req.GetString("status", ""),
+			Position:      req.GetInt("position", 0),
 		}
 		saved, err := d.store.SaveInitiative(ctx, wsID, i)
 		if err != nil {

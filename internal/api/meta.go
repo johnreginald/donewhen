@@ -1,10 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // ---- states ----
@@ -84,9 +86,6 @@ func (s *Server) handleSaveInitiative(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	if id := r.PathValue("id"); id != "" {
-		i.ID = id
-	}
 	if i.Name == "" {
 		writeErr(w, http.StatusBadRequest, "name required")
 		return
@@ -96,6 +95,56 @@ func (s *Server) handleSaveInitiative(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, saved)
+}
+
+// handleUpdateInitiative is PATCH: only the fields present in the body change.
+func (s *Server) handleUpdateInitiative(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name          *string         `json:"name"`
+		DescriptionMD *string         `json:"descriptionMd"`
+		Status        *string         `json:"status"`
+		Position      *int            `json:"position"`
+		RepoURL       json.RawMessage `json:"repoUrl"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.Name != nil && *body.Name == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	repo, ok := patchString(body.RepoURL)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "repoUrl must be a string or null")
+		return
+	}
+	saved, err := s.store.UpdateInitiative(r.Context(), ws(r), r.PathValue("id"), store.InitiativePatch{
+		Name: body.Name, DescriptionMD: body.DescriptionMD, Status: body.Status,
+		Position: body.Position, RepoURL: repo,
+	})
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, 200, saved)
+}
+
+// patchString reads a nullable string field of a PATCH body: absent -> nil
+// (leave unchanged), null or "" -> "" (clear), a string -> that string. ok is
+// false for any other JSON type.
+func patchString(raw json.RawMessage) (*string, bool) {
+	if len(raw) == 0 {
+		return nil, true
+	}
+	if string(raw) == "null" {
+		empty := ""
+		return &empty, true
+	}
+	var v string
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, false
+	}
+	return &v, true
 }
 
 func (s *Server) handleDeleteInitiative(w http.ResponseWriter, r *http.Request) {
@@ -129,14 +178,49 @@ func (s *Server) handleSaveProject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	if id := r.PathValue("id"); id != "" {
-		p.ID = id
-	}
 	if p.Name == "" {
 		writeErr(w, http.StatusBadRequest, "name required")
 		return
 	}
 	saved, err := s.store.SaveProject(r.Context(), ws(r), p)
+	if handleStoreErr(w, err) {
+		return
+	}
+	writeJSON(w, 200, saved)
+}
+
+// handleUpdateProject is PATCH: only the fields present in the body change.
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name          *string         `json:"name"`
+		DescriptionMD *string         `json:"descriptionMd"`
+		Status        *string         `json:"status"`
+		Position      *int            `json:"position"`
+		RepoURL       json.RawMessage `json:"repoUrl"`
+		InitiativeID  json.RawMessage `json:"initiativeId"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.Name != nil && *body.Name == "" {
+		writeErr(w, http.StatusBadRequest, "name required")
+		return
+	}
+	repo, ok := patchString(body.RepoURL)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "repoUrl must be a string or null")
+		return
+	}
+	ini, ok := patchString(body.InitiativeID)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "initiativeId must be a string or null")
+		return
+	}
+	saved, err := s.store.UpdateProject(r.Context(), ws(r), r.PathValue("id"), store.ProjectPatch{
+		Name: body.Name, DescriptionMD: body.DescriptionMD, Status: body.Status,
+		Position: body.Position, RepoURL: repo, InitiativeID: ini,
+	})
 	if handleStoreErr(w, err) {
 		return
 	}

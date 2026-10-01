@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -201,7 +202,17 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]models.Issue, 
 	return s.attachLabels(ctx, out)
 }
 
+// queryer is what a pool and a transaction have in common.
+type queryer interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
 func (s *Store) attachLabels(ctx context.Context, issues []models.Issue) ([]models.Issue, error) {
+	return attachLabelsQ(ctx, s.pool, issues)
+}
+
+func attachLabelsQ(ctx context.Context, q queryer, issues []models.Issue) ([]models.Issue, error) {
 	if len(issues) == 0 {
 		return issues, nil
 	}
@@ -212,7 +223,7 @@ func (s *Store) attachLabels(ctx context.Context, issues []models.Issue) ([]mode
 		idx[issues[i].ID] = i
 		ids[i] = issues[i].ID
 	}
-	rows, err := s.pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT il.issue_id, l.id, l.group_id, l.name, l.color
 		FROM issue_labels il JOIN labels l ON l.id = il.label_id
 		WHERE il.issue_id = ANY($1)`, ids)
@@ -269,6 +280,26 @@ func (s *Store) GetIssue(ctx context.Context, wsID, id string) (models.Issue, er
 		return is, err
 	}
 	out, err := s.attachLabels(ctx, []models.Issue{is})
+	if err != nil {
+		return is, err
+	}
+	return out[0], nil
+}
+
+// getIssueTx reads an issue inside a transaction, optionally locking its row.
+func (s *Store) getIssueTx(ctx context.Context, tx pgx.Tx, wsID, id string, lock bool) (models.Issue, error) {
+	q := `SELECT ` + issueCols + ` FROM issues i WHERE i.id=$1 AND i.workspace_id=$2`
+	if lock {
+		q += ` FOR UPDATE OF i`
+	}
+	is, err := scanIssue(tx.QueryRow(ctx, q, id, wsID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return is, ErrNotFound
+	}
+	if err != nil {
+		return is, err
+	}
+	out, err := attachLabelsQ(ctx, tx, []models.Issue{is})
 	if err != nil {
 		return is, err
 	}
@@ -351,6 +382,7 @@ type IssueInput struct {
 	LabelNames    []string     // optional: resolve/attach labels by name (exclusive-group aware)
 	ForceGate     bool         // owner/admin session only: skip the done-when gate
 	GateOut       *GateOutcome // filled when ForceGate overrode the gate
+	Actor         string       // who is creating it, for the timeline; empty means human
 }
 
 // maxKeyAttempts bounds the retry loop that steps past a key already taken by a
@@ -427,9 +459,30 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 	if err := s.setLabelsTx(ctx, tx, id, labelIDs); err != nil {
 		return models.Issue{}, err
 	}
+	created, err := s.getIssueTx(ctx, tx, wsID, id, false)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	stateName, err := scalarTx(ctx, tx, `SELECT name FROM workflow_states WHERE id=$1`, created.StateID)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	rows := []models.Activity{{
+		IssueID: &created.ID, IssueKey: created.Key, IssueTitle: created.Title, Actor: in.Actor,
+		Kind: "created", ToVal: stateName,
+	}}
+	if g, ok := gateOverrideRow(created, stateName, in.Actor, in.GateOut); ok {
+		rows = append(rows, g)
+	}
+	for _, r := range rows {
+		if err := insertActivity(ctx, tx, wsID, r); err != nil {
+			return models.Issue{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return models.Issue{}, err
 	}
+	// Re-read for last_actor, which the rows just written moved.
 	return s.GetIssue(ctx, wsID, id)
 }
 
@@ -493,7 +546,27 @@ type IssuePatch struct {
 	ReplaceLabels bool
 	ForceGate     bool         // owner/admin session only: skip the done-when gate
 	GateOut       *GateOutcome // filled when ForceGate overrode the gate
+
+	// ExpectedUpdatedAt, when set, makes the update fail with a *StaleError unless
+	// the issue's updated_at still equals it: the caller's copy is not stale.
+	ExpectedUpdatedAt *time.Time
+	// Actor is who is making the change, for the timeline; empty means human.
+	Actor string
+	// BeforeOut, when set, receives the issue as it was inside the update
+	// transaction, under the row lock. Callers use it for events and the record
+	// instead of a racy read taken before the update.
+	BeforeOut *models.Issue
 }
+
+// StaleError refuses an update whose ExpectedUpdatedAt no longer matches: someone
+// else edited the issue since the caller loaded it. Current is the stored issue.
+type StaleError struct{ Current models.Issue }
+
+func (e *StaleError) Error() string {
+	return "conflict: the issue was changed since it was loaded"
+}
+
+func (e *StaleError) Unwrap() error { return ErrConflict }
 
 func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) (models.Issue, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -501,6 +574,20 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		return models.Issue{}, err
 	}
 	defer tx.Rollback(ctx)
+
+	// Lock the row first: "before" and the stale check are read under it, so a
+	// concurrent update cannot slip between them and our write.
+	before, err := s.getIssueTx(ctx, tx, wsID, id, true)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	if p.ExpectedUpdatedAt != nil && !p.ExpectedUpdatedAt.Equal(before.UpdatedAt) {
+		_ = tx.Rollback(ctx)
+		return models.Issue{}, &StaleError{Current: before}
+	}
+	if p.BeforeOut != nil {
+		*p.BeforeOut = before
+	}
 
 	var refProject, refAssignee, refParent *string
 	if p.SetProject {
@@ -525,10 +612,12 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		args = append(args, v)
 	}
 	targetState := "" // the column the issue ends up in, when it moves
-	if p.Title != nil {
+	// A value that is already stored is not written: a no-op save changes nothing,
+	// not even updated_at, and leaves no timeline row.
+	if p.Title != nil && *p.Title != before.Title {
 		set("title", *p.Title)
 	}
-	if p.DescriptionMD != nil {
+	if p.DescriptionMD != nil && *p.DescriptionMD != before.DescriptionMD {
 		set("description_md", *p.DescriptionMD)
 	}
 	if p.StateID != nil || p.StateName != nil {
@@ -544,19 +633,14 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		if err != nil {
 			return models.Issue{}, err
 		}
-		var cur string
-		if err := tx.QueryRow(ctx, `SELECT state_id FROM issues WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, wsID).Scan(&cur); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return models.Issue{}, ErrNotFound
-			}
-			return models.Issue{}, err
-		}
-		if cur != resolved {
+		if before.StateID != resolved {
 			if err := s.gateTx(ctx, tx, id, resolved, p.ForceGate, p.GateOut); err != nil {
 				return models.Issue{}, err
 			}
 		}
-		set("state_id", resolved)
+		if before.StateID != resolved {
+			set("state_id", resolved)
+		}
 		targetState = resolved
 	}
 	if p.Rank != nil {
@@ -566,19 +650,19 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		}
 		set("position", pos)
 	}
-	if p.SetProject {
+	if p.SetProject && ptrStr(p.ProjectID) != ptrStr(before.ProjectID) {
 		set("project_id", p.ProjectID)
 	}
-	if p.SetParent {
+	if p.SetParent && ptrStr(p.ParentKey) != ptrStr(before.ParentKey) {
 		set("parent_key", p.ParentKey)
 	}
-	if p.SetAssignee {
+	if p.SetAssignee && ptrStr(p.AssigneeID) != ptrStr(before.AssigneeID) {
 		set("assignee_id", p.AssigneeID)
 	}
-	if p.Priority != nil {
+	if p.Priority != nil && *p.Priority != before.Priority {
 		set("priority", *p.Priority)
 	}
-	if p.Position != nil {
+	if p.Position != nil && *p.Position != before.Position {
 		set("position", *p.Position)
 	}
 
@@ -600,16 +684,7 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 	}
 
 	if p.ReplaceLabels {
-		// Guard the label-only path: without a SET clause above, nothing has
-		// yet proved this issue belongs to the caller's workspace.
-		var ok bool
-		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM issues WHERE id=$1 AND workspace_id=$2)`, id, wsID).Scan(&ok); err != nil {
-			return models.Issue{}, err
-		}
-		if !ok {
-			return models.Issue{}, ErrNotFound
-		}
+		// The row lock taken above already proved this issue is in wsID.
 		labelIDs, err := s.resolveLabelIDsTx(ctx, tx, wsID, p.LabelIDs, p.LabelNames)
 		if err != nil {
 			return models.Issue{}, err
@@ -617,11 +692,65 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		if err := s.setLabelsTx(ctx, tx, id, labelIDs); err != nil {
 			return models.Issue{}, err
 		}
+		// A label change is an edit: bump updated_at so a stale page notices it.
+		// (When other columns changed above it is already bumped.)
+		if len(sets) == 0 && !sameIDs(labelIDs, before.Labels) {
+			if _, err := tx.Exec(ctx, `UPDATE issues SET updated_at=now() WHERE id=$1`, id); err != nil {
+				return models.Issue{}, err
+			}
+		}
+	}
+
+	// The timeline rows for what changed, written in this transaction: they commit
+	// with the change or the change rolls back.
+	after, err := s.getIssueTx(ctx, tx, wsID, id, false)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	rows, err := s.issueChanges(ctx, tx, before, after, p.Actor)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	if p.GateOut != nil && p.GateOut.Overridden {
+		stateName, err := scalarTx(ctx, tx, `SELECT name FROM workflow_states WHERE id=$1`, after.StateID)
+		if err != nil {
+			return models.Issue{}, err
+		}
+		if g, ok := gateOverrideRow(after, stateName, p.Actor, p.GateOut); ok {
+			rows = append(rows, g)
+		}
+	}
+	for _, r := range rows {
+		if err := insertActivity(ctx, tx, wsID, r); err != nil {
+			return models.Issue{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return models.Issue{}, err
 	}
+	// Re-read for last_actor, which the rows just written may have moved.
 	return s.GetIssue(ctx, wsID, id)
+}
+
+// sameIDs reports whether ids and labels name the same set of labels.
+func sameIDs(ids []string, labels []models.Label) bool {
+	have := map[string]bool{}
+	for _, l := range labels {
+		have[l.ID] = true
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	if len(have) != len(want) {
+		return false
+	}
+	for id := range want {
+		if !have[id] {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Store) DeleteIssue(ctx context.Context, wsID, id string) error {

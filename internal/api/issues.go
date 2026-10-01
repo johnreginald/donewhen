@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/models"
@@ -115,6 +116,9 @@ type issueUpdateReq struct {
 	ParentKey     *string  `json:"parentKey"`
 	LabelIds      []string `json:"labelIds"`
 	LabelNames    []string `json:"labelNames"`
+	// ExpectedUpdatedAt is the updatedAt the client loaded. When it no longer
+	// matches the stored value the update is refused with 409 "stale".
+	ExpectedUpdatedAt *time.Time `json:"expectedUpdatedAt"`
 	// Force skips the done-when gate. Honoured only for an owner/admin browser
 	// session; a bearer token's value is ignored.
 	Force bool `json:"force"`
@@ -134,6 +138,8 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		Priority:      req.Priority,
 		Position:      req.Position,
 		ForceGate:     req.Force && canForceGate(r),
+		// Compared inside the update transaction, under the row lock.
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
 	}
 	// Empty string clears the relation; a value sets it; absent leaves unchanged.
 	if req.ProjectId != nil {

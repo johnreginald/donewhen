@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/models"
 )
 
@@ -35,14 +36,10 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
-		c, err := d.store.AddCommit(ctx, wsID, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")))
+		c, err := d.store.AddCommitAs(ctx, wsID, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")), auth.ActorAI)
 		if err != nil {
 			return toolErr(err), nil
 		}
-		_ = d.store.RecordActivity(ctx, wsID, models.Activity{
-			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: "ai",
-			Kind: "committed", Detail: shortSHA(c.SHA) + " " + c.Message,
-		})
 		return jsonResult(c)
 	})
 
@@ -51,10 +48,10 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithDescription("Find the issue that recorded a commit SHA, with its done-when criteria. "+
 			"The reverse of link_commit. Use it when you have a commit and need the intent behind "+
 			"it — e.g. a code-intelligence tool reports what a commit actually changed, and you want "+
-			"to check that against what the ticket said it should do. Matches short and full SHAs "+
-			"in either direction. Returns not-found when no issue claims the commit, which is "+
-			"ordinary: plenty of commits are untracked."),
-		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, short or full")),
+			"to check that against what the ticket said it should do. The sha must be 7 to 40 hex "+
+			"characters and matches stored SHAs that start with it. Returns not-found when no "+
+			"issue claims the commit, which is ordinary: plenty of commits are untracked."),
+		mcp.WithString("sha", mcp.Required(), mcp.Description("Commit SHA, 7-40 hex characters")),
 		wsArg(),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
@@ -70,7 +67,8 @@ func (d *deps) registerDev(s *server.MCPServer) {
 
 	// ---- set_issue_dev ----
 	s.AddTool(mcp.NewTool("set_issue_dev",
-		mcp.WithDescription("Set the branch and/or pull-request URL that implemented an issue."),
+		mcp.WithDescription("Set the branch and/or pull-request URL that implemented an issue. Only the fields "+
+			"you send change; an empty string clears that field. Sending neither is an error."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		mcp.WithString("gitBranch", mcp.Description("Branch name")),
 		mcp.WithString("prUrl", mcp.Description("Pull request URL")),
@@ -84,7 +82,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
-		upd, err := d.store.SetIssueDev(ctx, wsID, is.ID, strp(req.GetString("gitBranch", "")), strp(req.GetString("prUrl", "")))
+		upd, err := d.store.SetIssueDev(ctx, wsID, is.ID, argString(req, "gitBranch"), argString(req, "prUrl"))
 		if err != nil {
 			return toolErr(err), nil
 		}
@@ -154,43 +152,19 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
+		// Validate the whole list before any write: a malformed items arg must
+		// never wipe or half-write the checklist.
+		items, err := criteriaItems(req)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		is, err := d.resolveIssueRef(ctx, wsID, req.GetString("issue", ""))
 		if err != nil {
 			return toolErr(err), nil
 		}
-		// Reconcile in place against the existing rows (ordered by position): update
-		// slot i, append new slots, delete the tail. Ticking one item off re-sends the
-		// same list, so its row is updated — id and created_at survive, no churn.
-		existing, _ := d.store.ListCriteria(ctx, wsID, is.ID)
-		items := criteriaItems(req)
-		out := []models.Criterion{}
-		for i, it := range items {
-			if i < len(existing) {
-				body, done, kind := it.text, it.done, it.kind
-				if kind == "" {
-					kind = models.CriterionManual
-				}
-				c, err := d.store.UpdateCriterion(ctx, wsID, existing[i].ID, &body, &done, &kind, it.check, nil)
-				if err != nil {
-					return toolErr(err), nil
-				}
-				out = append(out, c)
-				continue
-			}
-			c, err := d.store.AddCriterion(ctx, wsID, is.ID, it.text, it.kind, it.check)
-			if err != nil {
-				return toolErr(err), nil
-			}
-			if it.done {
-				done := true
-				if c, err = d.store.UpdateCriterion(ctx, wsID, c.ID, nil, &done, nil, nil, nil); err != nil {
-					return toolErr(err), nil
-				}
-			}
-			out = append(out, c)
-		}
-		for i := len(items); i < len(existing); i++ {
-			_ = d.store.DeleteCriterion(ctx, wsID, existing[i].ID)
+		out, err := d.store.ReplaceCriteria(ctx, wsID, is.ID, items, auth.ActorAI)
+		if err != nil {
+			return toolErr(err), nil
 		}
 		return jsonResult(out)
 	})
@@ -240,7 +214,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if e := strings.TrimSpace(req.GetString("evidence", "")); e != "" {
 			evidence = &e
 		}
-		c, err := d.store.UpdateCriterion(ctx, wsID, target.ID, nil, &done, nil, nil, evidence)
+		c, err := d.store.UpdateCriterionAs(ctx, wsID, target.ID, nil, &done, nil, nil, evidence, auth.ActorAI)
 		if err != nil {
 			return toolErr(err), nil
 		}
@@ -267,12 +241,4 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		}
 		return jsonResult(acts)
 	})
-}
-
-// shortSHA duplicated small helper (mcp package has no access to api's).
-func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
 }

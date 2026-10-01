@@ -33,19 +33,13 @@ func collectActivity(rows pgx.Rows) ([]models.Activity, error) {
 	return out, rows.Err()
 }
 
-// RecordActivity appends one entry to the timeline. Best-effort — callers log
-// but don't fail their operation on an activity write error. The workspace is
-// stamped on the row so the log survives the issue being deleted.
+// RecordActivity appends one entry to the timeline outside any transaction.
+// Best-effort — callers log but don't fail their operation on an activity write
+// error. Changes to an issue are recorded by the store itself, inside the
+// transaction of the change; this is for the entries that have no such home. The
+// workspace is stamped on the row so the log survives the issue being deleted.
 func (s *Store) RecordActivity(ctx context.Context, wsID string, a models.Activity) error {
-	actor := a.Actor
-	if actor == "" {
-		actor = "human"
-	}
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO activity (workspace_id, issue_id, issue_key, issue_title, actor, kind, field, from_val, to_val, detail)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-		wsID, a.IssueID, a.IssueKey, a.IssueTitle, actor, a.Kind, a.Field, a.FromVal, a.ToVal, a.Detail)
-	return err
+	return insertActivity(ctx, s.pool, wsID, a)
 }
 
 // ListActivity returns an issue's timeline, newest first.

@@ -2,11 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/johnreginald/donewhen/internal/auth"
-	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // ---- commits ----
@@ -49,43 +48,40 @@ func (s *Server) handleAddCommit(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
-	c, err := s.store.AddCommit(r.Context(), ws(r), id, body.Sha, body.Message, strPtr(body.URL))
+	c, err := s.store.AddCommitAs(r.Context(), ws(r), id, body.Sha, body.Message, strPtr(body.URL), auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
-	if is, e := s.store.GetIssue(r.Context(), ws(r), id); e == nil {
-		_ = s.store.RecordActivity(r.Context(), ws(r), models.Activity{
-			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title,
-			Actor: auth.ActorFrom(r.Context()), Kind: "committed",
-			Detail: shortSHA(body.Sha) + " " + body.Message,
-		})
-	}
 	writeJSON(w, http.StatusCreated, c)
-}
-
-func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
 }
 
 // ---- dev links (branch / PR) ----
 
 func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
+	// Only the fields present change; null or "" clears that field.
 	var body struct {
-		GitBranch string `json:"gitBranch"`
-		PrURL     string `json:"prUrl"`
+		GitBranch json.RawMessage `json:"gitBranch"`
+		PrURL     json.RawMessage `json:"prUrl"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	branch, ok1 := patchString(body.GitBranch)
+	pr, ok2 := patchString(body.PrURL)
+	if !ok1 || !ok2 {
+		writeErr(w, http.StatusBadRequest, "gitBranch and prUrl must be strings or null")
+		return
+	}
+	if branch == nil && pr == nil {
+		writeErr(w, http.StatusBadRequest, "nothing to set: send gitBranch and/or prUrl")
 		return
 	}
 	id, err := s.issueID(r)
 	if handleStoreErr(w, err) {
 		return
 	}
-	is, err := s.store.SetIssueDev(r.Context(), ws(r), id, strPtr(body.GitBranch), strPtr(body.PrURL))
+	is, err := s.store.SetIssueDev(r.Context(), ws(r), id, branch, pr)
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -94,23 +90,9 @@ func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
 
 // ---- done-when criteria ----
 
-// validateCriterionSpec enforces the same rule as the DB constraint: anything
-// other than a manual criterion has to say how it gets verified.
+// validateCriterionSpec is the shared store rule; see store.ValidateCriterionSpec.
 func validateCriterionSpec(kind string, spec json.RawMessage) error {
-	switch kind {
-	case "", models.CriterionManual:
-		return nil
-	case models.CriterionDeterministic, models.CriterionPolicy, models.CriterionJudgment:
-		if len(spec) == 0 {
-			return fmt.Errorf("checkSpec required for kind %q", kind)
-		}
-		if !json.Valid(spec) {
-			return fmt.Errorf("checkSpec is not valid JSON")
-		}
-		return nil
-	default:
-		return fmt.Errorf("unknown criterion kind %q", kind)
-	}
+	return store.ValidateCriterionSpec(kind, spec)
 }
 
 func (s *Server) handleListCriteria(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +150,7 @@ func (s *Server) handleUpdateCriterion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	c, err := s.store.UpdateCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done, body.Kind, body.CheckSpec, body.EvidenceRef)
+	c, err := s.store.UpdateCriterionAs(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done, body.Kind, body.CheckSpec, body.EvidenceRef, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -193,12 +175,7 @@ func (s *Server) handleDeleteCriterion(w http.ResponseWriter, r *http.Request) {
 //
 // 404 when no issue claims the SHA — an ordinary outcome, not an error.
 func (s *Server) handleIssueByCommit(w http.ResponseWriter, r *http.Request) {
-	sha := r.PathValue("sha")
-	if sha == "" {
-		writeErr(w, http.StatusBadRequest, "sha required")
-		return
-	}
-	owner, err := s.store.IssueByCommit(r.Context(), []string{ws(r)}, sha)
+	owner, err := s.store.IssueByCommit(r.Context(), []string{ws(r)}, r.PathValue("sha"))
 	if handleStoreErr(w, err) {
 		return
 	}

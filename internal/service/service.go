@@ -35,8 +35,6 @@ func (s *Service) statePtr(ctx context.Context, wsID, id string) *models.Workflo
 	return &st
 }
 
-var prioLabels = map[int]string{0: "No priority", 1: "Urgent", 2: "High", 3: "Medium", 4: "Low"}
-
 func (s *Service) stateName(ctx context.Context, wsID, id string) string {
 	if st := s.statePtr(ctx, wsID, id); st != nil {
 		return st.Name
@@ -44,27 +42,11 @@ func (s *Service) stateName(ctx context.Context, wsID, id string) string {
 	return ""
 }
 
-func (s *Service) projName(ctx context.Context, wsID string, id *string) string {
-	if id == nil || *id == "" {
-		return "None"
-	}
-	p, err := s.Store.GetProject(ctx, wsID, *id)
-	if err != nil {
-		return ""
-	}
-	return p.Name
-}
-
 // logActivity writes one timeline entry, best-effort (never fails the caller).
+// Only for entries that have no transaction of their own; changes to an issue
+// are written by the store inside the change's transaction.
 func (s *Service) logActivity(ctx context.Context, wsID string, a models.Activity) {
 	_ = s.Store.RecordActivity(ctx, wsID, a)
-}
-
-func ptrStr(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
 }
 
 func excerpt(s string, n int) string {
@@ -80,11 +62,11 @@ func (s *Service) CreateIssue(ctx context.Context, wsID string, in store.IssueIn
 	var gate store.GateOutcome
 	in.ForceGate = in.ForceGate && actor != "ai" // AI callers never force
 	in.GateOut = &gate
+	in.Actor = actor
 	is, err := s.Store.CreateIssue(ctx, wsID, in)
 	if err != nil {
 		return is, err
 	}
-	defer s.logOverride(ctx, wsID, is, gate, actor)
 	s.Bus.Publish(events.Event{
 		Type:        events.IssueCreated,
 		WorkspaceID: wsID,
@@ -92,28 +74,22 @@ func (s *Service) CreateIssue(ctx context.Context, wsID string, in store.IssueIn
 		Issue:       &is,
 		To:          s.statePtr(ctx, wsID, is.StateID),
 	})
-	s.logActivity(ctx, wsID, models.Activity{
-		IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: actor,
-		Kind: "created", ToVal: s.stateName(ctx, wsID, is.StateID),
-	})
 	return is, nil
 }
 
 // UpdateIssue applies a patch and publishes issue.state_changed when the state
 // moved, otherwise issue.updated.
 func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.IssuePatch, actor string) (models.Issue, error) {
-	before, err := s.Store.GetIssue(ctx, wsID, id)
-	if err != nil {
-		return models.Issue{}, err
-	}
+	var before models.Issue // read inside the update transaction, under the row lock
 	var gate store.GateOutcome
 	p.ForceGate = p.ForceGate && actor != "ai" // AI callers never force
 	p.GateOut = &gate
+	p.BeforeOut = &before
+	p.Actor = actor
 	is, err := s.Store.UpdateIssue(ctx, wsID, id, p)
 	if err != nil {
 		return is, err
 	}
-	defer s.logOverride(ctx, wsID, is, gate, actor)
 	if before.StateID != is.StateID {
 		s.Bus.Publish(events.Event{
 			Type:        events.IssueStateChanged,
@@ -131,46 +107,7 @@ func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.Issu
 			Issue:       &is,
 		})
 	}
-	// Timeline: one entry per meaningful field change.
-	base := models.Activity{IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: actor}
-	if before.StateID != is.StateID {
-		e := base
-		e.Kind, e.Field = "state_changed", "status"
-		e.FromVal, e.ToVal = s.stateName(ctx, wsID, before.StateID), s.stateName(ctx, wsID, is.StateID)
-		s.logActivity(ctx, wsID, e)
-	}
-	if before.Priority != is.Priority {
-		e := base
-		e.Kind, e.Field = "priority_changed", "priority"
-		e.FromVal, e.ToVal = prioLabels[before.Priority], prioLabels[is.Priority]
-		s.logActivity(ctx, wsID, e)
-	}
-	if ptrStr(before.ProjectID) != ptrStr(is.ProjectID) {
-		e := base
-		e.Kind, e.Field = "epic_changed", "epic"
-		e.FromVal, e.ToVal = s.projName(ctx, wsID, before.ProjectID), s.projName(ctx, wsID, is.ProjectID)
-		s.logActivity(ctx, wsID, e)
-	}
-	if before.Title != is.Title {
-		e := base
-		e.Kind, e.Field = "title_changed", "title"
-		e.FromVal, e.ToVal = before.Title, is.Title
-		s.logActivity(ctx, wsID, e)
-	}
 	return is, nil
-}
-
-// logOverride records a forced move past the done-when gate.
-func (s *Service) logOverride(ctx context.Context, wsID string, is models.Issue, g store.GateOutcome, actor string) {
-	if !g.Overridden {
-		return
-	}
-	s.logActivity(ctx, wsID, models.Activity{
-		IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: actor,
-		Kind: "gate_overridden", Field: "status",
-		ToVal:  s.stateName(ctx, wsID, is.StateID),
-		Detail: g.Err.Error(),
-	})
 }
 
 // DeleteIssue removes an issue and publishes issue.deleted.

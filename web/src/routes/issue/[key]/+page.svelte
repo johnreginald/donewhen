@@ -54,6 +54,16 @@
 	let savingDesc = $state(false);
 	let justSavedDesc = $state(false);
 	let descSavedTimer;
+	// Title edit: the issue's updatedAt when the title field got focus, so a save
+	// can tell whether the issue moved on meanwhile.
+	let editingTitle = $state(false);
+	let titleEditBase = $state(null);
+	// The server refused a save, or we saw a newer edit while a draft was open.
+	// The drafts are kept; the banner offers Reload (drop them) or Keep mine.
+	let conflict = $state(false);
+	// A secondary fetch (docs, criteria, commits...) failed: shown inline, the
+	// page stays on the issue.
+	let loadError = $state('');
 
 	const stOf = (c) => $states.find((s) => s.id === c.stateId);
 	const archivedEpic = $derived(issue ? $archivedProjects.find((p) => p.id === issue.projectId) : null);
@@ -92,6 +102,9 @@
 		issue = null;
 		confirmDel = false;
 		editingDesc = false;
+		editingTitle = false;
+		conflict = false;
+		loadError = '';
 		descSaveState = 'idle';
 		propsSheetOpen = false;
 
@@ -117,14 +130,19 @@
 		descEditBase = issue.updatedAt;
 		loading = false;
 
-		// Secondary reads — commits, activity, docs, criteria, parent/children.
-		// None of these may redirect on failure: only a failed primary fetch does.
+		await loadSecondary(issue, seq);
+	}
+
+	// Secondary reads — docs, children, parent, criteria, commits. None of these
+	// may redirect on failure: only a failed primary fetch does. The activity
+	// timeline refreshes itself (it is keyed on the issue).
+	async function loadSecondary(iss, seq) {
 		const results = await Promise.allSettled([
-			api.documents({ issue: issue.id }),
-			issue.childCount > 0 ? api.issues({ parent: issue.key }) : Promise.resolve([]),
-			issue.parentKey ? api.issue(issue.parentKey) : Promise.resolve(null),
-			api.criteria(issue.id),
-			api.commits(issue.id)
+			api.documents({ issue: iss.id }),
+			iss.childCount > 0 ? api.issues({ parent: iss.key }) : Promise.resolve([]),
+			iss.parentKey ? api.issue(iss.parentKey) : Promise.resolve(null),
+			api.criteria(iss.id),
+			api.commits(iss.id)
 		]);
 		if (seq !== loadSeq) return; // stale: this issue is no longer the one on screen
 		const [d, c, p, cr, co] = results;
@@ -133,6 +151,10 @@
 		parent = p.status === 'fulfilled' ? p.value : null;
 		criteria = cr.status === 'fulfilled' ? cr.value || [] : [];
 		commits = co.status === 'fulfilled' ? co.value || [] : [];
+		const failed = [['documents', d], ['sub-issues', c], ['parent', p], ['done-when', cr], ['commits', co]]
+			.filter(([, r]) => r.status === 'rejected')
+			.map(([n]) => n);
+		loadError = failed.length ? `Could not load ${failed.join(', ')}.` : '';
 	}
 
 	// Keep the page live: a save from another tab, the MCP server, or the AI
@@ -141,21 +163,24 @@
 	async function refreshIssue() {
 		if (!issue) return;
 		const key = issue.key;
+		const seq = loadSeq;
 		let fresh;
 		try {
 			fresh = await api.issue(key);
 		} catch {
 			return; // a transient failure here shouldn't disturb what's on screen
 		}
-		if (!issue || issue.key !== key) return; // navigated away meanwhile
+		if (!issue || issue.key !== key || seq !== loadSeq) return; // navigated away meanwhile
 		issue = fresh;
+		if (!editingTitle) titleDraft = issue.title;
 		if (!editingDesc) {
-			titleDraft = issue.title;
 			descDraft = issue.descriptionMd || '';
 			descEditBase = issue.updatedAt;
 		}
 		// else: leave descDraft/descEditBase alone. The gap between descEditBase
 		// and the fresh issue.updatedAt is exactly the stale-edit conflict.
+		if (editingTitle && titleEditBase && issue.updatedAt !== titleEditBase) conflict = true;
+		loadSecondary(issue, seq);
 	}
 
 	onMount(() =>
@@ -177,12 +202,14 @@
 	const canForce = $derived(['owner', 'admin'].includes($activeWorkspace?.role));
 	async function patch(body) {
 		try {
-			issue = await api.updateIssue(issue.id, body);
+			issue = await api.updateIssue(issue.id, { expectedUpdatedAt: issue.updatedAt, ...body });
 			gateBlock = null;
+			conflict = false;
 			// This is our own change, not a conflict — advance the edit's base
 			// so an in-progress description edit doesn't get falsely flagged.
 			if (editingDesc) descEditBase = issue.updatedAt;
 		} catch (e) {
+			if (staleFailure(e)) return;
 			const g = gateFailure(e);
 			if (g) {
 				gateBlock = { ...g, body };
@@ -191,8 +218,72 @@
 			showToast('Update failed: ' + e.message, 'error');
 		}
 	}
+	// The server refused a save because the issue changed since we loaded it.
+	// Take the current issue so the next save is not stale, keep every draft, and
+	// show the banner; nothing is overwritten until the user chooses.
+	function staleFailure(e) {
+		if (e.status !== 409 || e.code !== 'stale') return false;
+		if (e.issue && e.issue.id === issue.id) issue = e.issue;
+		conflict = true;
+		return true;
+	}
+	function startEditTitle() {
+		editingTitle = true;
+		titleEditBase = issue.updatedAt;
+	}
 	async function saveTitle() {
-		if (titleDraft.trim() && titleDraft !== issue.title) await patch({ title: titleDraft.trim() });
+		editingTitle = false;
+		const next = titleDraft.trim();
+		if (!next || next === issue.title) {
+			if (!next) titleDraft = issue.title;
+			return;
+		}
+		// Changed elsewhere since the field got focus: keep the draft, ask first.
+		if (titleEditBase && issue.updatedAt !== titleEditBase) {
+			conflict = true;
+			return;
+		}
+		await patch({ title: next });
+		if (conflict) editingTitle = true; // the draft is still unsaved
+	}
+	function cancelEditTitle() {
+		titleDraft = issue.title;
+		editingTitle = false;
+		titleEditBase = null;
+	}
+	function titleKeydown(e) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			e.target.blur();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			cancelEditTitle();
+			e.target.blur();
+		}
+	}
+	// Reload: drop every draft and show what is stored now.
+	async function reloadFromServer() {
+		conflict = false;
+		editingTitle = false;
+		editingDesc = false;
+		descSaveState = 'idle';
+		const key = issue.key;
+		try {
+			issue = await api.issue(key);
+		} catch (e) {
+			showToast('Reload failed: ' + e.message, 'error');
+			return;
+		}
+		titleDraft = issue.title;
+		descDraft = issue.descriptionMd || '';
+		descEditBase = issue.updatedAt;
+		loadSecondary(issue, loadSeq);
+	}
+	// Keep mine: the user has seen the newer edit and wants their title anyway.
+	async function keepMyTitle() {
+		titleEditBase = issue.updatedAt;
+		conflict = false;
+		await patch({ title: titleDraft.trim() });
 	}
 
 	function startEditDesc() {
@@ -208,9 +299,10 @@
 	async function saveDesc() {
 		savingDesc = true;
 		try {
-			issue = await api.updateIssue(issue.id, { descriptionMd: descDraft });
+			issue = await api.updateIssue(issue.id, { descriptionMd: descDraft, expectedUpdatedAt: issue.updatedAt });
 			descEditBase = issue.updatedAt;
 			editingDesc = false;
+			conflict = false;
 			descSaveState = 'idle';
 			justSavedDesc = true;
 			clearTimeout(descSavedTimer);
@@ -218,7 +310,7 @@
 		} catch (e) {
 			// A failed save restores the draft: stay in edit mode with exactly
 			// what was typed, rather than reverting to the last-saved text.
-			descSaveState = 'failed';
+			if (!staleFailure(e)) descSaveState = 'failed';
 		} finally {
 			savingDesc = false;
 		}
@@ -416,6 +508,22 @@
 			</div>
 		{/if}
 
+		{#if conflict}
+			<div class="conflict-banner top-conflict" role="alert">
+				<span class="bic">✦</span>
+				<span class="btext"><b>Changed elsewhere.</b> This issue was edited after you opened it. Your draft is kept.</span>
+				<span class="sp"></span>
+				<button class="btn sd sm" onclick={reloadFromServer}>Reload</button>
+				{#if titleDraft.trim() && titleDraft.trim() !== issue.title}
+					<button class="btn danger sm" onclick={keepMyTitle}>Keep my title</button>
+				{/if}
+			</div>
+		{/if}
+
+		{#if loadError}
+			<div class="load-error" role="status">{loadError}</div>
+		{/if}
+
 		<div class="panes" role="tablist">
 			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
 			<button role="tab" aria-selected={pane === 'chat'} class:on={pane === 'chat'} onclick={() => (pane = 'chat')}>
@@ -437,8 +545,9 @@
 						class="textarea title-input"
 						bind:value={titleDraft}
 						rows="1"
+						onfocus={startEditTitle}
 						onblur={saveTitle}
-						onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.target.blur())}
+						onkeydown={titleKeydown}
 					></textarea>
 
 					<div class="mobile-chiprow">
@@ -882,6 +991,17 @@
 		border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--line));
 		border-radius: var(--r);
 		font-size: var(--t-base);
+	}
+	.top-conflict {
+		margin: 0 0 12px;
+	}
+	.load-error {
+		margin: 0 0 12px;
+		padding: 8px 12px;
+		color: var(--danger, var(--ink));
+		border: 1px solid var(--line);
+		border-radius: var(--r);
+		font-size: var(--t-sm);
 	}
 	.bic {
 		color: var(--accent);

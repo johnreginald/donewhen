@@ -662,7 +662,7 @@ func TestArchiveProject(t *testing.T) {
 	}
 }
 
-// Editing an archived epic through SaveProject (MCP save_project, PATCH
+// Editing an archived epic through UpdateProject (MCP save_project, PATCH
 // /api/projects) sends no status; that must not silently unarchive it.
 func TestSaveProjectKeepsArchivedStatus(t *testing.T) {
 	s := testStore(t)
@@ -679,14 +679,15 @@ func TestSaveProjectKeepsArchivedStatus(t *testing.T) {
 	if _, err := s.ArchiveProject(ctx, ws, p.ID, true, "human"); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.SaveProject(ctx, ws, models.Project{ID: p.ID, Name: "Epic renamed"})
+	renamed, active := "Epic renamed", "active"
+	got, err := s.UpdateProject(ctx, ws, p.ID, ProjectPatch{Name: &renamed})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Status != "archived" || got.Name != "Epic renamed" {
 		t.Fatalf("after edit: status=%q name=%q, want archived / Epic renamed", got.Status, got.Name)
 	}
-	got, err = s.SaveProject(ctx, ws, models.Project{ID: p.ID, Name: "Epic renamed", Status: "active"})
+	got, err = s.UpdateProject(ctx, ws, p.ID, ProjectPatch{Name: &renamed, Status: &active})
 	if err != nil {
 		t.Fatal(err)
 	}
