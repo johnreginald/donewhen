@@ -69,6 +69,8 @@ async function request(method, path, body, wsOverride) {
 			err.state = data.state;
 			err.open = data.open;
 		}
+		// A save from a stale copy (PP-185) carries the issue as it is now.
+		if (data && data.issue) err.issue = data.issue;
 		throw err;
 	}
 	return data;

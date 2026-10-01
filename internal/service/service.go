@@ -102,13 +102,11 @@ func (s *Service) CreateIssue(ctx context.Context, wsID string, in store.IssueIn
 // UpdateIssue applies a patch and publishes issue.state_changed when the state
 // moved, otherwise issue.updated.
 func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.IssuePatch, actor string) (models.Issue, error) {
-	before, err := s.Store.GetIssue(ctx, wsID, id)
-	if err != nil {
-		return models.Issue{}, err
-	}
+	var before models.Issue // read inside the update transaction, under the row lock
 	var gate store.GateOutcome
 	p.ForceGate = p.ForceGate && actor != "ai" // AI callers never force
 	p.GateOut = &gate
+	p.BeforeOut = &before
 	is, err := s.Store.UpdateIssue(ctx, wsID, id, p)
 	if err != nil {
 		return is, err

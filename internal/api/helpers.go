@@ -35,6 +35,13 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 		writeGateErr(w, ge)
 		return true
 	}
+	var se *store.StaleError
+	if errors.As(err, &se) {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error": se.Error(), "code": "stale", "issue": se.Current,
+		})
+		return true
+	}
 	if errors.Is(err, store.ErrLastOwner) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "last_owner"})
 		return true
