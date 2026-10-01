@@ -15,10 +15,8 @@ func scanInboxRow(row pgx.Row) (models.Issue, int, *time.Time, error) {
 	var is models.Issue
 	var commitCount int
 	var enteredAt *time.Time
-	err := row.Scan(&is.ID, &is.WorkspaceID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
-		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
-		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.GitBranch, &is.PRURL,
-		&is.CreatedAt, &is.UpdatedAt, &commitCount, &enteredAt)
+	// issueDest keeps this in step with issueCols; only the extras are local.
+	err := row.Scan(append(issueDest(&is), &commitCount, &enteredAt)...)
 	return is, commitCount, enteredAt, err
 }
 
