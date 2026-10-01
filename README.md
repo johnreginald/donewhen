@@ -15,41 +15,41 @@
 
 I built DoneWhen to solve my own engineering problem.
 
-I build backend systems with AI agents every day. The agents work at lightspeed, often overnight. By the morning I could not tell what they had built, why they built it, or whether it was really done. The chat was gone. The commits said "fix". And a task was "done" because the AI said so.
+I build backend systems with AI agents every day. The agents work very fast, often overnight. In the morning I could not tell what they built, why they built it, or if it was really done. The chat was gone. The commits said "fix". A task was "done" because the AI said so.
 
 I did not want to read every line of code. I wanted three things:
-- A record I can read in minutes.
-- A rule the AI cannot skip.
+- A record that I can read in minutes.
+- A rule that the AI cannot skip.
 - A human gate on quality.
 
-I could not find a tool that did this, so I built one and ran my own projects on it. Now it is open source.
+I could not find a tool that did this. I built one and ran my own projects on it. Now it is open source.
 
 ## What it does
 
-DoneWhen is the place where you track the AI's work. It has three jobs:
+DoneWhen is the place where you track the work of the AI. It has three jobs:
 
-- **Track.** Every task is a ticket. The agent writes it as a full spec, with a done-when checklist. The AI ticks each item as it works. You see the progress on a board.
-- **Understand.** Tickets, attached documents and Mermaid diagrams show what was built and why. You do not read a long chat.
-- **Gate.** A ticket cannot move to In Review while an item is open. A human then reviews the quality and approves. The commits, the specs and the checklist stay, so you can check the work again later.
+- **Track.** Every task is a ticket. The agent writes the ticket as a full spec, with a done-when checklist. The AI ticks each item as it works. You see the progress on a board.
+- **Understand.** Tickets, attached documents and Mermaid diagrams show what the AI built and why. You do not read a long chat.
+- **Gate.** A ticket cannot move to In Review while an item is open. Then a human reviews the quality and approves. The commits, the specs and the checklist stay, so you can check the work again later.
 
 Read [docs/CONCEPTS.md](docs/CONCEPTS.md) for the full idea.
 
 ## Features
 
-- **Board and states.** Continuous-flow Kanban: Triage, Backlog, Aligning, Ready, In Progress, Blocked, In Review, Done, Canceled. No sprints, no estimates.
+- **Board and states.** Continuous-flow Kanban: Triage, Backlog, Aligning, Ready, In Progress, Blocked, In Review, Done, Canceled. There are no sprints and no estimates.
 - **Done-when gate.** Each ticket has a checklist. Open items block In Review and Done.
 - **Commits and engineering docs.** Link commits, branches and PRs to a ticket. Save a document (with Mermaid diagrams) for each change.
 - **MCP for AI agents.** An MCP server at `/mcp`. Any MCP client works, including Claude Code.
 - **Live updates.** The board updates in real time with Server-Sent Events.
-- **Installable PWA with Web Push.** Add it to your phone. Get notified in the background.
+- **Installable PWA with Web Push.** Add it to your phone. Get notifications in the background.
 - **Light and dark theme.**
-- **Multi-workspace.** Each workspace has its own issues, epics, labels and members. It is a hard boundary.
+- **Multi-workspace.** Each workspace has its own issues, epics, labels and members. The workspace is a hard boundary.
 
 ## Quick start
 
-Want the short path with Claude Code? Read [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
+For the short path with Claude Code, read [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
 
-You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md](docs/PODMAN.md).
+You need Docker with the Compose plugin, and Git. For Podman, see [docs/PODMAN.md](docs/PODMAN.md).
 
 1. Clone the repo.
 
@@ -70,7 +70,7 @@ You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md
    openssl rand -hex 32
    ```
 
-   The placeholder secret from `.env.example` is rejected unless `DONEWHEN_ENV=dev`, so replace it. Also change `POSTGRES_PASSWORD`. If you do, change the password inside `DONEWHEN_DATABASE_URL` too (only the local, non-Docker use reads that line).
+   The app rejects the placeholder secret from `.env.example` unless `DONEWHEN_ENV=dev`, so replace it. Also change `POSTGRES_PASSWORD`. Then change the password inside `DONEWHEN_DATABASE_URL` too. Only a local run outside Docker reads that line.
 
 4. For a local try-out, set the public URL to the port that Compose publishes:
 
@@ -80,7 +80,7 @@ You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md
 
    Leave `DONEWHEN_ENV=dev`. In `prod` mode cookies need HTTPS. For a real server, follow [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md).
 
-5. Start it.
+5. Start the app.
 
    ```bash
    docker compose up -d --build
@@ -96,13 +96,13 @@ You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md
 
 7. Open <http://localhost:8090> and sign in.
 
-   Compose publishes the app on `127.0.0.1:8090` only. Change the port with `DONEWHEN_HOST_PORT`.
+   Compose publishes the app on `127.0.0.1:8090` only. To change the port, use `DONEWHEN_HOST_PORT`.
 
 Next, create a workspace in the app, or run `docker compose exec donewhen /app/donewhen workspace create "My Work" MYW`.
 
 ## Try the demo
 
-Three commands start DoneWhen with sample data:
+Run three commands to start DoneWhen with sample data:
 
 ```bash
 docker compose up -d --build
@@ -110,9 +110,9 @@ docker compose exec donewhen /app/donewhen user you@example.com 'a-strong-passwo
 docker compose exec donewhen /app/donewhen demo
 ```
 
-`donewhen demo` makes a workspace called Demo (key `DEMO`). It holds about 24 tickets in every state, done-when checklists, blockers, three engineering documents with diagrams, and 3 tickets waiting for your review in the Inbox. The data is fictional. Run it again and it says "demo already exists" and changes nothing.
+`donewhen demo` makes a workspace called Demo (key `DEMO`). It holds about 24 tickets in every state, done-when checklists, blockers, three engineering documents with diagrams, and 3 tickets that wait for your review in the Inbox. The data is fictional. If you run it again, it says "demo already exists" and changes nothing.
 
-Prefer to seed on start? Set `DONEWHEN_DEMO=1` in `.env`. Compose then seeds the demo at start, once a user exists. Create the user first, then run `docker compose restart donewhen`.
+To seed the demo at start, set `DONEWHEN_DEMO=1` in `.env`. Compose then seeds the demo at start, after a user exists. Create the user first. Then run `docker compose restart donewhen`.
 
 ![A short walkthrough: board, ticket, done-when, inbox, artifacts](docs/images/walkthrough.gif)
 
@@ -136,7 +136,7 @@ DoneWhen has an MCP endpoint at `<your-server>/mcp` (Streamable HTTP, bearer tok
    docker compose exec donewhen /app/donewhen token claude
    ```
 
-   The token is shown once. Copy it.
+   The command shows the token one time. Copy it.
 
 2. Register the server.
 
@@ -149,7 +149,7 @@ DoneWhen has an MCP endpoint at `<your-server>/mcp` (Streamable HTTP, bearer tok
 
 ### Pinned tokens
 
-A normal token reaches all of your workspaces. A **pinned** token reaches one. Give the workspace slug as the second argument:
+A normal token reaches all of your workspaces. A **pinned** token reaches one workspace. Give the workspace slug as the second argument:
 
 ```bash
 docker compose exec donewhen /app/donewhen token acme-agent acme
@@ -159,26 +159,26 @@ Use a pinned token for an agent that works in one repo.
 
 ### The plugin: `/donewhen:tasks`
 
-The plugin adds one command. Run it with no arguments and it asks you what to look at: pick a workspace, narrow by epic, state or project, then open any ticket with its done-when checklist. It reads the REST API directly. The menus use a few model tokens. Add `--plain` for the old behaviour: one printed list, no questions, no model tokens.
+The plugin adds one command. If you run it with no arguments, it asks what you want to see. Pick a workspace. Narrow the list by epic, state or project. Then open any ticket with its done-when checklist. The plugin reads the REST API directly. The menus use a few model tokens. Add `--plain` for the old behaviour: it prints one list, asks no questions, and uses no model tokens.
 
-1. Install it. This repo is its own marketplace.
+1. Install the plugin. This repo is its own marketplace.
 
    ```bash
    claude plugin marketplace add johnreginald/donewhen
    claude plugin install donewhen@donewhen
    ```
 
-2. Set two environment variables. The most reliable place is the `env` block of `~/.claude/settings.json`, because every Claude Code session gets it, however you start it. A shell profile works only when Claude Code is started from that shell.
+2. Set two environment variables. The most reliable place is the `env` block of `~/.claude/settings.json`. Every Claude Code session gets that block, however you start the session. A shell profile works only when you start Claude Code from that shell.
 
    ```json
    { "env": { "DONEWHEN_URL": "https://tracker.example.com", "DONEWHEN_TOKEN": "donewhen_..." } }
    ```
 
-   Get a token from `donewhen token <name>`. Restart Claude Code after you change it.
+   Get a token from `donewhen token <name>`. Restart Claude Code after you change the block.
 
 3. Run `/donewhen:tasks` in Claude Code.
 
-A pinned token also picks the workspace for you. Otherwise, set a default for a repo in `.claude/donewhen.json`:
+A pinned token also selects the workspace for you. If you do not use a pinned token, set a default for a repo in `.claude/donewhen.json`:
 
 ```json
 { "workspace": "acme", "project": "Core" }
@@ -194,58 +194,58 @@ Usage:
 /donewhen:tasks use <workspace> [--project <text>]
 ```
 
-In the interactive mode, after each list you choose: narrow it down (epic, state, project, or show Done too), look at a ticket, switch workspace, or stop. Done and Canceled issues are hidden unless you pass `--all` or pick "Show Done and Canceled too".
+In the interactive mode, you choose an action after each list. You can narrow the list (epic, state, project, or show Done too), look at a ticket, switch workspace, or stop. The plugin hides Done and Canceled issues unless you pass `--all` or pick "Show Done and Canceled too".
 
 The repo also has a skill that teaches Claude how to use the tools well. See [skills/README.md](skills/README.md). For the full loop, see [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md).
 
 ## Configuration
 
-Set these in `.env` (Compose) or in the environment. The project was called Raenil before. The old `RAENIL_*` names keep working for one release and log a deprecation warning. If both are set, the `DONEWHEN_*` name wins.
+Set these in `.env` (Compose) or in the environment. The project was called Raenil before. The old `RAENIL_*` names work for one more release and log a deprecation warning. If both names are set, the `DONEWHEN_*` name wins.
 
 | Name | Default | Meaning |
 |---|---|---|
 | `DONEWHEN_BASE_URL` | `http://localhost:8080` | Public URL of the app. Used for cookies, the Web Push origin and links. |
-| `DONEWHEN_LISTEN_ADDR` | `:8080` | Address the server listens on. Compose sets `:8080` inside the container. |
+| `DONEWHEN_LISTEN_ADDR` | `:8080` | Address on which the server listens. Compose sets `:8080` inside the container. |
 | `DONEWHEN_DATABASE_URL` | `postgres://donewhen:donewhen@localhost:5432/donewhen?sslmode=disable` | Postgres connection string. Compose builds it from the `POSTGRES_*` values. |
 | `DONEWHEN_ENV` | `dev` (Compose: `prod`) | `dev` or `prod`. `prod` needs a session secret and always sets Secure cookies (HTTPS). |
-| `DONEWHEN_SESSION_SECRET` | none | Secret for sessions. At least 16 characters. Required in `prod`. Generate with `openssl rand -hex 32`. |
-| `DONEWHEN_ISSUE_PREFIX` | `R` | Key prefix of the legacy default workspace. New workspaces choose their own prefix. |
-| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header your proxy sets to the real client IP. Used for login rate limiting. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#4-trusted-proxy-header). |
-| `DONEWHEN_VAPID_PUBLIC` | empty | Web Push public key. Push is off if this or the private key is empty. |
+| `DONEWHEN_SESSION_SECRET` | none | Secret for sessions. At least 16 characters. Required in `prod`. Generate it with `openssl rand -hex 32`. |
+| `DONEWHEN_ISSUE_PREFIX` | `R` | Key prefix of the legacy default workspace. New workspaces have their own prefix. |
+| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header that your proxy sets to the real client IP. Used to limit the login rate. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#4-trusted-proxy-header). |
+| `DONEWHEN_VAPID_PUBLIC` | empty | Web Push public key. Push is off if this key or the private key is empty. |
 | `DONEWHEN_VAPID_PRIVATE` | empty | Web Push private key. Make a pair with `donewhen genvapid`. |
 | `DONEWHEN_VAPID_SUBJECT` | `mailto:admin@localhost` | Contact for push services. Use `mailto:you@example.com`. |
-| `DONEWHEN_DEMO` | empty | Compose passes it through. `1` seeds the Demo workspace at start, once a user exists. |
-| `DONEWHEN_BACKUP_CONFIRMED` | empty | Names of destructive migrations you have backed up for, comma-separated. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#migration-safety). |
+| `DONEWHEN_DEMO` | empty | Compose passes it through. `1` seeds the Demo workspace at start, after a user exists. |
+| `DONEWHEN_BACKUP_CONFIRMED` | empty | Names of destructive migrations for which you made a backup, comma-separated. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#migration-safety). |
 | `DONEWHEN_HOST_PORT` | `8090` | Compose only. Host port on `127.0.0.1` for the app. |
 | `DONEWHEN_SITE_ADDRESS` | `:80` | Compose only. Domain for the bundled Caddy (`edge` profile). |
 | `POSTGRES_USER` | `donewhen` | Compose only. Database user. |
 | `POSTGRES_PASSWORD` | `donewhen` | Compose only. Database password. Change it. |
 | `POSTGRES_DB` | `donewhen` | Compose only. Database name. |
-| `DONEWHEN_URL` | none | Plugin only. Your server address. Set in your shell. |
-| `DONEWHEN_TOKEN` | none | Plugin only. An API token. Set in your shell. |
+| `DONEWHEN_URL` | none | Plugin only. Your server address. Set it in your shell. |
+| `DONEWHEN_TOKEN` | none | Plugin only. An API token. Set it in your shell. |
 
 ## Upgrading and backups
 
-Upgrade:
+To upgrade, run:
 
 ```bash
 git pull
 docker compose up -d --build
 ```
 
-Migrations run when the app starts. Back up first. If a destructive migration is pending, the app refuses to start and tells you what to do. See [Migration safety](docs/SELF-HOSTING.md#migration-safety).
+Migrations run when the app starts. Make a backup first. If a destructive migration is pending, the app refuses to start and tells you what to do. See [Migration safety](docs/SELF-HOSTING.md#migration-safety).
 
-Upgrading from before the rename to DoneWhen? The Compose service was called `raenil`, so run `docker compose up -d --build --remove-orphans`. The old container holds the port until you do. Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` at `raenil` in `.env`.
+If you upgrade from before the rename to DoneWhen, note that the Compose service was `raenil`. Run `docker compose up -d --build --remove-orphans`. Until you do, the old container holds the port. Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` at `raenil` in `.env`.
 
-Back up the database:
+To back up the database, run:
 
 ```bash
 docker compose exec -T db pg_dump -U donewhen donewhen | gzip > donewhen-$(date +%Y%m%d-%H%M%S).sql.gz
 ```
 
-Or run `make backup`, which writes to `./backups` and uses your `POSTGRES_USER` and `POSTGRES_DB`. `make` picks Podman when it is installed. To force Docker, run `make backup COMPOSE="docker compose"`.
+Or run `make backup`. It writes to `./backups` and uses your `POSTGRES_USER` and `POSTGRES_DB`. `make` uses Podman when Podman is installed. To use Docker, run `make backup COMPOSE="docker compose"`.
 
-Restore on a new machine or an empty `data/pg`. Start only the database, load the dump, then start the app:
+To restore on a new machine or an empty `data/pg`, start only the database. Then load the dump and start the app:
 
 ```bash
 docker compose up -d db
@@ -254,7 +254,7 @@ gunzip -c donewhen-YYYYMMDD-HHMMSS.sql.gz | docker compose exec -T db psql -U do
 docker compose up -d --build
 ```
 
-Start the app only after the load. If the app ran first, it has already created the tables, and the load fails on them. To restore over a running install, see [SELF-HOSTING.md](docs/SELF-HOSTING.md#restore).
+Start the app only after the load. If the app runs first, it creates the tables, and the load fails on them. To restore over a running install, see [SELF-HOSTING.md](docs/SELF-HOSTING.md#restore).
 
 More in [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md).
 

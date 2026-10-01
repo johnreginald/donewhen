@@ -1,6 +1,6 @@
 # Self-hosting DoneWhen
 
-This guide puts DoneWhen on a server you control. For a quick local try-out, use the [README](../README.md).
+This guide puts DoneWhen on a server that you control. For a quick local try-out, use the [README](../README.md).
 
 You need:
 
@@ -16,9 +16,9 @@ Use HTTPS on a real server. Three features need it:
 
 | Feature | Why |
 |---|---|
-| Login cookies | In `prod` mode the cookies are `Secure`. Browsers only send them over HTTPS. |
-| Installable PWA | Browsers only offer "Add to home screen" on HTTPS (localhost is the exception). |
-| Web Push | Push needs a service worker, and that needs HTTPS. |
+| Login cookies | In `prod` mode the cookies are `Secure`. Browsers send them only over HTTPS. |
+| Installable PWA | Browsers offer "Add to home screen" only on HTTPS (localhost is the exception). |
+| Web Push | Push needs a service worker. A service worker needs HTTPS. |
 
 Pick one of the three ways in step 3 to get HTTPS.
 
@@ -30,7 +30,7 @@ cd donewhen
 cp .env.example .env
 ```
 
-Set at least these in `.env`:
+Set at least these values in `.env`:
 
 ```
 DONEWHEN_ENV=prod
@@ -39,17 +39,17 @@ DONEWHEN_SESSION_SECRET=<output of: openssl rand -hex 32>
 POSTGRES_PASSWORD=<something strong>
 ```
 
-`DONEWHEN_BASE_URL` must be the exact public URL, with `https://` and no trailing slash. It is used for cookies, the push origin and links.
+`DONEWHEN_BASE_URL` must be the exact public URL. Include `https://` and do not add a trailing slash. DoneWhen uses it for cookies, the push origin and links.
 
 The full list is in the [README](../README.md#configuration).
 
 ### The database password
 
-Compose reads `POSTGRES_PASSWORD` and builds the database URL from it. Postgres stores the password in `data/pg` the first time it starts. If you change `POSTGRES_PASSWORD` later, the database keeps the old one. See [Troubleshooting](#troubleshooting).
+Compose reads `POSTGRES_PASSWORD` and builds the database URL from it. Postgres stores the password in `data/pg` the first time it starts. If you change `POSTGRES_PASSWORD` later, the database keeps the old password. See [Troubleshooting](#troubleshooting).
 
 ### VAPID keys (Web Push)
 
-Push needs a key pair. Make it once:
+Push needs a key pair. Make the key pair one time:
 
 ```bash
 docker compose run --rm donewhen /app/donewhen genvapid
@@ -68,7 +68,7 @@ Keep the same keys for the life of the install. If you change them, phones must 
 
 ## 3. Put it on the network
 
-The app listens on `127.0.0.1:8090` (change with `DONEWHEN_HOST_PORT`). Only the same machine can reach it. Put a proxy in front. Choose one way.
+The app listens on `127.0.0.1:8090` (change this with `DONEWHEN_HOST_PORT`). Only the same machine can reach it. Put a proxy in front of it. Choose one way.
 
 | Way | Use it when | HTTPS comes from |
 |---|---|---|
@@ -78,16 +78,16 @@ The app listens on `127.0.0.1:8090` (change with `DONEWHEN_HOST_PORT`). Only the
 
 ### A. A domain with Caddy (bundled)
 
-1. Point a DNS record (`A` or `AAAA`) for `tracker.example.com` at the server's public IP.
+1. Point a DNS record (`A` or `AAAA`) for `tracker.example.com` at the public IP of the server.
 2. Open ports 80 and 443 on the firewall and router. Caddy needs port 80 for the certificate check.
-3. Add to `.env`:
+3. Add these lines to `.env`:
 
    ```
    DONEWHEN_SITE_ADDRESS=tracker.example.com
    DONEWHEN_TRUSTED_PROXY_HEADER=X-Forwarded-For
    ```
 
-4. Start with the `edge` profile:
+4. Start the app with the `edge` profile:
 
    ```bash
    docker compose --profile edge up -d --build
@@ -104,20 +104,20 @@ If another proxy already owns ports 80 and 443 on the machine, do not use the `e
 1. In Cloudflare, create a tunnel and a public hostname, for example `tracker.example.com`.
 2. Point the hostname at `http://localhost:8090`.
 3. Run `cloudflared` on the same machine.
-4. Add to `.env`:
+4. Add these lines to `.env`:
 
    ```
    DONEWHEN_BASE_URL=https://tracker.example.com
    DONEWHEN_TRUSTED_PROXY_HEADER=CF-Connecting-IP
    ```
 
-5. Start without the `edge` profile:
+5. Start the app without the `edge` profile:
 
    ```bash
    docker compose up -d --build
    ```
 
-No ports are opened. Cloudflare provides HTTPS.
+This way opens no ports. Cloudflare provides HTTPS.
 
 ### C. A private network (Tailscale)
 
@@ -130,7 +130,7 @@ No ports are opened. Cloudflare provides HTTPS.
    ```
 
    The command prints your address, like `https://myserver.tailnet-name.ts.net`.
-4. Set `DONEWHEN_BASE_URL` in `.env` to that address, then run `docker compose up -d`.
+4. Set `DONEWHEN_BASE_URL` in `.env` to that address. Then run `docker compose up -d`.
 5. Leave `DONEWHEN_TRUSTED_PROXY_HEADER` empty.
 
 Only devices on your tailnet can open the app. Push and the PWA work because the address is HTTPS.
@@ -139,7 +139,7 @@ Only devices on your tailnet can open the app. Push and the PWA work because the
 
 `DONEWHEN_TRUSTED_PROXY_HEADER` tells DoneWhen which request header holds the real client IP.
 
-Why it matters: login is rate limited per client IP. Behind a proxy, every request comes from the proxy's address. Without the header, all visitors share one limit. With a wrong header, an attacker can fake the header and skip the limit.
+DoneWhen limits the login rate for each client IP. Behind a proxy, every request comes from the address of the proxy. Without the header, all visitors share one limit. If the header is wrong, an attacker can fake the header and skip the limit.
 
 | Setup | Value |
 |---|---|
@@ -149,8 +149,8 @@ Why it matters: login is rate limited per client IP. Behind a proxy, every reque
 
 Rules:
 
-- Set it only when that proxy is the only way to reach the app. The header is believed as sent.
-- If the header is missing or not an IP, DoneWhen uses the proxy's address. All callers then share one limit. This is safe, but strict.
+- Set it only when that proxy is the only way to reach the app. DoneWhen believes the header as sent.
+- If the header is missing or is not an IP, DoneWhen uses the address of the proxy. All callers then share one limit. This is safe, but strict.
 
 ## 5. Start and create the first user
 
@@ -168,7 +168,7 @@ To connect an AI agent, see [Connect Claude Code](../README.md#connect-claude-co
 
 ## 6. Workspaces
 
-A workspace owns its issues, epics, labels, board columns, documents and activity. Only its members can read them. This holds over the web app, REST, MCP and the live stream.
+A workspace owns its issues, epics, labels, board columns, documents and activity. Only its members can read them. This is true in the web app, REST, MCP and the live stream.
 
 ```bash
 docker compose exec donewhen /app/donewhen workspace list
@@ -186,19 +186,19 @@ Dump the database:
 make backup
 ```
 
-This writes `./backups/donewhen-<timestamp>.sql.gz`. It reads the database user and name from the `db` container, so an install that kept `POSTGRES_USER=raenil` works too. `make` uses Podman when it is installed. To force Docker, run `make backup COMPOSE="docker compose"`. The same thing without `make`:
+This command writes `./backups/donewhen-<timestamp>.sql.gz`. It reads the database user and name from the `db` container, so it also works for an install that kept `POSTGRES_USER=raenil`. `make` uses Podman when Podman is installed. To use Docker, run `make backup COMPOSE="docker compose"`. This is the same command without `make`:
 
 ```bash
 docker compose exec -T db pg_dump -U donewhen donewhen | gzip > donewhen-backup.sql.gz
 ```
 
-Run it every night with cron:
+To run the backup every night, use cron:
 
 ```cron
 30 3 * * *  cd /path/to/donewhen && /usr/bin/make backup >> /var/log/donewhen-backup.log 2>&1
 ```
 
-In the commands below, replace `donewhen` after `-U` and the database name with your `POSTGRES_USER` and `POSTGRES_DB` if you changed them.
+In the commands below, if you changed `POSTGRES_USER` and `POSTGRES_DB`, replace `donewhen` after `-U` and the database name with your values.
 
 Copy the files off the machine. Keep `data/` on durable storage. It holds Postgres (`data/pg`) and the Caddy certificates (`data/caddy`).
 
@@ -221,7 +221,7 @@ gunzip -c donewhen-backup.sql.gz | docker compose exec -T db psql -U donewhen do
 docker compose start donewhen
 ```
 
-To restore on a new machine, or after you delete `data/pg`, start only the database, load the dump, then start the app. Do not start the app first: it creates the tables, and the load then fails on them.
+To restore on a new machine, or after you delete `data/pg`, start only the database. Then load the dump and start the app. Do not start the app first. The app creates the tables, and then the load fails on them.
 
 ```bash
 docker compose up -d db
@@ -232,7 +232,7 @@ docker compose up -d --build
 
 ## 8. Upgrading
 
-1. Back up (step 7).
+1. Make a backup (step 7).
 2. Pull and rebuild:
 
    ```bash
@@ -240,38 +240,38 @@ docker compose up -d --build
    docker compose up -d --build        # add --profile edge for way A
    ```
 
-3. Check the logs: `docker compose logs -f --tail=100 donewhen`.
+3. Read the logs: `docker compose logs -f --tail=100 donewhen`.
 
-Migrations run when the app starts. Each file runs in its own transaction, so a failure rolls that file back. Run one instance only. You can also run `docker compose exec donewhen /app/donewhen migrate` by hand.
+Migrations run when the app starts. Each file runs in its own transaction, so a failure rolls back that file. Run only one instance. You can also run `docker compose exec donewhen /app/donewhen migrate` by hand.
 
 To go back, restore the backup and check out the older version.
 
-Upgrading an install from before the rename to DoneWhen: the Compose service was called `raenil` and is now `donewhen`. Add `--remove-orphans` once, or the old container keeps the port:
+If you upgrade an install from before the rename to DoneWhen, note this change: the Compose service was `raenil` and is now `donewhen`. Add `--remove-orphans` one time. If you do not, the old container keeps the port:
 
 ```bash
 docker compose up -d --build --remove-orphans
 ```
 
-Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` set to `raenil` in `.env`. Postgres only reads them on first init, so the data stays under the old names. An old `.env` with `RAENIL_*` keys keeps working.
+Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` set to `raenil` in `.env`. Postgres reads them only on first init, so the data stays under the old names. An old `.env` with `RAENIL_*` keys still works.
 
 ### Migration safety
 
-- Migrations run under a Postgres advisory lock. If two processes start together, they take turns. The second finds nothing left to apply.
-- A migration whose first line is `-- donewhen:destructive` drops or rewrites data. If one is pending on a database that already has data, DoneWhen refuses to start and names it. A fresh, empty database applies everything without this gate.
-- To continue, make a backup. Then confirm it by name in `.env`, and run `docker compose up -d`:
+- Migrations run under a Postgres advisory lock. If two processes start together, they take turns. The second process finds nothing left to apply.
+- A migration whose first line is `-- donewhen:destructive` drops or rewrites data. If one is pending on a database that already has data, DoneWhen refuses to start and names the migration. A fresh, empty database applies everything without this gate.
+- To continue, make a backup. Then confirm the migration by name in `.env`, and run `docker compose up -d`:
 
   ```bash
   make backup
   DONEWHEN_BACKUP_CONFIRMED=0036_plain_tracker.sql
   ```
 
-- The value is a comma-separated list of migration names. Remove the line after the migration is applied.
-- `0039_security_cleanup.sql` deletes old push subscriptions that point at non-https or private addresses, and clears issue project or parent links that cross workspaces. Each change is logged as `migration 0039: ...`. If you run tests against a database that already has data, confirm it the same way.
-- `make migrate` does both steps, but it runs the local `./donewhen` binary. It needs Go on the machine and `DONEWHEN_DATABASE_URL` pointing at a database it can reach. Compose does not publish Postgres, so on a Compose install use the steps above.
+- The value is a comma-separated list of migration names. Remove the line after DoneWhen applies the migration.
+- `0039_security_cleanup.sql` deletes old push subscriptions that point at non-https or private addresses. It also clears issue project or parent links that cross workspaces. DoneWhen logs each change as `migration 0039: ...`. If you run tests against a database that already has data, confirm the migration in the same way.
+- `make migrate` does both steps, but it runs the local `./donewhen` binary. It needs Go on the machine. It also needs `DONEWHEN_DATABASE_URL` to point at a database that it can reach. Compose does not publish Postgres, so on a Compose install use the steps above.
 
 ### Upgrading an old install to workspaces
 
-Migration `0011` adds workspaces. It makes one workspace for each existing project (initiative). It places issues with no epic by their key prefix. Anything it cannot place goes to a workspace called `Unsorted`, created only if needed. Every existing account becomes an owner of every workspace. Existing issue keys never change.
+Migration `0011` adds workspaces. It makes one workspace for each existing project (initiative). It places issues with no epic by their key prefix. It puts anything that it cannot place in a workspace called `Unsorted`. It creates that workspace only if needed. Every existing account becomes an owner of every workspace. Existing issue keys never change.
 
 This migration rewrites `issues.state_id` and every label link. Rehearse it on a copy:
 
@@ -287,22 +287,22 @@ Then compare the row counts of `issues`, `labels`, `issue_labels`, `documents` a
 
 | Problem | Cause and fix |
 |---|---|
-| Cannot log in, no error | `DONEWHEN_ENV=prod` sets Secure cookies, so use HTTPS. For local HTTP, use `DONEWHEN_ENV=dev`. Check that `DONEWHEN_BASE_URL` matches the address in the browser. |
-| Login is refused after many tries | The login rate limit. Wait and try again. If every visitor hits it, set `DONEWHEN_TRUSTED_PROXY_HEADER` (step 4). |
-| Login works, then you are logged out | The session secret changed, or the cookie was not saved. Keep `DONEWHEN_SESSION_SECRET` fixed. Use HTTPS. |
+| Cannot log in, no error | `DONEWHEN_ENV=prod` sets Secure cookies, so use HTTPS. For local HTTP, use `DONEWHEN_ENV=dev`. Make sure that `DONEWHEN_BASE_URL` matches the address in the browser. |
+| Login is refused after many tries | This is the login rate limit. Wait and try again. If every visitor hits it, set `DONEWHEN_TRUSTED_PROXY_HEADER` (step 4). |
+| Login works, then you are logged out | The session secret changed, or the browser did not save the cookie. Keep `DONEWHEN_SESSION_SECRET` fixed. Use HTTPS. |
 | App will not start: `DONEWHEN_SESSION_SECRET is required in prod` | Set the secret in `.env`. It needs at least 16 characters. |
-| Push does not work | Check: HTTPS; both VAPID keys set (the log says `push=true` at start); the PWA is installed; notifications are allowed for the site. If you changed the VAPID keys, subscribe again. |
-| Live updates stop after a short time | Your proxy buffers `/api/events`. Turn off buffering for that path. The bundled Caddy already does. |
+| Push does not work | Make sure that: HTTPS is on; both VAPID keys are set (the log says `push=true` at start); the PWA is installed; the site is allowed to send notifications. If you changed the VAPID keys, subscribe again. |
+| Live updates stop after a short time | Your proxy buffers `/api/events`. Turn off buffering for that path. The bundled Caddy already does this. |
 | `port is already allocated` or `address already in use` | Another program uses the port. Change `DONEWHEN_HOST_PORT`. For the `edge` profile, ports 80 and 443 must be free. Do not use `edge` if another proxy owns them. |
 | `password authentication failed for user "donewhen"` | `POSTGRES_PASSWORD` in `.env` differs from the password stored in `data/pg`. Postgres sets the password only the first time. Put the old password back in `.env`, or change it in the database: `docker compose exec db psql -U donewhen -c "ALTER USER donewhen PASSWORD 'new-password'"`. An install made before the rename uses the user `raenil`: set `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` to `raenil` in `.env`. On a fresh install with no data, run `docker compose down` and delete `data/pg`. |
-| `Bind for 127.0.0.1:8090 failed: port is already allocated` after an upgrade | The pre-rename `raenil` container is still running. Run `docker compose up -d --build --remove-orphans`. |
-| `refusing to migrate: destructive migration(s) pending` | Back up, then set `DONEWHEN_BACKUP_CONFIRMED` to the name in the message and run `docker compose up -d`. See [Migration safety](#migration-safety). |
-| `DONEWHEN_SESSION_SECRET is still the placeholder` | `.env` still has the secret from `.env.example`. Generate one with `openssl rand -hex 32`. |
-| Database container fails with a permissions error | Rootless Podman. See [PODMAN.md](PODMAN.md). |
-| Certificate is not issued (Caddy) | DNS does not point at this machine, or port 80 is closed. Check `docker compose logs caddy`. |
+| `Bind for 127.0.0.1:8090 failed: port is already allocated` after an upgrade | The `raenil` container from before the rename is still running. Run `docker compose up -d --build --remove-orphans`. |
+| `refusing to migrate: destructive migration(s) pending` | Make a backup. Then set `DONEWHEN_BACKUP_CONFIRMED` to the name in the message and run `docker compose up -d`. See [Migration safety](#migration-safety). |
+| `DONEWHEN_SESSION_SECRET is still the placeholder` | `.env` still has the secret from `.env.example`. Generate a new secret with `openssl rand -hex 32`. |
+| Database container fails with a permissions error | This happens with rootless Podman. See [PODMAN.md](PODMAN.md). |
+| Certificate is not issued (Caddy) | DNS does not point at this machine, or port 80 is closed. Read the output of `docker compose logs caddy`. |
 
 ## More
 
-- [PODMAN.md](PODMAN.md): running with Podman.
-- [ARCHITECTURE.md](ARCHITECTURE.md): how the parts fit.
-- [AI-WORKFLOW.md](AI-WORKFLOW.md): connect and drive an AI agent.
+- [PODMAN.md](PODMAN.md): how to run with Podman.
+- [ARCHITECTURE.md](ARCHITECTURE.md): how the parts fit together.
+- [AI-WORKFLOW.md](AI-WORKFLOW.md): how to connect and drive an AI agent.
