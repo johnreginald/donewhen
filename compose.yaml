@@ -45,6 +45,8 @@ services:
       DONEWHEN_VAPID_PUBLIC: ${DONEWHEN_VAPID_PUBLIC:-${RAENIL_VAPID_PUBLIC:-}}
       DONEWHEN_VAPID_PRIVATE: ${DONEWHEN_VAPID_PRIVATE:-${RAENIL_VAPID_PRIVATE:-}}
       DONEWHEN_VAPID_SUBJECT: ${DONEWHEN_VAPID_SUBJECT:-${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}}
+      # Set to 1 to seed the sample "Demo" workspace at start, once a user exists.
+      DONEWHEN_DEMO: ${DONEWHEN_DEMO:-}
       DONEWHEN_TRUSTED_PROXY_HEADER: ${DONEWHEN_TRUSTED_PROXY_HEADER:-${RAENIL_TRUSTED_PROXY_HEADER:-}}
     restart: unless-stopped
 
