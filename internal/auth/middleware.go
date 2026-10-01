@@ -214,6 +214,45 @@ func (m *Manager) ResolveWorkspace(ctx context.Context, user models.User, reques
 	return memberships[0].Workspace, memberships[0].Role, nil
 }
 
+// Revalidate reports whether the credential on r still belongs to userID and
+// userID is still a member of wsID. Long-lived streams call it periodically,
+// because the checks in Middleware and ResolveWorkspace ran only once. A
+// transient store error counts as "still valid": only a definite answer closes
+// a stream.
+func (m *Manager) Revalidate(r *http.Request, wsID, userID string) bool {
+	ctx := r.Context()
+	valid := false
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		if tok := strings.TrimSpace(strings.TrimPrefix(h, "Bearer ")); tok != "" {
+			u, _, err := m.Store.LookupAPIToken(ctx, HashToken(tok))
+			switch {
+			case err == nil:
+				valid = u.ID == userID
+			case !errors.Is(err, store.ErrNotFound):
+				return true
+			}
+		}
+	}
+	if !valid {
+		if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" {
+			u, err := m.Store.LookupSession(ctx, c.Value)
+			switch {
+			case err == nil:
+				valid = u.ID == userID
+			case !errors.Is(err, store.ErrNotFound):
+				return true
+			}
+		}
+	}
+	if !valid {
+		return false
+	}
+	if _, err := m.Store.RoleIn(ctx, wsID, userID); err != nil {
+		return !(errors.Is(err, store.ErrNotMember) || errors.Is(err, store.ErrNotFound))
+	}
+	return true
+}
+
 // RequestedWorkspace pulls the workspace a request names, from the header or
 // the query string (EventSource cannot set headers).
 func RequestedWorkspace(r *http.Request) string {

@@ -46,7 +46,6 @@ func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *ev
 		svc:       svc,
 		bus:       bus,
 		auth:      auth.NewManager(st, cfg.SecureCookies()),
-		sse:       sse.NewHandler(bus),
 		mcp:       mcp,
 		staticDir: "web/build",
 
@@ -54,6 +53,7 @@ func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *ev
 		verifyPassword: auth.VerifyPassword,
 		stop:           stop,
 	}
+	s.sse = sse.NewHandler(bus, s.auth.Revalidate)
 	go s.loginLimiter.run(sweepCtx, sweepInterval)
 	return s
 }

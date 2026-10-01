@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/events"
 	"github.com/johnreginald/donewhen/internal/models"
 	"github.com/johnreginald/donewhen/internal/store"
 )
@@ -144,7 +145,8 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
-	err := s.store.RemoveMember(r.Context(), ws(r), r.PathValue("userId"))
+	userID := r.PathValue("userId")
+	err := s.store.RemoveMember(r.Context(), ws(r), userID)
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "not a member")
 		return
@@ -153,5 +155,8 @@ func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Close the removed user's open live streams at once.
+	s.bus.Publish(events.Event{Type: events.MemberRemoved, WorkspaceID: ws(r), UserID: userID,
+		Actor: auth.ActorFrom(r.Context())})
 	writeJSON(w, 200, map[string]string{"status": "removed"})
 }
