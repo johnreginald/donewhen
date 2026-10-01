@@ -103,6 +103,28 @@ git pull
 docker compose up -d --build   # migrations run automatically on start
 ```
 
+### Migration safety
+
+- Migrations run under a Postgres advisory lock. Two processes starting together
+  (for example two replicas) take turns; the second finds nothing left to apply.
+- A migration whose first line is `-- raenil:destructive` drops or rewrites data.
+  If one is pending on a database that already has data, Raenil **refuses to
+  start** and names it, for example `0036_plain_tracker.sql`. A fresh, empty
+  database applies everything without this gate.
+- To proceed, take a backup, then confirm it by name:
+
+  ```bash
+  make backup
+  # compose: add to .env, then `docker compose up -d`
+  RAENIL_BACKUP_CONFIRMED=0036_plain_tracker.sql
+  # remove the line again once the migration has been applied
+  ```
+
+  The value is a comma-separated list of migration names. `make migrate` does
+  both steps for you (it runs `raenil migrate-pending`, takes `make backup` if
+  anything destructive is pending, then migrates). It needs the compose `db`
+  service; for another Postgres take your own `pg_dump` and use the env var.
+
 
 ## Workspaces
 

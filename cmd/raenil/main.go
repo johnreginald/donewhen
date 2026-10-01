@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,6 +48,8 @@ func main() {
 		runServe()
 	case "migrate":
 		runMigrate()
+	case "migrate-pending":
+		runMigratePending()
 	case "mcp":
 		runMCPStdio()
 	case "token":
@@ -72,6 +75,7 @@ func printUsage() {
 usage:
   raenil serve                 run the server (default)
   raenil migrate               apply DB migrations and exit
+  raenil migrate-pending       print pending destructive migrations (comma-separated)
   raenil mcp                   run the MCP server over stdio
   raenil token <name> [ws]     create an API token; pass a workspace slug to pin it
   raenil user <email> <pass>   create the initial user
@@ -152,6 +156,23 @@ func runMigrate() {
 		log.Fatalf("migrate: %v", err)
 	}
 	log.Println("migrations up to date")
+}
+
+// runMigratePending prints the pending destructive migrations, comma-separated,
+// for `make migrate` to back up before applying. Prints nothing when none.
+func runMigratePending() {
+	cfg := mustConfig()
+	ctx := context.Background()
+	pool, err := db.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("db: %v", err)
+	}
+	defer pool.Close()
+	names, err := db.PendingDestructive(ctx, pool)
+	if err != nil {
+		log.Fatalf("migrate-pending: %v", err)
+	}
+	fmt.Println(strings.Join(names, ","))
 }
 
 func runMCPStdio() {

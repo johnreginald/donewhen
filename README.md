@@ -195,3 +195,7 @@ make backup     # pg_dump | gzip -> ./backups/raenil-<timestamp>.sql.gz
 ```
 
 Add to cron for nightly dumps — see `docs/DEPLOY.md`.
+
+A pending destructive migration (`-- raenil:destructive`) blocks startup until you
+confirm a backup with `RAENIL_BACKUP_CONFIRMED=<name>`; `make migrate` backs up
+and confirms for you. Details in `docs/DEPLOY.md`.
