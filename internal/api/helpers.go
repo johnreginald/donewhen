@@ -35,6 +35,10 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 		writeGateErr(w, ge)
 		return true
 	}
+	if errors.Is(err, store.ErrLastOwner) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "last_owner"})
+		return true
+	}
 	if errors.Is(err, store.ErrNotMember) {
 		writeErr(w, http.StatusForbidden, "not a member of this workspace")
 		return true

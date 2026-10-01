@@ -136,21 +136,49 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
+	// Only an owner may hand out ownership or change an owner's role.
+	if !s.ownerRulesAllow(w, r, u.ID, body.Role == models.RoleOwner) {
+		return
+	}
 	if err := s.store.AddMember(r.Context(), ws(r), u.ID, body.Role); err != nil {
+		if errors.Is(err, store.ErrLastOwner) {
+			handleStoreErr(w, err)
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"userId": u.ID, "email": u.Email})
 }
 
+// ownerRulesAllow answers 403 and returns false when a non-owner actor tries
+// to grant owner (grantsOwner) or to touch a user who is currently an owner.
+func (s *Server) ownerRulesAllow(w http.ResponseWriter, r *http.Request, targetID string, grantsOwner bool) bool {
+	if auth.RoleFrom(r.Context()) == models.RoleOwner {
+		return true
+	}
+	targetRole, err := s.store.RoleIn(r.Context(), ws(r), targetID)
+	if err != nil && !errors.Is(err, store.ErrNotMember) {
+		internalErr(w, err)
+		return false
+	}
+	if grantsOwner || targetRole == models.RoleOwner {
+		writeErr(w, http.StatusForbidden, "only an owner can grant or change the owner role")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
+	if !s.ownerRulesAllow(w, r, r.PathValue("userId"), false) {
+		return
+	}
 	err := s.store.RemoveMember(r.Context(), ws(r), r.PathValue("userId"))
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "not a member")
 		return
 	}
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+	if handleStoreErr(w, err) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "removed"})
