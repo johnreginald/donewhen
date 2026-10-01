@@ -27,8 +27,8 @@ func TestHashPasswordUniqueSalt(t *testing.T) {
 }
 
 func TestHashTokenStable(t *testing.T) {
-	first := HashToken("raenil_abc")
-	second := HashToken("raenil_abc")
+	first := HashToken("donewhen_abc")
+	second := HashToken("donewhen_abc")
 	if first != second {
 		t.Fatal("token hash not stable")
 	}

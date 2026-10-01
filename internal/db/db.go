@@ -6,13 +6,13 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/johnreginald/donewhen/internal/config"
 )
 
 //go:embed migrations/*.sql
@@ -47,16 +47,21 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 }
 
 // migrateLockID is the Postgres advisory-lock key that serialises migration
-// runs ("RAENIL" in ASCII).
+// runs (the original project name in ASCII; the value is kept so old and new binaries share the lock).
 const migrateLockID int64 = 0x5241454e494c
 
 // DestructiveMarker, as the first line of a migration file, flags it as
 // destructive: it drops or rewrites data, so a backup must exist first.
-const DestructiveMarker = "-- raenil:destructive"
+const DestructiveMarker = "-- donewhen:destructive"
+
+// LegacyDestructiveMarker is the marker from before the rename to DoneWhen.
+// Migrations are tracked by file name, so already-applied ones are unaffected;
+// the gate still accepts the old marker.
+const LegacyDestructiveMarker = "-- raenil:destructive"
 
 // BackupConfirmedEnv names the env var that confirms a backup was taken. It
 // holds a comma-separated list of the destructive migration names to allow.
-const BackupConfirmedEnv = "RAENIL_BACKUP_CONFIRMED"
+const BackupConfirmedEnv = "DONEWHEN_BACKUP_CONFIRMED"
 
 // BackupRequiredError is returned when a destructive migration is pending and
 // no backup was confirmed for it.
@@ -73,7 +78,8 @@ func (e *BackupRequiredError) Error() string {
 // on its first line.
 func IsDestructive(sql string) bool {
 	first, _, _ := strings.Cut(sql, "\n")
-	return strings.TrimSpace(first) == DestructiveMarker
+	first = strings.TrimSpace(first)
+	return first == DestructiveMarker || first == LegacyDestructiveMarker
 }
 
 func migrationNames() ([]string, error) {
@@ -155,9 +161,9 @@ func pendingDestructive(applied map[string]bool) ([]string, error) {
 }
 
 // Migrate applies any embedded migrations not yet recorded in schema_migrations,
-// reading the backup confirmation from RAENIL_BACKUP_CONFIRMED.
+// reading the backup confirmation from DONEWHEN_BACKUP_CONFIRMED.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	return MigrateConfirmed(ctx, pool, os.Getenv(BackupConfirmedEnv))
+	return MigrateConfirmed(ctx, pool, config.Getenv(BackupConfirmedEnv))
 }
 
 // MigrateConfirmed is Migrate with an explicit backup confirmation (a

@@ -1,5 +1,5 @@
 -- Persisted activity log — the record of what happened, by whom (human/ai), when.
--- This is the backbone of Raenil as a record-keeper: every meaningful transition
+-- This is the backbone of DoneWhen as a record-keeper: every meaningful transition
 -- and action is written here so the timeline, changelog, and human/AI split can
 -- be reconstructed. issue_id is SET NULL (not CASCADE) + key/title snapshotted so
 -- the history survives even if the issue is later deleted.

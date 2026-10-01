@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"raenil/internal/auth"
-	"raenil/internal/events"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/events"
 )
 
 // ---- "blocked by" links ----

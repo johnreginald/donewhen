@@ -6,8 +6,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 func (d *deps) registerMeta(s *server.MCPServer) {

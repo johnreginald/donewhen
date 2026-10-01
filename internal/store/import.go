@@ -20,7 +20,7 @@ type ImportProject struct {
 	Name        string `json:"name"`
 	Summary     string `json:"summary"`
 	Description string `json:"description"`
-	Team        string `json:"team"` // Linear team → Raenil initiative
+	Team        string `json:"team"` // Linear team → DoneWhen initiative
 }
 
 type ImportIssue struct {
@@ -75,7 +75,7 @@ func (s *Store) UpdateDescriptions(ctx context.Context, wsID string, byKey map[s
 	return n, nil
 }
 
-// linearTypeToState maps a Linear workflow-state category to a Raenil state name,
+// linearTypeToState maps a Linear workflow-state category to a DoneWhen state name,
 // used when an issue's status name has no exact match.
 var linearTypeToState = map[string]string{
 	"triage":    "Triage",

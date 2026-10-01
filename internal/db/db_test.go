@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/johnreginald/donewhen/internal/config"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -15,20 +15,20 @@ import (
 )
 
 // scratchPool creates a throwaway database, returns a pool on it and drops it
-// at the end. Needs RAENIL_TEST_DATABASE_URL (any database on a test server);
+// at the end. Needs DONEWHEN_TEST_DATABASE_URL (any database on a test server);
 // otherwise the test is skipped. It never touches the shared database itself.
 func scratchPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	base := os.Getenv("RAENIL_TEST_DATABASE_URL")
+	base := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
 	if base == "" {
-		t.Skip("set RAENIL_TEST_DATABASE_URL to run db tests")
+		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run db tests")
 	}
 	ctx := context.Background()
 	admin, err := Connect(ctx, base)
 	if err != nil {
 		t.Fatalf("connect admin: %v", err)
 	}
-	name := fmt.Sprintf("raenil_scratch_%d", time.Now().UnixNano())
+	name := fmt.Sprintf("donewhen_scratch_%d", time.Now().UnixNano())
 	if _, err := admin.Exec(ctx, `CREATE DATABASE `+name); err != nil {
 		admin.Close()
 		t.Fatalf("create scratch db: %v", err)
@@ -224,11 +224,12 @@ func mustLen(t *testing.T) int {
 
 func TestIsDestructive(t *testing.T) {
 	cases := map[string]bool{
-		"-- raenil:destructive\nDROP TABLE x;":    true,
-		"-- raenil:destructive  \r\nDROP TABLE x": true,
-		"-- note\n-- raenil:destructive\nSELECT":  false,
-		"SELECT 1;":                               false,
-		"":                                        false,
+		"-- donewhen:destructive\nDROP TABLE x;":    true,
+		"-- donewhen:destructive  \r\nDROP TABLE x": true,
+		"-- raenil:destructive\nDROP TABLE x;":      true, // legacy marker
+		"-- note\n-- donewhen:destructive\nSELECT":  false,
+		"SELECT 1;": false,
+		"":          false,
 	}
 	for in, want := range cases {
 		if got := IsDestructive(in); got != want {
@@ -244,5 +245,35 @@ func TestOnly0036IsMarked(t *testing.T) {
 		if got, want := IsDestructive(string(b)), n == "0036_plain_tracker.sql"; got != want {
 			t.Errorf("%s destructive = %v, want %v", n, got, want)
 		}
+	}
+}
+
+// Migrations are tracked by file name, so changing 0036's marker from the old
+// "-- raenil:destructive" to the new one must not change what an
+// already-migrated database sees as pending.
+func TestMarkerRenameDoesNotAffectAppliedDatabases(t *testing.T) {
+	names, err := migrationNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := map[string]bool{}
+	for _, n := range names {
+		applied[n] = true
+	}
+	got, err := pendingDestructive(applied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("fully migrated database sees pending destructive migrations: %v", got)
+	}
+
+	delete(applied, "0036_plain_tracker.sql")
+	got, err = pendingDestructive(applied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "0036_plain_tracker.sql" {
+		t.Fatalf("pending = %v, want [0036_plain_tracker.sql]", got)
 	}
 }

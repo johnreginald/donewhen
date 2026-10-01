@@ -1,6 +1,6 @@
 {
-	"name": "Raenil",
-	"short_name": "Raenil",
+	"name": "DoneWhen",
+	"short_name": "DoneWhen",
 	"description": "Self-hosted issue tracker",
 	"start_url": "/inbox",
 	"scope": "/",

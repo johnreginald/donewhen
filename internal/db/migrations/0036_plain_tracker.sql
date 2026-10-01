@@ -1,5 +1,5 @@
--- raenil:destructive
--- Raenil is a tracker again, not a control plane: agents, the machines that
+-- donewhen:destructive
+-- DoneWhen is a tracker again, not a control plane: agents, the machines that
 -- ran them, their runs, conversations, reviews and evidence are gone. Tickets,
 -- comments, criteria, commits, documents and "blocked by" links stay.
 DROP TABLE IF EXISTS evidence;

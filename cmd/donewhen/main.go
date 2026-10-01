@@ -1,14 +1,14 @@
-// Command raenil is the single-binary server + tooling for the Raenil tracker.
+// Command donewhen is the single-binary server + tooling for the DoneWhen tracker.
 //
 // Subcommands:
 //
-//	raenil serve                 run the HTTP API + SSE + Web Push + MCP endpoint
-//	raenil migrate               apply DB migrations and exit
-//	raenil mcp                   run the MCP server over stdio (local fallback)
-//	raenil token <name> [ws]     create an API token, optionally pinned to a workspace
-//	raenil user <email> <pass>   create the initial user
-//	raenil workspace ...         list/create workspaces and grant access
-//	raenil genvapid              print a fresh VAPID keypair
+//	donewhen serve                 run the HTTP API + SSE + Web Push + MCP endpoint
+//	donewhen migrate               apply DB migrations and exit
+//	donewhen mcp                   run the MCP server over stdio (local fallback)
+//	donewhen token <name> [ws]     create an API token, optionally pinned to a workspace
+//	donewhen user <email> <pass>   create the initial user
+//	donewhen workspace ...         list/create workspaces and grant access
+//	donewhen genvapid              print a fresh VAPID keypair
 package main
 
 import (
@@ -23,20 +23,20 @@ import (
 	"syscall"
 	"time"
 
-	"raenil/internal/api"
-	"raenil/internal/auth"
-	"raenil/internal/config"
-	"raenil/internal/db"
-	"raenil/internal/events"
-	appmcp "raenil/internal/mcp"
-	"raenil/internal/push"
-	"raenil/internal/service"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/api"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/events"
+	appmcp "github.com/johnreginald/donewhen/internal/mcp"
+	"github.com/johnreginald/donewhen/internal/push"
+	"github.com/johnreginald/donewhen/internal/service"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("raenil: ")
+	log.SetPrefix("donewhen: ")
 
 	cmd := "serve"
 	if len(os.Args) > 1 {
@@ -70,20 +70,20 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Print(`raenil — self-hosted issue tracker
+	fmt.Print(`donewhen — self-hosted issue tracker
 
 usage:
-  raenil serve                 run the server (default)
-  raenil migrate               apply DB migrations and exit
-  raenil migrate-pending       print pending destructive migrations (comma-separated)
-  raenil mcp                   run the MCP server over stdio
-  raenil token <name> [ws]     create an API token; pass a workspace slug to pin it
-  raenil user <email> <pass>   create the initial user
-  raenil genvapid              print a fresh VAPID keypair
+  donewhen serve                 run the server (default)
+  donewhen migrate               apply DB migrations and exit
+  donewhen migrate-pending       print pending destructive migrations (comma-separated)
+  donewhen mcp                   run the MCP server over stdio
+  donewhen token <name> [ws]     create an API token; pass a workspace slug to pin it
+  donewhen user <email> <pass>   create the initial user
+  donewhen genvapid              print a fresh VAPID keypair
 
-  raenil workspace list                      show workspaces + member counts
-  raenil workspace create <name> <prefix>    create a workspace
-  raenil workspace add <slug> <email> [role] grant a user access (owner|admin|member)
+  donewhen workspace list                      show workspaces + member counts
+  donewhen workspace create <name> <prefix>    create a workspace
+  donewhen workspace add <slug> <email> [role] grant a user access (owner|admin|member)
 `)
 }
 
@@ -204,13 +204,13 @@ func runToken(args []string) {
 
 	u, err := st.FirstUser(ctx)
 	if err != nil {
-		log.Fatalf("no user yet — run `raenil user <email> <pass>` first")
+		log.Fatalf("no user yet — run `donewhen user <email> <pass>` first")
 	}
 	raw, err := auth.RandomToken(32)
 	if err != nil {
 		log.Fatalf("token: %v", err)
 	}
-	secret := "raenil_" + raw
+	secret := auth.TokenPrefix + raw
 
 	var pin *string
 	scope := "all your workspaces"
@@ -231,7 +231,7 @@ func runToken(args []string) {
 
 func runWorkspace(args []string) {
 	if len(args) == 0 {
-		log.Fatalf("usage: raenil workspace <list|create|add> ...")
+		log.Fatalf("usage: donewhen workspace <list|create|add> ...")
 	}
 	cfg := mustConfig()
 	ctx := context.Background()
@@ -245,7 +245,7 @@ func runWorkspace(args []string) {
 			log.Fatalf("list workspaces: %v", err)
 		}
 		if len(items) == 0 {
-			fmt.Println("no workspaces yet — create one with `raenil workspace create <name> <prefix>`")
+			fmt.Println("no workspaces yet — create one with `donewhen workspace create <name> <prefix>`")
 			return
 		}
 		fmt.Printf("%-4s  %-24s  %-24s  %s\n", "KEY", "SLUG", "NAME", "MEMBERS")
@@ -256,7 +256,7 @@ func runWorkspace(args []string) {
 
 	case "create":
 		if len(args) < 3 {
-			log.Fatalf("usage: raenil workspace create <name> <prefix>")
+			log.Fatalf("usage: donewhen workspace create <name> <prefix>")
 		}
 		name, prefix := args[1], args[2]
 		if err := store.ValidatePrefix(prefix, st.ReservedPrefix()); err != nil {
@@ -276,7 +276,7 @@ func runWorkspace(args []string) {
 
 	case "add":
 		if len(args) < 3 {
-			log.Fatalf("usage: raenil workspace add <slug> <email> [owner|admin|member]")
+			log.Fatalf("usage: donewhen workspace add <slug> <email> [owner|admin|member]")
 		}
 		role := "member"
 		if len(args) > 3 {
@@ -288,7 +288,7 @@ func runWorkspace(args []string) {
 		}
 		u, _, err := st.GetUserByEmail(ctx, args[2])
 		if err != nil {
-			log.Fatalf("no account for %s — create it with `raenil user` first", args[2])
+			log.Fatalf("no account for %s — create it with `donewhen user` first", args[2])
 		}
 		if err := st.AddMember(ctx, w.ID, u.ID, role); err != nil {
 			log.Fatalf("add member: %v", err)
@@ -302,7 +302,7 @@ func runWorkspace(args []string) {
 
 func runUser(args []string) {
 	if len(args) < 2 {
-		log.Fatalf("usage: raenil user <email> <password>")
+		log.Fatalf("usage: donewhen user <email> <password>")
 	}
 	email, pass := args[0], args[1]
 	if len(pass) < 8 {
@@ -329,5 +329,5 @@ func runGenVAPID() {
 	if err != nil {
 		log.Fatalf("genvapid: %v", err)
 	}
-	fmt.Printf("RAENIL_VAPID_PRIVATE=%s\nRAENIL_VAPID_PUBLIC=%s\n", priv, pub)
+	fmt.Printf("DONEWHEN_VAPID_PRIVATE=%s\nDONEWHEN_VAPID_PUBLIC=%s\n", priv, pub)
 }

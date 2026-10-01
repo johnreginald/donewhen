@@ -15,7 +15,7 @@
 
 	const stOf = (id) => $states.find((s) => s.id === id);
 
-	const LS_KEY = 'raenil.byEpic.collapsed';
+	const LS_KEY = 'donewhen.byEpic.collapsed';
 	function loadCollapsed() {
 		try {
 			return new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]'));

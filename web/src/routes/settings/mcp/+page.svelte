@@ -5,7 +5,7 @@
 
 	const mcpUrl = $derived(($appConfig.baseUrl || '') + '/mcp');
 	const cmd = $derived(
-		`claude mcp add --transport http raenil \\\n  ${mcpUrl} \\\n  --header "Authorization: Bearer <token>"`
+		`claude mcp add --transport http donewhen \\\n  ${mcpUrl} \\\n  --header "Authorization: Bearer <token>"`
 	);
 
 	async function copy(text) {

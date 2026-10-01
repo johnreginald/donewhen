@@ -7,29 +7,28 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"raenil/internal/auth"
-	"raenil/internal/config"
-	"raenil/internal/db"
-	"raenil/internal/events"
-	"raenil/internal/models"
-	"raenil/internal/service"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/events"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/service"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
-// These tests need a throwaway Postgres. Set RAENIL_TEST_DATABASE_URL to run;
+// These tests need a throwaway Postgres. Set DONEWHEN_TEST_DATABASE_URL to run;
 // otherwise they skip, so `go test ./...` stays green without a database.
 func testDSN(t *testing.T) string {
 	t.Helper()
-	dsn := os.Getenv("RAENIL_TEST_DATABASE_URL")
+	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("set RAENIL_TEST_DATABASE_URL to run api tests")
+		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run api tests")
 	}
 	return dsn
 }
@@ -105,7 +104,7 @@ func (e *testEnv) workspace(owner string) models.Workspace {
 func (e *testEnv) token(userID string, pin string) string {
 	e.t.Helper()
 	raw, _ := auth.RandomToken(32)
-	plain := "raenil_" + raw
+	plain := auth.TokenPrefix + raw
 	var p *string
 	if pin != "" {
 		p = &pin

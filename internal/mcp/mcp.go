@@ -1,4 +1,4 @@
-// Package mcp exposes Raenil over the Model Context Protocol using a tool
+// Package mcp exposes DoneWhen over the Model Context Protocol using a tool
 // surface that mirrors Linear's verbs (save_issue, list_issues, ...), served
 // over Streamable HTTP and authenticated with a bearer API token.
 package mcp
@@ -15,11 +15,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"raenil/internal/auth"
-	"raenil/internal/config"
-	"raenil/internal/models"
-	"raenil/internal/service"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/service"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 const version = "1.0.0"
@@ -219,10 +219,10 @@ const ticketFormat = "Ticket format — a ticket is an execution spec the reader
 	"diagram helps for backend flows."
 
 func buildServer(d *deps) *server.MCPServer {
-	s := server.NewMCPServer("raenil", version,
+	s := server.NewMCPServer("donewhen", version,
 		server.WithToolCapabilities(true),
 		server.WithInstructions(
-			"Raenil issue tracker. Continuous-flow Kanban: Triage → Backlog → Aligning → "+
+			"DoneWhen issue tracker. Continuous-flow Kanban: Triage → Backlog → Aligning → "+
 				"Ready → In Progress → In Review → Done → Canceled. Hierarchy is "+
 				"Workspace → Project (initiative) → Epic (project) → Issue. Listing tools "+
 				"span every workspace you can reach (an issue key's prefix names its workspace), and a "+

@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 
-	"raenil/internal/auth"
-	"raenil/internal/config"
-	"raenil/internal/db"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // callTool runs one tools/call through the real bearer + auth middleware and
@@ -63,9 +62,9 @@ func callTool(t *testing.T, h http.Handler, token, name string, args map[string]
 }
 
 func TestMCPLinkURLsAreHTTPOnly(t *testing.T) {
-	dsn := os.Getenv("RAENIL_TEST_DATABASE_URL")
+	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("set RAENIL_TEST_DATABASE_URL to run MCP tests")
+		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run MCP tests")
 	}
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)

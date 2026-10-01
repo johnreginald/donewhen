@@ -158,7 +158,7 @@
 			This account is not a member of any workspace. Ask an owner to add you, or create one
 			from the command line:
 		</p>
-		<pre>raenil workspace create "My Workspace" MYW</pre>
+		<pre>donewhen workspace create "My Workspace" MYW</pre>
 		<button class="btn" onclick={() => location.reload()}>Retry</button>
 	</div>
 {:else if ready}
@@ -190,7 +190,7 @@
 	<Composer />
 	<ArchiveEpicDialog />
 {:else}
-	<div class="booting">Loading Raenil…</div>
+	<div class="booting">Loading DoneWhen…</div>
 {/if}
 
 <ToastStack />

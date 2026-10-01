@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 func TestRESTLinkURLsAreHTTPOnly(t *testing.T) {

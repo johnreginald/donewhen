@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // PP-189: save_workspace follows the REST rules.

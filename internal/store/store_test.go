@@ -4,23 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"github.com/johnreginald/donewhen/internal/config"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"raenil/internal/db"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
-// These tests need a throwaway Postgres. Set RAENIL_TEST_DATABASE_URL to run;
+// These tests need a throwaway Postgres. Set DONEWHEN_TEST_DATABASE_URL to run;
 // otherwise they skip (so `go test ./...` stays green without a database).
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := os.Getenv("RAENIL_TEST_DATABASE_URL")
+	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
 	if dsn == "" {
-		t.Skip("set RAENIL_TEST_DATABASE_URL to run store tests")
+		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run store tests")
 	}
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)

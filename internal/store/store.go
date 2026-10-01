@@ -1,4 +1,4 @@
-// Package store holds all Postgres persistence for Raenil.
+// Package store holds all Postgres persistence for DoneWhen.
 //
 // Every method that touches tenant data takes an explicit workspace id as its
 // first argument. That is deliberate: the workspace is never read from a
@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -34,7 +34,7 @@ func invalid(format string, args ...any) error {
 
 type Store struct {
 	pool *pgxpool.Pool
-	// reservedPrefix is the pre-workspace issue key prefix (RAENIL_ISSUE_PREFIX).
+	// reservedPrefix is the pre-workspace issue key prefix (DONEWHEN_ISSUE_PREFIX).
 	// Legacy keys still carry it, so no workspace may claim it for new issues.
 	reservedPrefix string
 }

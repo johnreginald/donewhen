@@ -106,7 +106,7 @@ podman run -d --name donewhen-mig-test --pull=never \
   -p 55432:5432 docker.io/library/postgres:18-alpine
 
 go build -o ./donewhen ./cmd/donewhen
-RAENIL_DATABASE_URL='postgres://donewhen:donewhen@localhost:55432/donewhen?sslmode=disable' \
+DONEWHEN_DATABASE_URL='postgres://donewhen:donewhen@localhost:55432/donewhen?sslmode=disable' \
   ./donewhen migrate
 
 podman rm -f donewhen-mig-test

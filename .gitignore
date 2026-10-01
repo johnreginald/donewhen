@@ -1,5 +1,5 @@
 # Go
-/raenil
+/donewhen
 /orchestrator
 /bin/
 *.test
@@ -33,5 +33,6 @@ web/.env
 # private working notes and local agent state
 .scratch/
 .alumnium/
-.claude/raenil.json
+.claude/donewhen.json
 .claude/worktrees/
+.claude/raenil.json

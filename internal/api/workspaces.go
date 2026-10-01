@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // handleListWorkspaces returns the workspaces the caller belongs to. This is
@@ -130,7 +130,7 @@ func (s *Server) handleAddMember(w http.ResponseWriter, r *http.Request) {
 	// v1 grants access to accounts that already exist; there is no invite flow.
 	u, _, err := s.store.GetUserByEmail(r.Context(), body.Email)
 	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "no account with that email; create it with `raenil user` first")
+		writeErr(w, http.StatusNotFound, "no account with that email; create it with `donewhen user` first")
 		return
 	}
 	if handleStoreErr(w, err) {

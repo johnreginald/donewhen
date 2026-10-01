@@ -2,26 +2,29 @@ services:
   db:
     image: postgres:18-alpine
     environment:
-      # LEGACY DEFAULTS: user/password/db "raenil" are kept so existing volumes
-      # (initialised with them) keep working. Postgres only reads these on first
-      # init, so changing them on an existing ./data/pg does NOT rename anything.
+      # Postgres only reads these on first init, so changing them on an existing
+      # ./data/pg does NOT rename anything. An install created before the rename
+      # to DoneWhen has user/password/db "raenil": set POSTGRES_USER, POSTGRES_PASSWORD
+      # and POSTGRES_DB to those values in .env so it keeps working.
       # New installs should set a strong POSTGRES_PASSWORD in .env.
-      POSTGRES_USER: ${POSTGRES_USER:-raenil}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-raenil}
-      POSTGRES_DB: ${POSTGRES_DB:-raenil}
+      POSTGRES_USER: ${POSTGRES_USER:-donewhen}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-donewhen}
+      POSTGRES_DB: ${POSTGRES_DB:-donewhen}
     volumes:
       # PG18+ wants the mount at the parent dir (data lands in a subdir).
       # NOTE: no :U here — that option is Podman-only and Docker rejects it.
       # Rootless Podman needs the host dir pre-owned instead; see docs/PODMAN.md.
       - ./data/pg:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raenil}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-donewhen}"]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
-  raenil:
+  # DONEWHEN_* are read first; an old .env that still has RAENIL_* keeps working
+  # (compose cannot warn; rename the keys within one release).
+  donewhen:
     build: .
     depends_on:
       db:
@@ -29,26 +32,26 @@ services:
     # Publish on localhost only, for a host reverse proxy (Caddy/nginx) to front.
     # When using the bundled Caddy (profile "edge"), this is still harmless.
     ports:
-      - "127.0.0.1:${RAENIL_HOST_PORT:-8090}:8080"
+      - "127.0.0.1:${DONEWHEN_HOST_PORT:-${RAENIL_HOST_PORT:-8090}}:8080"
     environment:
-      RAENIL_DATABASE_URL: postgres://${POSTGRES_USER:-raenil}:${POSTGRES_PASSWORD:-raenil}@db:5432/${POSTGRES_DB:-raenil}?sslmode=disable
-      RAENIL_BASE_URL: ${RAENIL_BASE_URL:-http://localhost:8080}
-      RAENIL_LISTEN_ADDR: ":8080"
+      DONEWHEN_DATABASE_URL: postgres://${POSTGRES_USER:-donewhen}:${POSTGRES_PASSWORD:-donewhen}@db:5432/${POSTGRES_DB:-donewhen}?sslmode=disable
+      DONEWHEN_BASE_URL: ${DONEWHEN_BASE_URL:-${RAENIL_BASE_URL:-http://localhost:8080}}
+      DONEWHEN_LISTEN_ADDR: ":8080"
       # Legacy default "prod" kept. Anything other than "dev" counts as prod.
-      RAENIL_ENV: ${RAENIL_ENV:-prod}
+      DONEWHEN_ENV: ${DONEWHEN_ENV:-${RAENIL_ENV:-prod}}
       # Required: compose refuses to start without it (generate: openssl rand -hex 32).
-      RAENIL_SESSION_SECRET: ${RAENIL_SESSION_SECRET:?set RAENIL_SESSION_SECRET in .env (openssl rand -hex 32)}
-      RAENIL_ISSUE_PREFIX: ${RAENIL_ISSUE_PREFIX:-R}
-      RAENIL_VAPID_PUBLIC: ${RAENIL_VAPID_PUBLIC}
-      RAENIL_VAPID_PRIVATE: ${RAENIL_VAPID_PRIVATE}
-      RAENIL_VAPID_SUBJECT: ${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}
-      RAENIL_TRUSTED_PROXY_HEADER: ${RAENIL_TRUSTED_PROXY_HEADER:-}
+      DONEWHEN_SESSION_SECRET: ${DONEWHEN_SESSION_SECRET:-${RAENIL_SESSION_SECRET:?set DONEWHEN_SESSION_SECRET in .env (openssl rand -hex 32)}}
+      DONEWHEN_ISSUE_PREFIX: ${DONEWHEN_ISSUE_PREFIX:-${RAENIL_ISSUE_PREFIX:-R}}
+      DONEWHEN_VAPID_PUBLIC: ${DONEWHEN_VAPID_PUBLIC:-${RAENIL_VAPID_PUBLIC:-}}
+      DONEWHEN_VAPID_PRIVATE: ${DONEWHEN_VAPID_PRIVATE:-${RAENIL_VAPID_PRIVATE:-}}
+      DONEWHEN_VAPID_SUBJECT: ${DONEWHEN_VAPID_SUBJECT:-${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}}
+      DONEWHEN_TRUSTED_PROXY_HEADER: ${DONEWHEN_TRUSTED_PROXY_HEADER:-${RAENIL_TRUSTED_PROXY_HEADER:-}}
     restart: unless-stopped
 
   # Bundled edge TLS proxy — only for boxes with FREE 80/443.
   # Enable with:  make up PROFILE=edge   (or: <engine> compose --profile edge up -d)
   # If a host reverse proxy already owns 80/443, leave this disabled and point
-  # that proxy at 127.0.0.1:${RAENIL_HOST_PORT:-8090}.
+  # that proxy at 127.0.0.1:${DONEWHEN_HOST_PORT:-8090}.
   #
   # Under rootless Podman, binding 80/443 needs a host sysctl — see docs/PODMAN.md.
   # Under Docker this works as-is.
@@ -56,12 +59,12 @@ services:
     image: caddy:2-alpine
     profiles: ["edge"]
     depends_on:
-      - raenil
+      - donewhen
     ports:
       - "80:80"
       - "443:443"
     environment:
-      RAENIL_SITE_ADDRESS: ${RAENIL_SITE_ADDRESS:-:80}
+      DONEWHEN_SITE_ADDRESS: ${DONEWHEN_SITE_ADDRESS:-${RAENIL_SITE_ADDRESS:-:80}}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data

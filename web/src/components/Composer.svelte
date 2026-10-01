@@ -20,7 +20,7 @@
 	let editId = $state(''); // set when editing an existing project/epic
 	let confirmDel = $state(false);
 
-	// Raenil's Project entity is shown as "Epic"; its Initiative entity as "Project".
+	// DoneWhen's Project entity is shown as "Epic"; its Initiative entity as "Project".
 	const NOUN = { project: 'epic', initiative: 'project' };
 	const heading = $derived((editId ? 'Edit ' : 'New ') + NOUN[kind]);
 

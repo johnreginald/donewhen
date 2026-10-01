@@ -14,9 +14,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"raenil/internal/auth"
-	"raenil/internal/config"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 // ---- PP-194 part 1: client IP ----
@@ -272,7 +272,7 @@ func tempDatabase(t *testing.T) string {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = admin.Close(ctx) })
-	name := "raenil_setup_" + uniq()
+	name := "donewhen_setup_" + uniq()
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Skipf("cannot create a scratch database (needs CREATEDB): %v", err)
 	}

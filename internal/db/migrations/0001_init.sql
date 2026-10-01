@@ -1,4 +1,4 @@
--- Core schema for Raenil.
+-- Core schema for DoneWhen.
 
 CREATE TABLE users (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),

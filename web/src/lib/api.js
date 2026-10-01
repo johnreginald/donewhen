@@ -6,7 +6,7 @@ function getCookie(name) {
 	return m ? decodeURIComponent(m[1]) : '';
 }
 
-const WS_KEY = 'raenil_workspace';
+const WS_KEY = 'donewhen_workspace';
 
 // The active workspace lives in localStorage so a reload lands in the same
 // place, and so this module can read it without importing the store (which
@@ -31,7 +31,7 @@ export function setWorkspace(slug) {
 async function request(method, path, body, wsOverride) {
 	const headers = {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
-	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('raenil_csrf');
+	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('donewhen_csrf');
 	const wsp = wsOverride || getWorkspace();
 	if (wsp) headers['X-Workspace'] = wsp;
 	const res = await fetch('/api' + path, {

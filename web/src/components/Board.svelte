@@ -22,7 +22,7 @@
 
 	// Every column folds. Done and Canceled start folded; after that the
 	// user's choice is kept per device and per workspace.
-	const collapseKey = (wsId) => `raenil.board.collapsed.${wsId}`;
+	const collapseKey = (wsId) => `donewhen.board.collapsed.${wsId}`;
 	function canCollapse(col) {
 		return true;
 	}

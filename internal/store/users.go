@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // ---- Users ----
@@ -29,7 +29,7 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (mod
 
 // setupLockKey serialises first-run setup. Any int64 works; it only has to be
 // the same for every caller.
-const setupLockKey int64 = 0x72616e65696c // "raenil"
+const setupLockKey int64 = 0x72616e65696c // the original project name in ASCII
 
 // CreateFirstUser creates the initial account, and only if no user exists yet.
 // The check and the insert are one statement under a transaction-scoped

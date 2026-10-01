@@ -3,9 +3,9 @@ package api
 import (
 	"net/http"
 
-	"raenil/internal/auth"
-	"raenil/internal/models"
-	"raenil/internal/push"
+	"github.com/johnreginald/donewhen/internal/auth"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/push"
 )
 
 // browserSubscription matches the JSON produced by PushSubscription.toJSON().

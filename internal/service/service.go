@@ -10,9 +10,9 @@ package service
 import (
 	"context"
 
-	"raenil/internal/events"
-	"raenil/internal/models"
-	"raenil/internal/store"
+	"github.com/johnreginald/donewhen/internal/events"
+	"github.com/johnreginald/donewhen/internal/models"
+	"github.com/johnreginald/donewhen/internal/store"
 )
 
 type Service struct {

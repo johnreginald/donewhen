@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"raenil/internal/config"
-	"raenil/internal/models"
+	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/models"
 )
 
 // PP-203: REST refuses a move into In Review / Done while done-when criteria
