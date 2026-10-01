@@ -2,6 +2,8 @@
 
 This page shows how an AI agent drives a ticket in DoneWhen. For the ideas behind it, read [CONCEPTS.md](CONCEPTS.md).
 
+![How I work with AI agents: plan, the agent writes the tickets, start with /goal, the agent builds and ticks, the server gate, the human review inbox, and check again later](images/ai-workflow.png)
+
 ## The loop for one ticket
 
 1. **Capture.** A one-line ticket goes to Triage.

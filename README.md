@@ -5,9 +5,9 @@
 <p align="center"><b>See what your AI built. Review it at a gate. Check it again later.</b></p>
 
 <p align="center">
-  <a href="docs/showreel/donewhen-showreel.mp4"><img src="docs/images/showreel.gif" width="860" alt="A 39-second tour of DoneWhen: track the work, understand it at a glance, a human holds the gate, check it again later"></a>
+  <a href="https://burmese.dev/work/donewhen"><img src="https://burmese.dev/work/donewhen/poster-play.jpg" width="860" alt="Play the 39-second tour of DoneWhen: track the work, understand it at a glance, a human holds the gate, check it again later"></a>
 </p>
-<p align="center"><sub>A 39-second tour. <a href="docs/showreel/donewhen-showreel.mp4">Watch it with sound (MP4)</a> · <a href="docs/showreel/donewhen-showreel-vertical.mp4">vertical version (9:16)</a>.</sub></p>
+<p align="center"><sub>A 39-second tour, with sound. <a href="https://burmese.dev/work/donewhen/showreel.mp4">Watch the video (MP4)</a> · <a href="https://burmese.dev/work/donewhen/showreel-vertical.mp4">vertical version (9:16)</a> · <a href="https://burmese.dev/work/donewhen">case study</a></sub></p>
 
 > **Hi, I'm Htet Wai Yan Soe.** I am an engineering leader and backend engineer with 14+ years in mobile financial services, marketplaces and consumer platforms. I am based in Chiang Mai, Thailand, and I work remotely. More about me: [burmese.dev](https://burmese.dev) · [LinkedIn](https://www.linkedin.com/in/johnthelinux/)
 
