@@ -54,7 +54,7 @@
 	// overwriting it, scoped per workspace so switching workspaces doesn't
 	// cross-contaminate the divider.
 	function lastVisitKey() {
-		return 'raenil_log_last_visit:' + (getWorkspace() || 'default');
+		return 'donewhen_log_last_visit:' + (getWorkspace() || 'default');
 	}
 	onMount(() => {
 		try {

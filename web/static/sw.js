@@ -1,4 +1,4 @@
-// Raenil service worker: Web Push delivery + notification click routing.
+// DoneWhen service worker: Web Push delivery + notification click routing.
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
@@ -12,9 +12,9 @@ self.addEventListener('push', (event) => {
 	try {
 		data = event.data ? event.data.json() : {};
 	} catch {
-		data = { title: 'Raenil', body: event.data ? event.data.text() : '' };
+		data = { title: 'DoneWhen', body: event.data ? event.data.text() : '' };
 	}
-	const title = data.title || 'Raenil';
+	const title = data.title || 'DoneWhen';
 	event.waitUntil(
 		self.registration.showNotification(title, {
 			body: data.body || '',

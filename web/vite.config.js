@@ -2,7 +2,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 // Where the Go server listens. Override when :8080 is taken on this machine.
-const api = process.env.RAENIL_API || 'http://localhost:8080';
+const api = process.env.DONEWHEN_API || 'http://localhost:8080';
 
 export default defineConfig({
 	plugins: [sveltekit()],

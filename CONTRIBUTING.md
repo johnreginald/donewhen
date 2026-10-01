@@ -16,7 +16,7 @@ cd donewhen
 
 # Postgres for development and tests
 docker run -d --name donewhen-dev-pg -p 55433:5432 \
-  -e POSTGRES_USER=raenil -e POSTGRES_PASSWORD=raenil -e POSTGRES_DB=raenil \
+  -e POSTGRES_USER=donewhen -e POSTGRES_PASSWORD=donewhen -e POSTGRES_DB=donewhen \
   postgres:17
 
 # Frontend
@@ -31,7 +31,7 @@ Run all three before you open a PR.
 
 ```sh
 # Go (needs the database above)
-RAENIL_TEST_DATABASE_URL='postgres://raenil:raenil@localhost:55433/raenil?sslmode=disable' go test ./...
+DONEWHEN_TEST_DATABASE_URL='postgres://donewhen:donewhen@localhost:55433/donewhen?sslmode=disable' go test ./...
 
 # Web: the build runs check:ds first
 cd web && npm run build

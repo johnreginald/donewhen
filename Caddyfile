@@ -1,14 +1,14 @@
-# Set RAENIL_SITE_ADDRESS to your domain (e.g. tracker.example.com) for automatic
+# Set DONEWHEN_SITE_ADDRESS to your domain (e.g. tracker.example.com) for automatic
 # HTTPS, or leave as :80 for local. SSE needs buffering off, which reverse_proxy
 # handles by streaming; flush_interval -1 forces immediate flush.
-{$RAENIL_SITE_ADDRESS} {
+{$DONEWHEN_SITE_ADDRESS} {
 	encode gzip
 
 	# Stream Server-Sent Events without buffering.
 	@sse path /api/events
-	reverse_proxy @sse raenil:8080 {
+	reverse_proxy @sse donewhen:8080 {
 		flush_interval -1
 	}
 
-	reverse_proxy raenil:8080
+	reverse_proxy donewhen:8080
 }

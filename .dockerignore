@@ -11,8 +11,7 @@ web/build
 web/.svelte-kit
 
 # compiled binary (image builds its own)
-/raenil
-/kanri
+/donewhen
 
 # os
 .DS_Store

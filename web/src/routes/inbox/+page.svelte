@@ -330,7 +330,7 @@
 		<div class="inbox">
 			<div class="content-inner">
 				<div class="pagehead">
-					<span class="eyebrow">Raenil · Inbox</span>
+					<span class="eyebrow">DoneWhen · Inbox</span>
 					<h1>Inbox</h1>
 					<span class="sub faint">What {$aiName} did while you were away</span>
 				</div>

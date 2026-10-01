@@ -110,11 +110,11 @@
 
 {#if phase === 'loading'}
 	<div class="auth-wrap">
-		<div class="auth-brand">Raenil</div>
+		<div class="auth-brand">DoneWhen</div>
 	</div>
 {:else if phase === 'login'}
 	<div class="auth-wrap">
-		<div class="auth-brand">Raenil</div>
+		<div class="auth-brand">DoneWhen</div>
 		<form class="auth-card" onsubmit={submitLogin}>
 			<h1>Sign in</h1>
 			<div class="settings-field">
@@ -156,7 +156,7 @@
 	</div>
 {:else if phase === 'setup1'}
 	<div class="auth-wrap">
-		<div class="auth-brand">Raenil</div>
+		<div class="auth-brand">DoneWhen</div>
 		<div class="auth-steps">
 			<span class="auth-stepdot on"></span><span class="auth-stepdot"></span>
 			<span class="auth-stepn">Step 1 of 2</span>
@@ -209,7 +209,7 @@
 	</div>
 {:else if phase === 'setup2'}
 	<div class="auth-wrap">
-		<div class="auth-brand">Raenil</div>
+		<div class="auth-brand">DoneWhen</div>
 		<div class="auth-steps">
 			<span class="auth-stepdot on"></span><span class="auth-stepdot on"></span>
 			<span class="auth-stepn">Step 2 of 2</span>

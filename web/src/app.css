@@ -1,5 +1,5 @@
-/* Raenil design tokens — light-first, calm (PP-208).
-   Source of truth: Claude Design project "Raenil Design System" → tokens.css.
+/* DoneWhen design tokens — light-first, calm (PP-208).
+   Source of truth: Claude Design project "DoneWhen Design System" → tokens.css.
    Warm paper neutrals, one ink-blue accent, state hues at equal
    lightness/chroma. Dark is the same roles, re-valued: explicit
    [data-theme='dark'] on <html>, or the OS preference unless the user chose

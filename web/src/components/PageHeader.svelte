@@ -62,7 +62,7 @@
 					aria-haspopup="true"
 					aria-expanded={wsOpen}
 				>
-					{$activeWorkspace?.name || 'Raenil'}<ChevronDown size={10} strokeWidth={2.6} class="cchev" />
+					{$activeWorkspace?.name || 'DoneWhen'}<ChevronDown size={10} strokeWidth={2.6} class="cchev" />
 				</button>
 				{#if wsOpen}
 					<div class="dd-bd" role="presentation" onclick={() => (wsOpen = false)}></div>

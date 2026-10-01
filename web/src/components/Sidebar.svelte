@@ -40,7 +40,7 @@
 	let isMobile = $state(false);
 	onMount(() => {
 		try {
-			collapsed = localStorage.getItem('raenil.sidebarCollapsed') === '1';
+			collapsed = localStorage.getItem('donewhen.sidebarCollapsed') === '1';
 		} catch {
 			/* storage blocked: stay expanded */
 		}
@@ -53,7 +53,7 @@
 	function toggleCollapsed() {
 		collapsed = !collapsed;
 		try {
-			localStorage.setItem('raenil.sidebarCollapsed', collapsed ? '1' : '0');
+			localStorage.setItem('donewhen.sidebarCollapsed', collapsed ? '1' : '0');
 		} catch {
 			/* not remembered */
 		}
@@ -92,7 +92,7 @@
 		refreshCounts();
 	});
 
-	// Edit / delete an Epic (Raenil "project").
+	// Edit / delete an Epic (DoneWhen "project").
 	function editEpic(p) {
 		openComposer('project', {
 			id: p.id,
@@ -122,7 +122,7 @@
 	let epicsOpen = $state(true);
 	onMount(() => {
 		try {
-			epicsOpen = localStorage.getItem('raenil.epicsOpen') !== '0';
+			epicsOpen = localStorage.getItem('donewhen.epicsOpen') !== '0';
 		} catch {
 			/* storage blocked: stay open */
 		}
@@ -130,7 +130,7 @@
 	function toggleEpics() {
 		epicsOpen = !epicsOpen;
 		try {
-			localStorage.setItem('raenil.epicsOpen', epicsOpen ? '1' : '0');
+			localStorage.setItem('donewhen.epicsOpen', epicsOpen ? '1' : '0');
 		} catch {
 			/* storage blocked: not remembered */
 		}
@@ -160,7 +160,7 @@
 		<button class="ws-btn" bind:this={wsBtn} onclick={toggleWs} title="Switch workspace">
 			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}</span>
 			<span class="ws-text">
-				<span class="ws-name">{$activeWorkspace?.name || 'Raenil'}</span>
+				<span class="ws-name">{$activeWorkspace?.name || 'DoneWhen'}</span>
 				<span class="ws-key">{$activeWorkspace?.keyPrefix || ''}</span>
 			</span>
 			<ChevronsUpDown size={14} strokeWidth={2} />

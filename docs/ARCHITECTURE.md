@@ -46,7 +46,7 @@ flowchart LR
 
 `cmd/donewhen/main.go` is the single entry point. Sub-commands: `serve` (default), `migrate`, `mcp` (MCP over stdio), `token`, `user`, `workspace`, `genvapid`.
 
-Settings come from `DONEWHEN_*` environment variables, read in `internal/config/config.go`. The old `RAENIL_*` names still work for one release.
+Settings come from `DONEWHEN_*` environment variables, read in `internal/config/config.go`.
 
 ## Packages in `internal/`
 

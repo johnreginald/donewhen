@@ -18,7 +18,7 @@
 		['comments', 'Comments'],
 		['history', 'History']
 	];
-	const KEY = 'raenil.issueActivityFilter';
+	const KEY = 'donewhen.issueActivityFilter';
 	const ICON = {
 		created: Plus,
 		state_changed: CircleDot,

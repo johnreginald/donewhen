@@ -132,7 +132,7 @@
 			</div>
 			{#if addErr}<span class="settings-err">{addErr}</span>{/if}
 			<span class="settings-hint">
-				The account must already exist — create it with <span class="settings-mono">raenil user &lt;email&gt; &lt;pass&gt;</span>.
+				The account must already exist — create it with <span class="settings-mono">donewhen user &lt;email&gt; &lt;pass&gt;</span>.
 			</span>
 		</section>
 	{/if}

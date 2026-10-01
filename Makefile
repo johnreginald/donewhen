@@ -3,7 +3,7 @@
 # bash: the backup recipe needs pipefail so a failed pg_dump is not hidden by gzip.
 SHELL := bash
 
-BIN := ./raenil
+BIN := ./donewhen
 
 # Container engine. Podman on the dev Mac, Docker on the production box — both
 # read compose.yaml. Auto-detected; override explicitly when you need to:
@@ -14,7 +14,7 @@ COMPOSE ?= $(shell command -v podman >/dev/null 2>&1 && echo "podman compose" ||
 PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 
 build: ## build the Go binary
-	go build -o $(BIN) ./cmd/raenil
+	go build -o $(BIN) ./cmd/donewhen
 
 web: ## build the SvelteKit frontend into web/build
 	cd web && npm install && npm run build
@@ -31,7 +31,7 @@ migrate: build ## apply DB migrations; backs up first if a destructive one is pe
 		echo "destructive migration pending ($$pending): taking a backup first"; \
 		$(MAKE) backup || exit 1; \
 	fi; \
-	RAENIL_BACKUP_CONFIRMED="$$pending" $(BIN) migrate
+	DONEWHEN_BACKUP_CONFIRMED="$$pending" $(BIN) migrate
 
 user: build ## create initial user: make user EMAIL=you@x.com PASS=secret123
 	$(BIN) user $(EMAIL) $(PASS)
@@ -62,8 +62,8 @@ engine: ## show which container engine will be used
 
 backup: ## dump the database to ./backups
 	@mkdir -p backups
-	@set -o pipefail; f=backups/raenil-$$(date +%Y%m%d-%H%M%S).sql.gz; \
-	if $(COMPOSE) exec -T db pg_dump -U $${POSTGRES_USER:-raenil} $${POSTGRES_DB:-raenil} | gzip > $$f; then \
+	@set -o pipefail; f=backups/donewhen-$$(date +%Y%m%d-%H%M%S).sql.gz; \
+	if $(COMPOSE) exec -T db pg_dump -U $${POSTGRES_USER:-donewhen} $${POSTGRES_DB:-donewhen} | gzip > $$f; then \
 		echo "backup written to $$f"; \
 	else rm -f $$f; echo "backup FAILED" >&2; exit 1; fi
 

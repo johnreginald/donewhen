@@ -3,7 +3,7 @@
 // it at runtime. Stored in localStorage so each device keeps its own.
 import { writable } from 'svelte/store';
 
-const KEY = 'raenil.theme';
+const KEY = 'donewhen.theme';
 export const THEMES = ['system', 'light', 'dark'];
 
 export function getTheme() {

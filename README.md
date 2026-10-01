@@ -161,7 +161,7 @@ The repo also has a skill that teaches Claude how to use the tools well. See [sk
 
 ## Configuration
 
-Set these in `.env` (Compose) or in the environment. The old `RAENIL_*` names keep working for one release. Use the `DONEWHEN_*` names.
+Set these in `.env` (Compose) or in the environment. The project was called Raenil before. The old `RAENIL_*` names keep working for one release and log a deprecation warning. If both are set, the `DONEWHEN_*` name wins.
 
 | Name | Default | Meaning |
 |---|---|---|

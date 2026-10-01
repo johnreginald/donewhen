@@ -25,7 +25,7 @@
 <div class="settings-wrap">
 	<div class="settings-head">
 		<h1 class="settings-h1">Account</h1>
-		<p class="settings-lede">Your sign-in and how Raenil looks to you.</p>
+		<p class="settings-lede">Your sign-in and how DoneWhen looks to you.</p>
 	</div>
 
 	<section class="settings-panel">

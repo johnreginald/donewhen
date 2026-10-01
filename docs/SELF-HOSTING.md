@@ -41,7 +41,7 @@ POSTGRES_PASSWORD=<something strong>
 
 `DONEWHEN_BASE_URL` must be the exact public URL, with `https://` and no trailing slash. It is used for cookies, the push origin and links.
 
-The old `RAENIL_*` names keep working for one release. Use the `DONEWHEN_*` names. The full list is in the [README](../README.md#configuration).
+The full list is in the [README](../README.md#configuration).
 
 ### The database password
 

@@ -2,7 +2,7 @@
 
 ## Paperclip
 
-Raenil's agents, dashboard, task, agent, connector and audit screens
+DoneWhen's agents, dashboard, task, agent, connector and audit screens
 follow the design of Paperclip (https://github.com/paperclipai/paperclip),
 re-implemented in Svelte and Go. No Paperclip source code is included.
 Paperclip is distributed under the MIT License:

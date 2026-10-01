@@ -26,7 +26,7 @@
 	const epicOf = (id) => $projects.find((p) => p.id === id);
 	const openBlockers = $derived(openBlockersByIssue($blockLinks));
 
-	const LS_KEY = 'raenil.list.collapsedStates';
+	const LS_KEY = 'donewhen.list.collapsedStates';
 	// First visit: only the "live" categories start open, same as the design.
 	const DEFAULT_OPEN = new Set(['Ready', 'In Progress', 'In Review']);
 	let collapsed = $state(null); // null = not computed yet (waiting on $states)

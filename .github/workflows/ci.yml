@@ -15,18 +15,18 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: raenil
-          POSTGRES_PASSWORD: raenil
-          POSTGRES_DB: raenil
+          POSTGRES_USER: donewhen
+          POSTGRES_PASSWORD: donewhen
+          POSTGRES_DB: donewhen
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U raenil"
+          --health-cmd "pg_isready -U donewhen"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      RAENIL_TEST_DATABASE_URL: postgres://raenil:raenil@localhost:5432/raenil?sslmode=disable
+      DONEWHEN_TEST_DATABASE_URL: postgres://donewhen:donewhen@localhost:5432/donewhen?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
