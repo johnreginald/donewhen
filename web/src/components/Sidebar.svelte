@@ -62,6 +62,17 @@
 	// Workspace switcher — the top-level scope. Everything below it (epics,
 	// issues, labels, the inbox badge) belongs to the selected workspace only.
 	let wsOpen = $state(false);
+	let wsBtn = $state(null);
+	let wsPos = $state({ top: 0, left: 0 });
+	// The sidebar clips overflow, so the menu is fixed-positioned under the
+	// button instead of absolutely inside the sidebar.
+	function toggleWs() {
+		if (!wsOpen && wsBtn) {
+			const r = wsBtn.getBoundingClientRect();
+			wsPos = { top: r.bottom + 4, left: r.left };
+		}
+		wsOpen = !wsOpen;
+	}
 
 	// Full issue set (filter-independent) for the per-epic totals in the badge.
 	let allIssues = $state([]);
@@ -146,7 +157,7 @@
 	</button>
 
 	<div class="ws">
-		<button class="ws-btn" onclick={() => (wsOpen = !wsOpen)} title="Switch workspace">
+		<button class="ws-btn" bind:this={wsBtn} onclick={toggleWs} title="Switch workspace">
 			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}</span>
 			<span class="ws-text">
 				<span class="ws-name">{$activeWorkspace?.name || 'Raenil'}</span>
@@ -156,7 +167,7 @@
 		</button>
 		{#if wsOpen}
 			<div class="menu-backdrop" role="presentation" onclick={() => (wsOpen = false)}></div>
-			<div class="ws-menu">
+			<div class="ws-menu" style:top="{wsPos.top}px" style:left="{wsPos.left}px">
 				<WorkspaceMenu onpick={() => (wsOpen = false)} />
 			</div>
 		{/if}
@@ -356,12 +367,10 @@
 		letter-spacing: 0.04em;
 	}
 	.ws-menu {
-		position: absolute;
-		top: 44px;
-		left: 0;
+		position: fixed;
 		/* Grow past the sidebar so long workspace names aren't cut. */
 		width: max-content;
-		min-width: 100%;
+		min-width: 220px;
 		max-width: min(380px, calc(100vw - 24px));
 		z-index: 31;
 		background: var(--surface);
