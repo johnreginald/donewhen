@@ -269,7 +269,12 @@ func (s *Store) GetInitiative(ctx context.Context, wsID, id string) (models.Init
 	return i, err
 }
 
+// SaveInitiative creates an initiative. Changing one goes through
+// UpdateInitiative, which only touches the fields it is given.
 func (s *Store) SaveInitiative(ctx context.Context, wsID string, i models.Initiative) (models.Initiative, error) {
+	if i.ID != "" {
+		return i, invalid("SaveInitiative creates; use UpdateInitiative to change one")
+	}
 	if i.Status == "" {
 		i.Status = "active"
 	}
@@ -278,24 +283,75 @@ func (s *Store) SaveInitiative(ctx context.Context, wsID string, i models.Initia
 		return i, err
 	}
 	i.RepoURL = repo
-	if i.ID == "" {
-		err := s.pool.QueryRow(ctx,
-			`INSERT INTO initiatives (workspace_id, name, description_md, status, position, repo_url)
-			 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at, updated_at`,
-			wsID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL).Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
-		return i, err
+	err = s.pool.QueryRow(ctx,
+		`INSERT INTO initiatives (workspace_id, name, description_md, status, position, repo_url)
+		 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at, updated_at`,
+		wsID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL).Scan(&i.ID, &i.CreatedAt, &i.UpdatedAt)
+	return i, err
+}
+
+// InitiativePatch carries optional updates; nil fields are left unchanged.
+// An empty RepoURL clears it.
+type InitiativePatch struct {
+	Name          *string
+	DescriptionMD *string
+	Status        *string
+	Position      *int
+	RepoURL       *string
+}
+
+// UpdateInitiative applies a patch to one initiative: it loads the row under a
+// lock, overlays only the fields sent and writes it back.
+func (s *Store) UpdateInitiative(ctx context.Context, wsID, id string, p InitiativePatch) (models.Initiative, error) {
+	var repo *string
+	if p.RepoURL != nil {
+		var err error
+		if repo, err = normURL("repoUrl", p.RepoURL); err != nil {
+			return models.Initiative{}, err
+		}
 	}
-	ct, err := s.pool.Exec(ctx,
-		`UPDATE initiatives SET name=$3, description_md=$4, status=$5, position=$6, repo_url=$7, updated_at=now()
-		 WHERE id=$1 AND workspace_id=$2`,
-		i.ID, wsID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Initiative{}, err
+	}
+	defer tx.Rollback(ctx)
+	var i models.Initiative
+	err = tx.QueryRow(ctx,
+		`SELECT id, name, description_md, status, position, repo_url, created_at, updated_at
+		 FROM initiatives WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, wsID).
+		Scan(&i.ID, &i.Name, &i.DescriptionMD, &i.Status, &i.Position, &i.RepoURL, &i.CreatedAt, &i.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return i, ErrNotFound
+	}
 	if err != nil {
 		return i, err
 	}
-	if ct.RowsAffected() == 0 {
-		return i, ErrNotFound
+	changed := false
+	if p.Name != nil {
+		i.Name, changed = *p.Name, true
 	}
-	return s.GetInitiative(ctx, wsID, i.ID)
+	if p.DescriptionMD != nil {
+		i.DescriptionMD, changed = *p.DescriptionMD, true
+	}
+	if p.Status != nil && *p.Status != "" {
+		i.Status, changed = *p.Status, true
+	}
+	if p.Position != nil {
+		i.Position, changed = *p.Position, true
+	}
+	if p.RepoURL != nil {
+		i.RepoURL, changed = repo, true
+	}
+	if !changed {
+		return i, nil
+	}
+	if err := tx.QueryRow(ctx,
+		`UPDATE initiatives SET name=$3, description_md=$4, status=$5, position=$6, repo_url=$7, updated_at=now()
+		 WHERE id=$1 AND workspace_id=$2 RETURNING updated_at`,
+		id, wsID, i.Name, i.DescriptionMD, i.Status, i.Position, i.RepoURL).Scan(&i.UpdatedAt); err != nil {
+		return i, err
+	}
+	return i, tx.Commit(ctx)
 }
 
 func (s *Store) DeleteInitiative(ctx context.Context, wsID, id string) error {
@@ -361,10 +417,13 @@ func (s *Store) GetProject(ctx context.Context, wsID, id string) (models.Project
 	return p, err
 }
 
+// SaveProject creates an epic. Changing one goes through UpdateProject, which
+// only touches the fields it is given.
 func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) (models.Project, error) {
-	// A new epic defaults to active. An update with no status keeps the
-	// stored one, so editing an archived epic doesn't silently unarchive it.
-	if p.ID == "" && p.Status == "" {
+	if p.ID != "" {
+		return p, invalid("SaveProject creates; use UpdateProject to change one")
+	}
+	if p.Status == "" {
 		p.Status = "active"
 	}
 	repo, err := normURL("repoUrl", p.RepoURL)
@@ -378,24 +437,89 @@ func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) 
 			return p, err
 		}
 	}
-	if p.ID == "" {
-		err := s.pool.QueryRow(ctx,
-			`INSERT INTO projects (workspace_id, initiative_id, name, description_md, status, position, repo_url)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at, updated_at`,
-			wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
-		return p, err
+	err = s.pool.QueryRow(ctx,
+		`INSERT INTO projects (workspace_id, initiative_id, name, description_md, status, position, repo_url)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at, updated_at`,
+		wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
+	return p, err
+}
+
+// ProjectPatch carries optional updates; nil fields are left unchanged. An empty
+// RepoURL clears it and an empty InitiativeID detaches the epic.
+type ProjectPatch struct {
+	Name          *string
+	DescriptionMD *string
+	Status        *string
+	Position      *int
+	RepoURL       *string
+	InitiativeID  *string
+}
+
+// UpdateProject applies a patch to one epic: it loads the row under a lock,
+// overlays only the fields sent and writes it back. An archived epic stays
+// archived unless a status is sent.
+func (s *Store) UpdateProject(ctx context.Context, wsID, id string, patch ProjectPatch) (models.Project, error) {
+	var repo *string
+	if patch.RepoURL != nil {
+		var err error
+		if repo, err = normURL("repoUrl", patch.RepoURL); err != nil {
+			return models.Project{}, err
+		}
 	}
-	ct, err := s.pool.Exec(ctx,
-		`UPDATE projects SET initiative_id=$3, name=$4, description_md=$5, status=COALESCE(NULLIF($6, ''), status), position=$7, repo_url=$8, updated_at=now()
-		 WHERE id=$1 AND workspace_id=$2`,
-		p.ID, wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL)
+	// An epic may only hang off an initiative in the same workspace.
+	if patch.InitiativeID != nil && *patch.InitiativeID != "" {
+		if _, err := s.GetInitiative(ctx, wsID, *patch.InitiativeID); err != nil {
+			return models.Project{}, err
+		}
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Project{}, err
+	}
+	defer tx.Rollback(ctx)
+	var p models.Project
+	err = tx.QueryRow(ctx,
+		`SELECT id, initiative_id, name, description_md, status, position, repo_url, created_at, updated_at
+		 FROM projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, wsID).
+		Scan(&p.ID, &p.InitiativeID, &p.Name, &p.DescriptionMD, &p.Status, &p.Position, &p.RepoURL, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, ErrNotFound
+	}
 	if err != nil {
 		return p, err
 	}
-	if ct.RowsAffected() == 0 {
-		return p, ErrNotFound
+	changed := false
+	if patch.Name != nil {
+		p.Name, changed = *patch.Name, true
 	}
-	return s.GetProject(ctx, wsID, p.ID)
+	if patch.DescriptionMD != nil {
+		p.DescriptionMD, changed = *patch.DescriptionMD, true
+	}
+	if patch.Status != nil && *patch.Status != "" {
+		p.Status, changed = *patch.Status, true
+	}
+	if patch.Position != nil {
+		p.Position, changed = *patch.Position, true
+	}
+	if patch.RepoURL != nil {
+		p.RepoURL, changed = repo, true
+	}
+	if patch.InitiativeID != nil {
+		p.InitiativeID, changed = nil, true
+		if *patch.InitiativeID != "" {
+			p.InitiativeID = patch.InitiativeID
+		}
+	}
+	if !changed {
+		return p, nil
+	}
+	if err := tx.QueryRow(ctx,
+		`UPDATE projects SET initiative_id=$3, name=$4, description_md=$5, status=$6, position=$7, repo_url=$8, updated_at=now()
+		 WHERE id=$1 AND workspace_id=$2 RETURNING updated_at`,
+		id, wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL).Scan(&p.UpdatedAt); err != nil {
+		return p, err
+	}
+	return p, tx.Commit(ctx)
 }
 
 // SetProjectStatus changes only the epic's status — unlike SaveProject it

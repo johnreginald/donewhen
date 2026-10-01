@@ -716,6 +716,34 @@ func (d *deps) issueList(ctx context.Context, req mcp.CallToolRequest, wsIDs []s
 	return jsonResult(page("issues", issueRows(issues, names), limit))
 }
 
+// argString returns the string argument only when the caller actually sent the
+// key, so an update can tell "not sent" (nil, keep) from "" (clear).
+func argString(req mcp.CallToolRequest, key string) *string {
+	raw, ok := req.GetArguments()[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	v, ok := raw.(string)
+	if !ok {
+		return nil
+	}
+	return &v
+}
+
+// argInt is argString for numbers.
+func argInt(req mcp.CallToolRequest, key string) *int {
+	raw, ok := req.GetArguments()[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	f, ok := raw.(float64)
+	if !ok {
+		return nil
+	}
+	v := int(f)
+	return &v
+}
+
 func strp(s string) *string {
 	if s == "" {
 		return nil
