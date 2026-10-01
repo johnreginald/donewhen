@@ -1,7 +1,7 @@
 {
 	"name": "DoneWhen",
 	"short_name": "DoneWhen",
-	"description": "Self-hosted issue tracker",
+	"description": "Track what your AI built, review it at a gate, check it again later",
 	"start_url": "/inbox",
 	"scope": "/",
 	"display": "standalone",

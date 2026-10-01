@@ -1,42 +1,19 @@
-<script module>
-	// Mask ids are document-global, so each instance needs its own.
-	let seq = 0;
-</script>
-
 <script>
-	// The DoneWhen mark: a solid D with a check cut out of it. The check keeps going
-	// past the edge of the D, the colours swap as it crosses, and the part outside
-	// takes a lighter tint. Same geometry as static/icon.svg, coloured from the theme.
+	// The DoneWhen mark: a D whose open side is a gate. The AI's work arrives from the
+	// left as a trail of dots; the filled dot is the one that has passed the gate.
+	// Same geometry as static/icon.svg, coloured from the theme tokens.
 	let { size = 24 } = $props();
-	const id = `dw${seq++}`;
 	const TILE = 'M512.0 256.0 L511.9 320.1 L511.8 340.6 L511.5 355.5 L511.2 367.5 L510.7 377.9 L510.2 387.0 L509.5 395.2 L508.8 402.7 L507.9 409.6 L506.9 416.0 L505.8 422.0 L504.7 427.6 L503.4 432.9 L502.0 437.9 L500.5 442.7 L498.8 447.1 L497.1 451.4 L495.2 455.5 L493.3 459.3 L491.2 463.0 L489.0 466.5 L486.6 469.8 L484.2 473.0 L481.6 476.0 L478.9 478.9 L476.0 481.6 L473.0 484.2 L469.8 486.6 L466.5 489.0 L463.0 491.2 L459.3 493.3 L455.5 495.2 L451.4 497.1 L447.1 498.8 L442.7 500.5 L437.9 502.0 L432.9 503.4 L427.6 504.7 L422.0 505.8 L416.0 506.9 L409.6 507.9 L402.7 508.8 L395.2 509.5 L387.0 510.2 L377.9 510.7 L367.5 511.2 L355.5 511.5 L340.6 511.8 L320.1 511.9 L256.0 512.0 L191.9 511.9 L171.4 511.8 L156.5 511.5 L144.5 511.2 L134.1 510.7 L125.0 510.2 L116.8 509.5 L109.3 508.8 L102.4 507.9 L96.0 506.9 L90.0 505.8 L84.4 504.7 L79.1 503.4 L74.1 502.0 L69.3 500.5 L64.9 498.8 L60.6 497.1 L56.5 495.2 L52.7 493.3 L49.0 491.2 L45.5 489.0 L42.2 486.6 L39.0 484.2 L36.0 481.6 L33.1 478.9 L30.4 476.0 L27.8 473.0 L25.4 469.8 L23.0 466.5 L20.8 463.0 L18.7 459.3 L16.8 455.5 L14.9 451.4 L13.2 447.1 L11.5 442.7 L10.0 437.9 L8.6 432.9 L7.3 427.6 L6.2 422.0 L5.1 416.0 L4.1 409.6 L3.2 402.7 L2.5 395.2 L1.8 387.0 L1.3 377.9 L0.8 367.5 L0.5 355.5 L0.2 340.6 L0.1 320.1 L0.0 256.0 L0.1 191.9 L0.2 171.4 L0.5 156.5 L0.8 144.5 L1.3 134.1 L1.8 125.0 L2.5 116.8 L3.2 109.3 L4.1 102.4 L5.1 96.0 L6.2 90.0 L7.3 84.4 L8.6 79.1 L10.0 74.1 L11.5 69.3 L13.2 64.9 L14.9 60.6 L16.8 56.5 L18.7 52.7 L20.8 49.0 L23.0 45.5 L25.4 42.2 L27.8 39.0 L30.4 36.0 L33.1 33.1 L36.0 30.4 L39.0 27.8 L42.2 25.4 L45.5 23.0 L49.0 20.8 L52.7 18.7 L56.5 16.8 L60.6 14.9 L64.9 13.2 L69.3 11.5 L74.1 10.0 L79.1 8.6 L84.4 7.3 L90.0 6.2 L96.0 5.1 L102.4 4.1 L109.3 3.2 L116.8 2.5 L125.0 1.8 L134.1 1.3 L144.5 0.8 L156.5 0.5 L171.4 0.2 L191.9 0.1 L256.0 0.0 L320.1 0.1 L340.6 0.2 L355.5 0.5 L367.5 0.8 L377.9 1.3 L387.0 1.8 L395.2 2.5 L402.7 3.2 L409.6 4.1 L416.0 5.1 L422.0 6.2 L427.6 7.3 L432.9 8.6 L437.9 10.0 L442.7 11.5 L447.1 13.2 L451.4 14.9 L455.5 16.8 L459.3 18.7 L463.0 20.8 L466.5 23.0 L469.8 25.4 L473.0 27.8 L476.0 30.4 L478.9 33.1 L481.6 36.0 L484.2 39.0 L486.6 42.2 L489.0 45.5 L491.2 49.0 L493.3 52.7 L495.2 56.5 L497.1 60.6 L498.8 64.9 L500.5 69.3 L502.0 74.1 L503.4 79.1 L504.7 84.4 L505.8 90.0 L506.9 96.0 L507.9 102.4 L508.8 109.3 L509.5 116.8 L510.2 125.0 L510.7 134.1 L511.2 144.5 L511.5 156.5 L511.8 171.4 L511.9 191.9 Z';
-	const D = 'M118 112 H262 A144 144 0 0 1 262 400 H118 Z';
-	const CHECK = 'M184 266 L236 318 L418 104';
 </script>
 
 <svg class="logo" width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
-	<defs>
-		<mask id="{id}-in">
-			<rect width="512" height="512" fill="#fff" />
-			<path d={CHECK} fill="none" stroke="#000" stroke-width="52" stroke-linejoin="round" />
-			<circle cx="184" cy="266" r="26" fill="#000" />
-		</mask>
-		<mask id="{id}-out">
-			<rect width="512" height="512" fill="#fff" />
-			<path d={D} fill="#000" />
-		</mask>
-	</defs>
 	<path d={TILE} style="fill: var(--accent)" />
-	<g transform="translate(-4 0)">
-		<path d={D} style="fill: var(--accent-ink)" mask="url(#{id}-in)" />
-		<path
-			d={CHECK}
-			fill="none"
-			style="stroke: color-mix(in srgb, var(--accent-ink) 62%, var(--accent))"
-			stroke-width="52"
-			stroke-linejoin="round"
-			mask="url(#{id}-out)"
-		/>
+	<path d="M208 112 H266 A144 144 0 0 1 266 400 H208" fill="none" stroke-width="66" style="stroke: var(--accent-ink)" />
+	<circle cx="324" cy="256" r="50" style="fill: color-mix(in srgb, var(--accent-ink) 62%, var(--accent))" />
+	<g style="fill: var(--accent-ink)">
+		<circle cx="152" cy="256" r="31" fill-opacity=".82" />
+		<circle cx="100" cy="256" r="21" fill-opacity=".5" />
+		<circle cx="62" cy="256" r="13" fill-opacity=".28" />
 	</g>
 </svg>
 

@@ -2,17 +2,19 @@
 
 <h1 align="center">DoneWhen</h1>
 
-<p align="center">A self-hosted issue tracker that keeps the record of AI-built work.</p>
+<p align="center"><b>See what your AI built. Review it at a gate. Check it again later.</b></p>
 
 ![The DoneWhen board with the demo workspace](docs/images/board-light.png)
 
 ## What and why
 
-AI agents build fast, but the record of what was built gets lost. The chat is gone and the commit says "fix".
+AI agents build fast, but you cannot follow all of it. The chat is gone, and the commit says "fix".
 
-DoneWhen fixes this. Every ticket has a **done-when checklist**, written before the work starts. The AI ticks each item as it is met. A ticket cannot move to In Review or Done while an item is open.
+DoneWhen is the place where you track the AI's work. It has three jobs:
 
-When the work ends, DoneWhen keeps the commits, the branch and an engineering document. You review code you did not watch being written, and you know what "done" meant.
+- **Track.** Every task is a ticket with a short note and a done-when checklist. The AI ticks each item as it works. You see the progress on a board.
+- **Understand.** Boards, short notes and Mermaid diagrams show what was built and why. You do not read a long chat.
+- **Gate.** A ticket cannot move to In Review while an item is open. A human then reviews the quality and approves. The commits, the notes and the checklist stay, so you can check the work again later.
 
 Read [docs/CONCEPTS.md](docs/CONCEPTS.md) for the full idea.
 
