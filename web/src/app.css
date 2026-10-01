@@ -759,6 +759,9 @@ select {
 	box-sizing: border-box;
 }
 .auth-brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
 	font-family: var(--serif);
 	font-size: var(--t-xl);
 	color: var(--ink);

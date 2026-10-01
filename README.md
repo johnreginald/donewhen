@@ -1,6 +1,8 @@
-# DoneWhen
+<p align="center"><img src="docs/images/logo.svg" width="88" alt="DoneWhen logo"></p>
 
-A self-hosted issue tracker that keeps the record of AI-built work.
+<h1 align="center">DoneWhen</h1>
+
+<p align="center">A self-hosted issue tracker that keeps the record of AI-built work.</p>
 
 ![The DoneWhen board with the demo workspace](docs/images/board-light.png)
 
