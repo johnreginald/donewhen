@@ -186,7 +186,7 @@ Dump the database:
 make backup
 ```
 
-This writes `./backups/donewhen-<timestamp>.sql.gz`. The same thing without `make`:
+This writes `./backups/donewhen-<timestamp>.sql.gz`. It reads the database user and name from the `db` container, so an install that kept `POSTGRES_USER=raenil` works too. `make` uses Podman when it is installed. To force Docker, run `make backup COMPOSE="docker compose"`. The same thing without `make`:
 
 ```bash
 docker compose exec -T db pg_dump -U donewhen donewhen | gzip > donewhen-backup.sql.gz
@@ -197,6 +197,8 @@ Run it every night with cron:
 ```cron
 30 3 * * *  cd /path/to/donewhen && /usr/bin/make backup >> /var/log/donewhen-backup.log 2>&1
 ```
+
+In the commands below, replace `donewhen` after `-U` and the database name with your `POSTGRES_USER` and `POSTGRES_DB` if you changed them.
 
 Copy the files off the machine. Keep `data/` on durable storage. It holds Postgres (`data/pg`) and the Caddy certificates (`data/caddy`).
 
@@ -209,7 +211,7 @@ docker compose exec db createdb -U donewhen donewhen_rehearsal
 gunzip -c donewhen-backup.sql.gz | docker compose exec -T db psql -U donewhen donewhen_rehearsal
 ```
 
-To restore for real, stop the app, re-create the database, load the dump and start the app:
+To restore for real over a running install, stop the app, re-create the database, load the dump and start the app:
 
 ```bash
 docker compose stop donewhen
@@ -217,6 +219,15 @@ docker compose exec db dropdb -U donewhen donewhen
 docker compose exec db createdb -U donewhen donewhen
 gunzip -c donewhen-backup.sql.gz | docker compose exec -T db psql -U donewhen donewhen
 docker compose start donewhen
+```
+
+To restore on a new machine, or after you delete `data/pg`, start only the database, load the dump, then start the app. Do not start the app first: it creates the tables, and the load then fails on them.
+
+```bash
+docker compose up -d db
+docker compose ps db        # wait until it says healthy
+gunzip -c donewhen-backup.sql.gz | docker compose exec -T db psql -U donewhen donewhen
+docker compose up -d --build
 ```
 
 ## 8. Upgrading
@@ -235,6 +246,14 @@ Migrations run when the app starts. Each file runs in its own transaction, so a 
 
 To go back, restore the backup and check out the older version.
 
+Upgrading an install from before the rename to DoneWhen: the Compose service was called `raenil` and is now `donewhen`. Add `--remove-orphans` once, or the old container keeps the port:
+
+```bash
+docker compose up -d --build --remove-orphans
+```
+
+Keep `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` set to `raenil` in `.env`. Postgres only reads them on first init, so the data stays under the old names. An old `.env` with `RAENIL_*` keys keeps working.
+
 ### Migration safety
 
 - Migrations run under a Postgres advisory lock. If two processes start together, they take turns. The second finds nothing left to apply.
@@ -247,7 +266,7 @@ To go back, restore the backup and check out the older version.
   ```
 
 - The value is a comma-separated list of migration names. Remove the line after the migration is applied.
-- `make migrate` does both steps. It needs the compose `db` service. For another Postgres, make your own `pg_dump` and use the variable.
+- `make migrate` does both steps, but it runs the local `./donewhen` binary. It needs Go on the machine and `DONEWHEN_DATABASE_URL` pointing at a database it can reach. Compose does not publish Postgres, so on a Compose install use the steps above.
 
 ### Upgrading an old install to workspaces
 
@@ -274,7 +293,10 @@ Then compare the row counts of `issues`, `labels`, `issue_labels`, `documents` a
 | Push does not work | Check: HTTPS; both VAPID keys set (the log says `push=true` at start); the PWA is installed; notifications are allowed for the site. If you changed the VAPID keys, subscribe again. |
 | Live updates stop after a short time | Your proxy buffers `/api/events`. Turn off buffering for that path. The bundled Caddy already does. |
 | `port is already allocated` or `address already in use` | Another program uses the port. Change `DONEWHEN_HOST_PORT`. For the `edge` profile, ports 80 and 443 must be free. Do not use `edge` if another proxy owns them. |
-| `password authentication failed for user "donewhen"` | `POSTGRES_PASSWORD` in `.env` differs from the password stored in `data/pg`. Postgres sets the password only the first time. Put the old password back in `.env`, or change it in the database: `docker compose exec db psql -U donewhen -c "ALTER USER donewhen PASSWORD 'new-password'"`. On a fresh install with no data, run `docker compose down` and delete `data/pg`. |
+| `password authentication failed for user "donewhen"` | `POSTGRES_PASSWORD` in `.env` differs from the password stored in `data/pg`. Postgres sets the password only the first time. Put the old password back in `.env`, or change it in the database: `docker compose exec db psql -U donewhen -c "ALTER USER donewhen PASSWORD 'new-password'"`. An install made before the rename uses the user `raenil`: set `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` to `raenil` in `.env`. On a fresh install with no data, run `docker compose down` and delete `data/pg`. |
+| `Bind for 127.0.0.1:8090 failed: port is already allocated` after an upgrade | The pre-rename `raenil` container is still running. Run `docker compose up -d --build --remove-orphans`. |
+| `refusing to migrate: destructive migration(s) pending` | Back up, then set `DONEWHEN_BACKUP_CONFIRMED` to the name in the message and run `docker compose up -d`. See [Migration safety](#migration-safety). |
+| `DONEWHEN_SESSION_SECRET is still the placeholder` | `.env` still has the secret from `.env.example`. Generate one with `openssl rand -hex 32`. |
 | Database container fails with a permissions error | Rootless Podman. See [PODMAN.md](PODMAN.md). |
 | Certificate is not issued (Caddy) | DNS does not point at this machine, or port 80 is closed. Check `docker compose logs caddy`. |
 
