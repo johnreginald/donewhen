@@ -113,7 +113,7 @@ func (s *Server) handleActivateWorkspace(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := s.store.SetLastWorkspace(r.Context(), u.ID, target.ID); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalErr(w, err)
 		return
 	}
 	writeJSON(w, 200, models.Membership{Workspace: target, Role: role})

@@ -6,6 +6,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -121,6 +122,10 @@ func iniRef(id string) ref      { return ref{"initiatives", id} }
 func documentRef(id string) ref { return ref{"documents", id} }
 func stateRef(id string) ref    { return ref{"workflow_states", id} }
 
+// errAccessRevoked is what a pinned token gets once its owner has left the
+// workspace it is pinned to.
+var errAccessRevoked = errors.New("workspace access revoked")
+
 // scopeOne is the write scope: the single workspace a call acts on.
 //
 // Order: an explicit argument, then the token's pin, then the workspace of the
@@ -135,6 +140,18 @@ func (d *deps) scopeOne(ctx context.Context, req mcp.CallToolRequest, refs ...re
 		return one, nil
 	}
 	if pin, pinned := auth.TokenPinFrom(ctx); pinned {
+		// The pin only narrows what the owner may reach; it never grants. Check
+		// the owner is still a member, so removing someone locks out their token.
+		user, err := d.caller(ctx)
+		if err != nil {
+			return "", err
+		}
+		if _, err := d.store.RoleIn(ctx, pin, user.ID); err != nil {
+			if errors.Is(err, store.ErrNotMember) {
+				return "", errAccessRevoked
+			}
+			return "", err
+		}
 		return pin, nil
 	}
 

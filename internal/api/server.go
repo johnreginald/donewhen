@@ -62,6 +62,18 @@ func (s *Server) guard(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// sessionOnly is guard for account-level actions that a bearer token must never
+// perform, pinned or not: it refuses API/MCP callers outright.
+func (s *Server) sessionOnly(next http.HandlerFunc) http.HandlerFunc {
+	return s.guard(func(w http.ResponseWriter, r *http.Request) {
+		if auth.IsBearer(r.Context()) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		next(w, r)
+	})
+}
+
 // wsGuard is guard plus tenancy: it resolves which workspace the request acts
 // on and proves membership before the handler runs. Everything that reads or
 // writes tenant data goes through here.
@@ -121,17 +133,17 @@ func (s *Server) Handler() http.Handler {
 	// Workspaces — the tenancy boundary. Listing memberships must NOT be
 	// workspace-scoped: it is how a client discovers which ones exist.
 	mux.HandleFunc("GET /api/workspaces", s.guard(s.handleListWorkspaces))
-	mux.HandleFunc("POST /api/workspaces", s.guard(s.handleCreateWorkspace))
-	mux.HandleFunc("POST /api/workspaces/{id}/activate", s.guard(s.handleActivateWorkspace))
+	mux.HandleFunc("POST /api/workspaces", s.sessionOnly(s.handleCreateWorkspace))
+	mux.HandleFunc("POST /api/workspaces/{id}/activate", s.sessionOnly(s.handleActivateWorkspace))
 	mux.HandleFunc("PATCH /api/workspaces/{id}", s.adminOnly(s.handleUpdateWorkspace))
 	mux.HandleFunc("GET /api/workspaces/{id}/members", s.wsGuard(s.handleListMembers))
 	mux.HandleFunc("POST /api/workspaces/{id}/members", s.adminOnly(s.handleAddMember))
 	mux.HandleFunc("DELETE /api/workspaces/{id}/members/{userId}", s.adminOnly(s.handleRemoveMember))
 
 	// API tokens.
-	mux.HandleFunc("GET /api/tokens", s.guard(s.handleListTokens))
-	mux.HandleFunc("POST /api/tokens", s.guard(s.handleCreateToken))
-	mux.HandleFunc("DELETE /api/tokens/{id}", s.guard(s.handleDeleteToken))
+	mux.HandleFunc("GET /api/tokens", s.sessionOnly(s.handleListTokens))
+	mux.HandleFunc("POST /api/tokens", s.sessionOnly(s.handleCreateToken))
+	mux.HandleFunc("DELETE /api/tokens/{id}", s.sessionOnly(s.handleDeleteToken))
 
 	// Metadata.
 	mux.HandleFunc("GET /api/states", s.wsGuard(s.handleListStates))

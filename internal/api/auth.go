@@ -92,7 +92,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := auth.HashPassword(c.Password)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalErr(w, err)
 		return
 	}
 	u, err := s.store.CreateUser(r.Context(), c.Email, hash)
@@ -192,7 +192,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := auth.RandomToken(32)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalErr(w, err)
 		return
 	}
 	plaintext := "raenil_" + raw

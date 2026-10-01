@@ -179,10 +179,26 @@ func (s *Store) RemoveMember(ctx context.Context, wsID, userID string) error {
 		`DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`, wsID, userID); err != nil {
 		return err
 	}
+	// A token pinned to this workspace is useless to its owner now and must not
+	// outlive the membership. Unpinned tokens stay: they lose access through the
+	// membership check like everything else.
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM api_tokens WHERE workspace_id=$1 AND user_id=$2`, wsID, userID); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 // ---- create / update ----
+
+// workspaceWriteErr turns a unique-key collision on slug or key prefix into
+// ErrConflict, so callers answer 409 instead of leaking a 500.
+func workspaceWriteErr(err error) error {
+	if isUniqueViolation(err, "") {
+		return fmt.Errorf("%w: a workspace with that slug or key prefix already exists", ErrConflict)
+	}
+	return err
+}
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
 var prefixRe = regexp.MustCompile(`^[A-Z][A-Z0-9]*$`)
