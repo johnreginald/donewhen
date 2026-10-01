@@ -652,3 +652,36 @@ func TestArchiveProject(t *testing.T) {
 		t.Fatalf("missing epic: %v", err)
 	}
 }
+
+// Editing an archived epic through SaveProject (MCP save_project, PATCH
+// /api/projects) sends no status; that must not silently unarchive it.
+func TestSaveProjectKeepsArchivedStatus(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	ws := newWorkspace(t, s)
+
+	p, err := s.SaveProject(ctx, ws, models.Project{Name: "Epic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Status != "active" {
+		t.Fatalf("new epic status = %q, want active", p.Status)
+	}
+	if _, err := s.ArchiveProject(ctx, ws, p.ID, true, "human"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.SaveProject(ctx, ws, models.Project{ID: p.ID, Name: "Epic renamed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "archived" || got.Name != "Epic renamed" {
+		t.Fatalf("after edit: status=%q name=%q, want archived / Epic renamed", got.Status, got.Name)
+	}
+	got, err = s.SaveProject(ctx, ws, models.Project{ID: p.ID, Name: "Epic renamed", Status: "active"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "active" {
+		t.Fatalf("explicit status: got %q, want active", got.Status)
+	}
+}

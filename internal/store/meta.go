@@ -357,7 +357,9 @@ func (s *Store) GetProject(ctx context.Context, wsID, id string) (models.Project
 }
 
 func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) (models.Project, error) {
-	if p.Status == "" {
+	// A new epic defaults to active. An update with no status keeps the
+	// stored one, so editing an archived epic doesn't silently unarchive it.
+	if p.ID == "" && p.Status == "" {
 		p.Status = "active"
 	}
 	// An epic may only hang off an initiative in the same workspace.
@@ -374,7 +376,7 @@ func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) 
 		return p, err
 	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE projects SET initiative_id=$3, name=$4, description_md=$5, status=$6, position=$7, repo_url=$8, updated_at=now()
+		`UPDATE projects SET initiative_id=$3, name=$4, description_md=$5, status=COALESCE(NULLIF($6, ''), status), position=$7, repo_url=$8, updated_at=now()
 		 WHERE id=$1 AND workspace_id=$2`,
 		p.ID, wsID, p.InitiativeID, p.Name, p.DescriptionMD, p.Status, p.Position, p.RepoURL)
 	if err != nil {
