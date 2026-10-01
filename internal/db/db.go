@@ -6,10 +6,12 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -44,19 +46,40 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	}
 }
 
-// Migrate applies any embedded migrations not yet recorded in schema_migrations.
-// Files are applied in lexical order; each runs inside its own transaction.
-func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
-	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
-		version text PRIMARY KEY,
-		applied_at timestamptz NOT NULL DEFAULT now()
-	)`); err != nil {
-		return fmt.Errorf("create schema_migrations: %w", err)
-	}
+// migrateLockID is the Postgres advisory-lock key that serialises migration
+// runs ("RAENIL" in ASCII).
+const migrateLockID int64 = 0x5241454e494c
 
+// DestructiveMarker, as the first line of a migration file, flags it as
+// destructive: it drops or rewrites data, so a backup must exist first.
+const DestructiveMarker = "-- raenil:destructive"
+
+// BackupConfirmedEnv names the env var that confirms a backup was taken. It
+// holds a comma-separated list of the destructive migration names to allow.
+const BackupConfirmedEnv = "RAENIL_BACKUP_CONFIRMED"
+
+// BackupRequiredError is returned when a destructive migration is pending and
+// no backup was confirmed for it.
+type BackupRequiredError struct{ Names []string }
+
+func (e *BackupRequiredError) Error() string {
+	return fmt.Sprintf("refusing to migrate: destructive migration(s) pending: %s. "+
+		"Back up the database first (make backup), then set %s=%s and start again, "+
+		"or run `make migrate`, which takes the backup for you",
+		strings.Join(e.Names, ", "), BackupConfirmedEnv, strings.Join(e.Names, ","))
+}
+
+// IsDestructive reports whether migration SQL carries the destructive marker
+// on its first line.
+func IsDestructive(sql string) bool {
+	first, _, _ := strings.Cut(sql, "\n")
+	return strings.TrimSpace(first) == DestructiveMarker
+}
+
+func migrationNames() ([]string, error) {
 	entries, err := migrationFS.ReadDir("migrations")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -65,22 +88,150 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 	}
 	sort.Strings(names)
+	return names, nil
+}
 
-	for _, name := range names {
-		var exists bool
-		if err := pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, name,
-		).Scan(&exists); err != nil {
-			return err
+// PendingDestructive lists destructive migrations not yet applied. On a
+// database with no applied migrations (a fresh install) it returns none: there
+// is no data to lose.
+func PendingDestructive(ctx context.Context, pool *pgxpool.Pool) ([]string, error) {
+	var hasTable bool
+	if err := pool.QueryRow(ctx, `SELECT to_regclass('schema_migrations') IS NOT NULL`).Scan(&hasTable); err != nil {
+		return nil, err
+	}
+	if !hasTable {
+		return nil, nil
+	}
+	applied, err := appliedSet(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+	return pendingDestructive(applied)
+}
+
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+func appliedSet(ctx context.Context, q querier) (map[string]bool, error) {
+	rows, err := q.Query(ctx, `SELECT version FROM schema_migrations`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	applied := map[string]bool{}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
 		}
-		if exists {
+		applied[v] = true
+	}
+	return applied, rows.Err()
+}
+
+func pendingDestructive(applied map[string]bool) ([]string, error) {
+	if len(applied) == 0 {
+		return nil, nil
+	}
+	names, err := migrationNames()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, n := range names {
+		if applied[n] {
+			continue
+		}
+		b, err := migrationFS.ReadFile("migrations/" + n)
+		if err != nil {
+			return nil, err
+		}
+		if IsDestructive(string(b)) {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
+// Migrate applies any embedded migrations not yet recorded in schema_migrations,
+// reading the backup confirmation from RAENIL_BACKUP_CONFIRMED.
+func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return MigrateConfirmed(ctx, pool, os.Getenv(BackupConfirmedEnv))
+}
+
+// MigrateConfirmed is Migrate with an explicit backup confirmation (a
+// comma-separated list of destructive migration names).
+//
+// A Postgres advisory lock on a dedicated connection serialises concurrent
+// runners: the applied set is read only after the lock is held, so a second
+// runner waits, then finds nothing to do. Files are applied in lexical order,
+// each in its own transaction.
+func MigrateConfirmed(ctx context.Context, pool *pgxpool.Pool, confirmed string) error {
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrateLockID); err != nil {
+		return fmt.Errorf("migration lock: %w", err)
+	}
+	defer func() {
+		// Fresh context: ctx may be cancelled. If unlock fails, drop the
+		// connection so the session end releases the lock.
+		uctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var ok bool
+		if err := conn.QueryRow(uctx, `SELECT pg_advisory_unlock($1)`, migrateLockID).Scan(&ok); err != nil || !ok {
+			_ = conn.Conn().Close(uctx)
+		}
+	}()
+
+	if _, err := conn.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version text PRIMARY KEY,
+		applied_at timestamptz NOT NULL DEFAULT now()
+	)`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+
+	applied, err := appliedSet(ctx, conn)
+	if err != nil {
+		return err
+	}
+
+	// Gate destructive migrations before applying anything.
+	pending, err := pendingDestructive(applied)
+	if err != nil {
+		return err
+	}
+	allowed := map[string]bool{}
+	for _, n := range strings.Split(confirmed, ",") {
+		allowed[strings.TrimSpace(n)] = true
+	}
+	var missing []string
+	for _, n := range pending {
+		if !allowed[n] {
+			missing = append(missing, n)
+		}
+	}
+	if len(missing) > 0 {
+		return &BackupRequiredError{Names: missing}
+	}
+
+	names, err := migrationNames()
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		if applied[name] {
 			continue
 		}
 		sqlBytes, err := migrationFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return err
 		}
-		tx, err := pool.Begin(ctx)
+		tx, err := conn.Begin(ctx)
 		if err != nil {
 			return err
 		}

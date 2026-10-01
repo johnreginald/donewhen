@@ -1,5 +1,8 @@
 .PHONY: build run web web-dev migrate token genvapid test up down logs engine backup clean tidy
 
+# bash: the backup recipe needs pipefail so a failed pg_dump is not hidden by gzip.
+SHELL := bash
+
 BIN := ./raenil
 
 # Container engine. Podman on the dev Mac, Docker on the production box — both
@@ -22,8 +25,13 @@ web-dev: ## run the Vite dev server (proxies /api to :8080)
 run: build ## run the server locally
 	$(BIN) serve
 
-migrate: build ## apply DB migrations
-	$(BIN) migrate
+migrate: build ## apply DB migrations; backs up first if a destructive one is pending
+	@pending=$$($(BIN) migrate-pending) || exit 1; \
+	if [ -n "$$pending" ]; then \
+		echo "destructive migration pending ($$pending): taking a backup first"; \
+		$(MAKE) backup || exit 1; \
+	fi; \
+	RAENIL_BACKUP_CONFIRMED="$$pending" $(BIN) migrate
 
 user: build ## create initial user: make user EMAIL=you@x.com PASS=secret123
 	$(BIN) user $(EMAIL) $(PASS)
@@ -54,8 +62,10 @@ engine: ## show which container engine will be used
 
 backup: ## dump the database to ./backups
 	@mkdir -p backups
-	$(COMPOSE) exec -T db pg_dump -U $${POSTGRES_USER:-raenil} $${POSTGRES_DB:-raenil} | gzip > backups/raenil-$$(date +%Y%m%d-%H%M%S).sql.gz
-	@echo "backup written to ./backups"
+	@set -o pipefail; f=backups/raenil-$$(date +%Y%m%d-%H%M%S).sql.gz; \
+	if $(COMPOSE) exec -T db pg_dump -U $${POSTGRES_USER:-raenil} $${POSTGRES_DB:-raenil} | gzip > $$f; then \
+		echo "backup written to $$f"; \
+	else rm -f $$f; echo "backup FAILED" >&2; exit 1; fi
 
 clean:
 	rm -f $(BIN)

@@ -2,6 +2,10 @@ services:
   db:
     image: postgres:18-alpine
     environment:
+      # LEGACY DEFAULTS: user/password/db "raenil" are kept so existing volumes
+      # (initialised with them) keep working. Postgres only reads these on first
+      # init, so changing them on an existing ./data/pg does NOT rename anything.
+      # New installs should set a strong POSTGRES_PASSWORD in .env.
       POSTGRES_USER: ${POSTGRES_USER:-raenil}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-raenil}
       POSTGRES_DB: ${POSTGRES_DB:-raenil}
@@ -30,8 +34,10 @@ services:
       RAENIL_DATABASE_URL: postgres://${POSTGRES_USER:-raenil}:${POSTGRES_PASSWORD:-raenil}@db:5432/${POSTGRES_DB:-raenil}?sslmode=disable
       RAENIL_BASE_URL: ${RAENIL_BASE_URL:-http://localhost:8080}
       RAENIL_LISTEN_ADDR: ":8080"
+      # Legacy default "prod" kept. Anything other than "dev" counts as prod.
       RAENIL_ENV: ${RAENIL_ENV:-prod}
-      RAENIL_SESSION_SECRET: ${RAENIL_SESSION_SECRET}
+      # Required: compose refuses to start without it (generate: openssl rand -hex 32).
+      RAENIL_SESSION_SECRET: ${RAENIL_SESSION_SECRET:?set RAENIL_SESSION_SECRET in .env (openssl rand -hex 32)}
       RAENIL_ISSUE_PREFIX: ${RAENIL_ISSUE_PREFIX:-R}
       RAENIL_VAPID_PUBLIC: ${RAENIL_VAPID_PUBLIC}
       RAENIL_VAPID_PRIVATE: ${RAENIL_VAPID_PRIVATE}
