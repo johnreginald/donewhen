@@ -1,5 +1,6 @@
 // Render markdown to HTML and mermaid code fences to SVG.
 import { marked } from 'marked';
+import { safeLinkHref, LINK_REL } from './url.js';
 
 let mermaidPromise;
 let mermaidCounter = 0;
@@ -61,12 +62,13 @@ export function renderMarkdown(src) {
 	const origLink = renderer.link.bind(renderer);
 	renderer.link = (...args) => {
 		const tok = args[0];
-		const href = String(typeof tok === 'object' ? tok.href : tok || '').trim();
-		if (/^(javascript|data|vbscript):/i.test(href)) {
-			if (typeof tok === 'object') tok.href = '#';
-			else args[0] = '#';
+		const href = String(typeof tok === 'object' ? tok.href : tok || '');
+		const safe = safeLinkHref(href);
+		if (safe !== href.trim()) {
+			if (typeof tok === 'object') tok.href = safe;
+			else args[0] = safe;
 		}
-		return origLink(...args);
+		return String(origLink(...args)).replace(/^<a /, `<a rel="${LINK_REL}" `);
 	};
 	return marked.parse(src, { renderer });
 }

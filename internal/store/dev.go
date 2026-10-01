@@ -16,6 +16,10 @@ import (
 
 // SetIssueDev sets the branch + PR that implemented an issue (nil clears).
 func (s *Store) SetIssueDev(ctx context.Context, wsID, issueID string, branch, prURL *string) (models.Issue, error) {
+	prURL, err := normURL("prUrl", prURL)
+	if err != nil {
+		return models.Issue{}, err
+	}
 	ct, err := s.pool.Exec(ctx,
 		`UPDATE issues SET git_branch=$3, pr_url=$4, updated_at=now() WHERE id=$1 AND workspace_id=$2`,
 		issueID, wsID, branch, prURL)
@@ -26,6 +30,17 @@ func (s *Store) SetIssueDev(ctx context.Context, wsID, issueID string, branch, p
 		return models.Issue{}, ErrNotFound
 	}
 	return s.GetIssue(ctx, wsID, issueID)
+}
+
+// normURL validates a link field (PR, commit, repo). Only absolute http(s) URLs
+// are stored — they are rendered as hrefs, so anything else is a stored-XSS
+// vector. Empty clears (returns nil).
+func normURL(field string, raw *string) (*string, error) {
+	v, err := models.NormalizeURL(raw)
+	if err != nil {
+		return nil, invalid("invalid_url: %s must be an absolute http or https URL", field)
+	}
+	return v, nil
 }
 
 // IssueRepo returns the default repo for an issue — its Epic's repo_url, else
@@ -56,14 +71,18 @@ func commitURL(repo, sha string) string {
 // ---- commits ----
 
 func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message string, url *string) (models.IssueCommit, error) {
+	url, err := normURL("url", url)
+	if err != nil {
+		return models.IssueCommit{}, err
+	}
 	// No explicit URL? Build one from the issue's default repo (Epic/Project).
-	if url == nil || *url == "" {
-		if built := commitURL(s.IssueRepo(ctx, wsID, issueID), sha); built != "" {
+	if url == nil {
+		if built := commitURL(s.IssueRepo(ctx, wsID, issueID), sha); built != "" && models.ValidateHTTPURL(built) == nil {
 			url = &built
 		}
 	}
 	var c models.IssueCommit
-	err := s.pool.QueryRow(ctx,
+	err = s.pool.QueryRow(ctx,
 		`INSERT INTO issue_commits (issue_id, sha, message, url)
 		 SELECT $1,$2,$3,$4 FROM issues WHERE id=$1 AND workspace_id=$5
 		 RETURNING id, issue_id, sha, message, url, created_at`,

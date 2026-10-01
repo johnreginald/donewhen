@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
+	import { safeHref } from '$lib/url.js';
 	import { states, projects, archivedProjects, blockLinks, unarchiveProject } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
@@ -64,19 +65,6 @@
 	const descConflict = $derived(
 		Boolean(editingDesc && descEditBase && issue?.updatedAt && issue.updatedAt !== descEditBase)
 	);
-
-	// Only http(s) links are ever followed from a PR/commit href — anything
-	// else (javascript:, data:, a bare string that isn't a URL at all) renders
-	// as plain text instead of a clickable link.
-	function safeHref(url) {
-		if (!url) return null;
-		try {
-			const u = new URL(url, window.location.href);
-			return u.protocol === 'http:' || u.protocol === 'https:' ? url : null;
-		} catch {
-			return null;
-		}
-	}
 
 	// Guards against the loads-race: navigating A → B must never let A's
 	// slower response land after B's and overwrite it. Every load() captures
@@ -497,7 +485,7 @@
 							{/if}
 							{#if issue.prUrl}
 								{#if safeHref(issue.prUrl)}
-									<a class="dev-row link" href={issue.prUrl} target="_blank" rel="noreferrer">
+									<a class="dev-row link" href={safeHref(issue.prUrl)} target="_blank" rel="noopener noreferrer">
 										<GitPullRequestArrow size={14} strokeWidth={2} />Pull request
 									</a>
 								{:else}
@@ -506,7 +494,7 @@
 							{/if}
 							{#each commits as c (c.id)}
 								{#if safeHref(c.url)}
-									<a class="dev-row link" href={c.url} target="_blank" rel="noreferrer">
+									<a class="dev-row link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">
 										<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
 									</a>
 								{:else}

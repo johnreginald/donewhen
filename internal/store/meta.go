@@ -273,6 +273,11 @@ func (s *Store) SaveInitiative(ctx context.Context, wsID string, i models.Initia
 	if i.Status == "" {
 		i.Status = "active"
 	}
+	repo, err := normURL("repoUrl", i.RepoURL)
+	if err != nil {
+		return i, err
+	}
+	i.RepoURL = repo
 	if i.ID == "" {
 		err := s.pool.QueryRow(ctx,
 			`INSERT INTO initiatives (workspace_id, name, description_md, status, position, repo_url)
@@ -362,6 +367,11 @@ func (s *Store) SaveProject(ctx context.Context, wsID string, p models.Project) 
 	if p.ID == "" && p.Status == "" {
 		p.Status = "active"
 	}
+	repo, err := normURL("repoUrl", p.RepoURL)
+	if err != nil {
+		return p, err
+	}
+	p.RepoURL = repo
 	// An epic may only hang off an initiative in the same workspace.
 	if p.InitiativeID != nil && *p.InitiativeID != "" {
 		if _, err := s.GetInitiative(ctx, wsID, *p.InitiativeID); err != nil {

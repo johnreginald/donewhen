@@ -4,6 +4,7 @@
 	// (→ In Progress) always works, with an optional reason that becomes a
 	// comment only when non-empty.
 	import { rel } from '$lib/format.js';
+	import { safeHref } from '$lib/url.js';
 
 	let {
 		item,
@@ -72,9 +73,9 @@
 			><span class="bar"><i style="width:{doneWidth}"></i></span>{done}/{total} done-when</span
 		>
 		{#if item.commitCount}<span class="dot2">·</span><span>{item.commitCount} commits</span>{/if}
-		{#if item.prUrl}
+		{#if safeHref(item.prUrl)}
 			<span class="dot2">·</span>
-			<a class="pr-link" href={item.prUrl} target="_blank" rel="noreferrer">PR ↗</a>
+			<a class="pr-link" href={safeHref(item.prUrl)} target="_blank" rel="noopener noreferrer">PR ↗</a>
 		{/if}
 		<span class="dot2">·</span>
 		<span>by <span class="actor-ai">✦ {aiName}</span></span>
