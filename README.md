@@ -185,7 +185,7 @@ Set these in `.env` (Compose) or in the environment. The project was called Raen
 | `DONEWHEN_ENV` | `dev` (Compose: `prod`) | `dev` or `prod`. `prod` needs a session secret and always sets Secure cookies (HTTPS). |
 | `DONEWHEN_SESSION_SECRET` | none | Secret for sessions. At least 16 characters. Required in `prod`. Generate with `openssl rand -hex 32`. |
 | `DONEWHEN_ISSUE_PREFIX` | `R` | Key prefix of the legacy default workspace. New workspaces choose their own prefix. |
-| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header your proxy sets to the real client IP. Used for login rate limiting. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#trusted-proxy-header). |
+| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header your proxy sets to the real client IP. Used for login rate limiting. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#4-trusted-proxy-header). |
 | `DONEWHEN_VAPID_PUBLIC` | empty | Web Push public key. Push is off if this or the private key is empty. |
 | `DONEWHEN_VAPID_PRIVATE` | empty | Web Push private key. Make a pair with `donewhen genvapid`. |
 | `DONEWHEN_VAPID_SUBJECT` | `mailto:admin@localhost` | Contact for push services. Use `mailto:you@example.com`. |

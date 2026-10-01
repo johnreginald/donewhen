@@ -47,6 +47,8 @@ services:
       DONEWHEN_VAPID_SUBJECT: ${DONEWHEN_VAPID_SUBJECT:-${RAENIL_VAPID_SUBJECT:-mailto:admin@localhost}}
       # Set to 1 to seed the sample "Demo" workspace at start, once a user exists.
       DONEWHEN_DEMO: ${DONEWHEN_DEMO:-}
+      # Confirms a backup before a destructive migration (docs/SELF-HOSTING.md).
+      DONEWHEN_BACKUP_CONFIRMED: ${DONEWHEN_BACKUP_CONFIRMED:-}
       DONEWHEN_TRUSTED_PROXY_HEADER: ${DONEWHEN_TRUSTED_PROXY_HEADER:-${RAENIL_TRUSTED_PROXY_HEADER:-}}
     restart: unless-stopped
 

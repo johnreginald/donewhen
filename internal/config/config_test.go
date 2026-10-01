@@ -27,6 +27,8 @@ func TestLoadEnvHandling(t *testing.T) {
 		{"typo without secret", map[string]string{"DONEWHEN_ENV": "prodd"}, true, true},
 		{"prod with real secret (legacy)", map[string]string{"DONEWHEN_ENV": "prod", "DONEWHEN_SESSION_SECRET": good}, false, true},
 		{"production with real secret", map[string]string{"DONEWHEN_ENV": "production", "DONEWHEN_SESSION_SECRET": good}, false, true},
+		{"prod with the .env.example placeholder", map[string]string{"DONEWHEN_ENV": "prod", "DONEWHEN_SESSION_SECRET": ExampleSessionSecret}, true, true},
+		{"dev with the .env.example placeholder", map[string]string{"DONEWHEN_ENV": "dev", "DONEWHEN_SESSION_SECRET": ExampleSessionSecret}, false, false},
 		{"prod with the public dev secret", map[string]string{"DONEWHEN_ENV": "prod", "DONEWHEN_SESSION_SECRET": DevSessionSecret}, true, true},
 		{"uppercase PROD is still prod", map[string]string{"DONEWHEN_ENV": "PROD", "DONEWHEN_SESSION_SECRET": good}, false, true},
 		{"dev with short secret", map[string]string{"DONEWHEN_ENV": "dev", "DONEWHEN_SESSION_SECRET": "short"}, true, false},
