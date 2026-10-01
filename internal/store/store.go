@@ -370,6 +370,10 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 		return models.Issue{}, err
 	}
 
+	if err := s.checkRefsTx(ctx, tx, wsID, in.ProjectID, in.AssigneeID, in.ParentKey); err != nil {
+		return models.Issue{}, err
+	}
+
 	var id string
 	// Bump the counters, then attempt the insert inside a savepoint. A rolled
 	// back savepoint leaves the bump standing, so each retry moves forward
@@ -424,6 +428,46 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 	return s.GetIssue(ctx, wsID, id)
 }
 
+// checkRefsTx rejects an issue write that points at a project, assignee or
+// parent outside wsID. The foreign keys only prove the row exists somewhere, so
+// without this a caller could attach another tenant's epic or user. nil or empty
+// references are skipped (they clear the field).
+func (s *Store) checkRefsTx(ctx context.Context, tx pgx.Tx, wsID string, projectID, assigneeID, parentKey *string) error {
+	exists := func(q string, args ...any) (bool, error) {
+		var ok bool
+		err := tx.QueryRow(ctx, q, args...).Scan(&ok)
+		return ok, err
+	}
+	if projectID != nil && *projectID != "" {
+		ok, err := exists(`SELECT EXISTS(SELECT 1 FROM projects WHERE id::text=$1 AND workspace_id=$2)`, *projectID, wsID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return invalid("invalid_project: epic not found in this workspace")
+		}
+	}
+	if assigneeID != nil && *assigneeID != "" {
+		ok, err := exists(`SELECT EXISTS(SELECT 1 FROM workspace_members WHERE user_id::text=$1 AND workspace_id=$2)`, *assigneeID, wsID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return invalid("invalid_assignee: user is not a member of this workspace")
+		}
+	}
+	if parentKey != nil && *parentKey != "" {
+		ok, err := exists(`SELECT EXISTS(SELECT 1 FROM issues WHERE upper(key)=upper($1) AND workspace_id=$2)`, *parentKey, wsID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return invalid("invalid_parent: parent issue not found in this workspace")
+		}
+	}
+	return nil
+}
+
 // IssuePatch carries optional updates; nil fields are left unchanged.
 type IssuePatch struct {
 	Title         *string
@@ -449,6 +493,20 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		return models.Issue{}, err
 	}
 	defer tx.Rollback(ctx)
+
+	var refProject, refAssignee, refParent *string
+	if p.SetProject {
+		refProject = p.ProjectID
+	}
+	if p.SetAssignee {
+		refAssignee = p.AssigneeID
+	}
+	if p.SetParent {
+		refParent = p.ParentKey
+	}
+	if err := s.checkRefsTx(ctx, tx, wsID, refProject, refAssignee, refParent); err != nil {
+		return models.Issue{}, err
+	}
 
 	sets := []string{}
 	args := []any{}

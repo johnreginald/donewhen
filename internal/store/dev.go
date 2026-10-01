@@ -35,8 +35,8 @@ func (s *Store) IssueRepo(ctx context.Context, wsID, issueID string) string {
 	err := s.pool.QueryRow(ctx, `
 		SELECT coalesce(p.repo_url, i.repo_url)
 		FROM issues iss
-		LEFT JOIN projects p ON p.id = iss.project_id
-		LEFT JOIN initiatives i ON i.id = p.initiative_id
+		LEFT JOIN projects p ON p.id = iss.project_id AND p.workspace_id = iss.workspace_id
+		LEFT JOIN initiatives i ON i.id = p.initiative_id AND i.workspace_id = iss.workspace_id
 		WHERE iss.id = $1 AND iss.workspace_id = $2`, issueID, wsID).Scan(&repo)
 	if err != nil || repo == nil {
 		return ""

@@ -59,7 +59,7 @@ func (s *Store) resolveStateTx(ctx context.Context, tx pgx.Tx, wsID, id, name st
 		err := tx.QueryRow(ctx,
 			`SELECT id FROM workflow_states WHERE id=$1 AND workspace_id=$2`, id, wsID).Scan(&got)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("state id %q not found in this workspace", id)
+			return "", invalid("state id %q not found in this workspace", id)
 		}
 		return got, err
 	}
@@ -68,7 +68,7 @@ func (s *Store) resolveStateTx(ctx context.Context, tx pgx.Tx, wsID, id, name st
 		err := tx.QueryRow(ctx,
 			`SELECT id FROM workflow_states WHERE lower(name)=lower($1) AND workspace_id=$2`, name, wsID).Scan(&got)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", fmt.Errorf("state name %q not found in this workspace", name)
+			return "", invalid("state name %q not found in this workspace", name)
 		}
 		return got, err
 	}

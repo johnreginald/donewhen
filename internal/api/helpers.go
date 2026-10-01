@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -45,7 +46,8 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
 		return true
 	}
-	writeErr(w, http.StatusInternalServerError, err.Error())
+	log.Printf("api: internal error: %v", err)
+	writeErr(w, http.StatusInternalServerError, "internal error")
 	return true
 }
 
