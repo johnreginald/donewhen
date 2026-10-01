@@ -82,13 +82,14 @@ Do these steps in order. The record is true only if the checklist is true.
 
 The rule: **a ticket does not move to In Review or Done while a criterion is open.**
 
-The situation today:
+Two layers keep the gate:
 
 - The skill tells the agent to run `get_criteria` first. If an item is open, the agent must stop (`skills/donewhen/SKILL.md`).
-- The server does **not** enforce the rule yet. `save_issue` with `state: "In Review"` succeeds when items are open. The web app shows the count (for example 3 of 5) on each issue.
-- **Planned:** the server will reject the move and say which items are open (ticket PP-203).
+- The server enforces the rule. `save_issue` with `state: "In Review"` or `"Done"` fails when an item is open. The error is `criteria_incomplete` and it lists the open items. If the ticket has no criteria, the error is `criteria_missing`.
+- The check runs in the same database transaction as the state change. An agent cannot skip it.
+- An owner or admin can force the move from the web app. The server records the override. An agent cannot force it.
 
-So today the skill and your review keep the gate. You always review before Done.
+You always review before Done.
 
 If an item cannot be met, the agent asks you. The agent does not tick the item. The agent does not delete the item without a notice.
 

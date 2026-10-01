@@ -31,7 +31,7 @@ When the work ends, DoneWhen keeps a **record**:
 - An engineering document: what changed and how, with a diagram.
 - An activity log: who did what, and when. "Who" is you or the AI.
 
-Today the gate is a rule that the agent follows. The server does not enforce the rule yet (planned, ticket PP-203). See [AI-WORKFLOW.md](AI-WORKFLOW.md#the-done-when-gate).
+The server enforces the gate. A move to In Review or Done fails while an item is open. See [AI-WORKFLOW.md](AI-WORKFLOW.md#the-done-when-gate).
 
 ## Vocabulary
 

@@ -142,7 +142,7 @@ The web app is in `web/`. It is a SvelteKit single-page app. The static adapter 
 - `db.Migrate` (`internal/db/db.go`) runs at the start of `serve` and `mcp`, and in `donewhen migrate`.
 - The files run in name order. The table `schema_migrations` records the files that ran.
 - Each file runs in its own transaction. If a file fails, the runner rolls that file back and stops.
-- **Planned:** a Postgres advisory lock, so that two instances that start together do not race (ticket PP-200). Today there is no lock. Run one instance, or run `donewhen migrate` first.
+- A Postgres advisory lock serialises the runner. Two instances that start together do not race. The second instance waits, then finds no work.
 
 ## Deployment
 
