@@ -47,6 +47,8 @@ Read [docs/CONCEPTS.md](docs/CONCEPTS.md) for the full idea.
 
 ## Quick start
 
+Want the short path with Claude Code? Read [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
+
 You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md](docs/PODMAN.md).
 
 1. Clone the repo.
@@ -264,6 +266,7 @@ You need Go, Node 22 and Docker. See [CONTRIBUTING.md](CONTRIBUTING.md) for setu
 
 | Page | What it covers |
 |---|---|
+| [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) | The short path: run it, connect Claude, give it the rules, work |
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | The idea, vocabulary and states |
 | [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md) | How an AI agent drives a ticket |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Parts, packages and data flow |
