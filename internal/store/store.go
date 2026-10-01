@@ -346,9 +346,11 @@ type IssueInput struct {
 	ProjectID     *string
 	AssigneeID    *string
 	Priority      int
-	ParentKey     *string  // epic key this issue belongs under
-	LabelIDs      []string // when non-nil, replaces the label set
-	LabelNames    []string // optional: resolve/attach labels by name (exclusive-group aware)
+	ParentKey     *string      // epic key this issue belongs under
+	LabelIDs      []string     // when non-nil, replaces the label set
+	LabelNames    []string     // optional: resolve/attach labels by name (exclusive-group aware)
+	ForceGate     bool         // owner/admin session only: skip the done-when gate
+	GateOut       *GateOutcome // filled when ForceGate overrode the gate
 }
 
 // maxKeyAttempts bounds the retry loop that steps past a key already taken by a
@@ -367,6 +369,10 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 
 	stateID, err := s.resolveStateTx(ctx, tx, wsID, in.StateID, in.StateName)
 	if err != nil {
+		return models.Issue{}, err
+	}
+
+	if err := s.gateTx(ctx, tx, "", stateID, in.ForceGate, in.GateOut); err != nil {
 		return models.Issue{}, err
 	}
 
@@ -441,6 +447,8 @@ type IssuePatch struct {
 	LabelIDs      []string // when non-nil, replaces label set
 	LabelNames    []string
 	ReplaceLabels bool
+	ForceGate     bool         // owner/admin session only: skip the done-when gate
+	GateOut       *GateOutcome // filled when ForceGate overrode the gate
 }
 
 func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) (models.Issue, error) {
@@ -476,6 +484,18 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		resolved, err := s.resolveStateTx(ctx, tx, wsID, sid, sn)
 		if err != nil {
 			return models.Issue{}, err
+		}
+		var cur string
+		if err := tx.QueryRow(ctx, `SELECT state_id FROM issues WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, wsID).Scan(&cur); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return models.Issue{}, ErrNotFound
+			}
+			return models.Issue{}, err
+		}
+		if cur != resolved {
+			if err := s.gateTx(ctx, tx, id, resolved, p.ForceGate, p.GateOut); err != nil {
+				return models.Issue{}, err
+			}
 		}
 		set("state_id", resolved)
 	}

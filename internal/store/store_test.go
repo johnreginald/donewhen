@@ -417,6 +417,15 @@ func TestStateMovePersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// In Review is gated on the done-when checklist (PP-203).
+	c, err := s.AddCriterion(ctx, ws, is.ID, "moved", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := true
+	if _, err := s.UpdateCriterion(ctx, ws, c.ID, nil, &done, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 	name := "In Review"
 	updated, err := s.UpdateIssue(ctx, ws, is.ID, IssuePatch{StateName: &name})
 	if err != nil {

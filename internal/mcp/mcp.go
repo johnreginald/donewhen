@@ -450,7 +450,9 @@ func (d *deps) register(s *server.MCPServer) {
 	// ---- save_issue (create or update) ----
 	s.AddTool(mcp.NewTool("save_issue",
 		mcp.WithDescription("Create a new issue (omit id) or update an existing one (pass id/key). "+
-			"Set 'state' to a status name to move it. Write the description in the ticket format in this "+
+			"Set 'state' to a status name to move it. Moving to 'In Review' or 'Done' is refused with "+
+			"criteria_incomplete (listing the unticked done-when items) or criteria_missing (no criteria set); "+
+			"tick them first, and there is no way to force it. Write the description in the ticket format in this "+
 			"server's instructions: Goal, numbered parts, Implementation notes, Acceptance tests, Out of scope."),
 		mcp.WithString("id", mcp.Description("Issue id or key to update; omit to create")),
 		mcp.WithString("title", mcp.Description("Issue title")),

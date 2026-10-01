@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
-	import { aiName } from '$lib/store.js';
+	import { aiName, activeWorkspace } from '$lib/store.js';
+	import { gateFailure } from '$lib/gate.js';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
@@ -31,6 +32,10 @@
 	const doneCrit = $derived(criteria.filter((c) => c.done).length);
 	// judgment criteria are advisory — shown, but never the reason a move is blocked.
 	const blockingOpen = $derived(criteria.filter((c) => !c.done && c.kind !== 'judgment').length);
+	// A criterion unticked after the issue moved to In Review/Done (allowed): warn.
+	const reopened = $derived(
+		blockingOpen > 0 && ['in review', 'done'].includes($states.find((s) => s.id === issue?.stateId)?.name?.toLowerCase())
+	);
 	let titleDraft = $state('');
 	let confirmDel = $state(false);
 	let delBtnEl = $state(null);
@@ -177,13 +182,23 @@
 		})
 	);
 
+	// A move the done-when gate refused: shown inline with the open items. An
+	// owner/admin may push it through; the server records the override.
+	let gateBlock = $state(null);
+	const canForce = $derived(['owner', 'admin'].includes($activeWorkspace?.role));
 	async function patch(body) {
 		try {
 			issue = await api.updateIssue(issue.id, body);
+			gateBlock = null;
 			// This is our own change, not a conflict — advance the edit's base
 			// so an in-progress description edit doesn't get falsely flagged.
 			if (editingDesc) descEditBase = issue.updatedAt;
 		} catch (e) {
+			const g = gateFailure(e);
+			if (g) {
+				gateBlock = { ...g, body };
+				return;
+			}
 			showToast('Update failed: ' + e.message, 'error');
 		}
 	}
@@ -298,7 +313,7 @@
 			<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
 			{#if blockingOpen > 0}
 				<span class="gate-badge" title="{blockingOpen} done-when item{blockingOpen === 1 ? '' : 's'} still open — judgment criteria don't count">
-					{blockingOpen} open
+					{reopened ? 'Reopened: ' : ''}{blockingOpen} open
 				</span>
 			{/if}
 		</span>
@@ -387,6 +402,31 @@
 			</div>
 		{/if}
 
+		{#if gateBlock}
+			<div class="gate-block" role="alert">
+				<div class="gate-block-body">
+					<strong>
+						{gateBlock.code === 'criteria_missing'
+							? `Can't move to ${gateBlock.state}: no done-when criteria yet.`
+							: `Can't move to ${gateBlock.state}: ${gateBlock.open.length} done-when item${gateBlock.open.length === 1 ? '' : 's'} not ticked.`}
+					</strong>
+					{#if gateBlock.open.length}
+						<ul>
+							{#each gateBlock.open as o (o.index)}
+								<li><span class="mono">{o.index}.</span> {o.text}</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+				<div class="gate-block-actions">
+					{#if canForce}
+						<button class="btn sm danger" onclick={() => patch({ ...gateBlock.body, force: true })}>Move anyway</button>
+					{/if}
+					<button class="btn sm" onclick={() => (gateBlock = null)}>Dismiss</button>
+				</div>
+			</div>
+		{/if}
+
 		<div class="panes" role="tablist">
 			<button role="tab" aria-selected={pane === 'task'} class:on={pane === 'task'} onclick={() => (pane = 'task')}>Task</button>
 			<button role="tab" aria-selected={pane === 'chat'} class:on={pane === 'chat'} onclick={() => (pane = 'chat')}>
@@ -414,7 +454,7 @@
 
 					<div class="mobile-chiprow">
 						<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
-						{#if blockingOpen > 0}<span class="gate-badge">{blockingOpen} open</span>{/if}
+						{#if blockingOpen > 0}<span class="gate-badge">{reopened ? 'Reopened: ' : ''}{blockingOpen} open</span>{/if}
 						<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
 					</div>
 					<button class="propsbtn" onclick={() => (propsSheetOpen = true)}>
@@ -1074,6 +1114,26 @@
 		border-bottom: 1px solid var(--line);
 		color: var(--ink-2);
 		font-size: var(--t-sm);
+	}
+	.gate-block {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--s3);
+		padding: var(--s3) var(--s4);
+		background: var(--danger-soft);
+		border-bottom: 1px solid var(--line);
+		color: var(--ink);
+		font-size: var(--t-sm);
+	}
+	.gate-block ul {
+		margin: var(--s2) 0 0;
+		padding-left: var(--s4);
+	}
+	.gate-block-actions {
+		display: flex;
+		gap: var(--s2);
+		flex-shrink: 0;
 	}
 	.panes {
 		display: none;
