@@ -15,15 +15,29 @@ import (
 
 // ---- dev links (branch / PR) ----
 
-// SetIssueDev sets the branch + PR that implemented an issue (nil clears).
+// SetIssueDev sets the branch and/or the PR that implemented an issue. A nil
+// argument leaves that column alone; an empty string clears it. Both nil is an
+// error: there is nothing to set.
 func (s *Store) SetIssueDev(ctx context.Context, wsID, issueID string, branch, prURL *string) (models.Issue, error) {
+	if branch == nil && prURL == nil {
+		return models.Issue{}, invalid("nothing to set: send gitBranch and/or prUrl")
+	}
+	setPR := prURL != nil
 	prURL, err := normURL("prUrl", prURL)
 	if err != nil {
 		return models.Issue{}, err
 	}
+	setBranch := branch != nil
+	if setBranch && *branch == "" {
+		branch = nil
+	}
 	ct, err := s.pool.Exec(ctx,
-		`UPDATE issues SET git_branch=$3, pr_url=$4, updated_at=now() WHERE id=$1 AND workspace_id=$2`,
-		issueID, wsID, branch, prURL)
+		`UPDATE issues SET
+			git_branch = CASE WHEN $5 THEN $3 ELSE git_branch END,
+			pr_url     = CASE WHEN $6 THEN $4 ELSE pr_url END,
+			updated_at = now()
+		 WHERE id=$1 AND workspace_id=$2`,
+		issueID, wsID, branch, prURL, setBranch, setPR)
 	if err != nil {
 		return models.Issue{}, err
 	}

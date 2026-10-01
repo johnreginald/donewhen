@@ -58,19 +58,30 @@ func (s *Server) handleAddCommit(w http.ResponseWriter, r *http.Request) {
 // ---- dev links (branch / PR) ----
 
 func (s *Server) handleSetDev(w http.ResponseWriter, r *http.Request) {
+	// Only the fields present change; null or "" clears that field.
 	var body struct {
-		GitBranch string `json:"gitBranch"`
-		PrURL     string `json:"prUrl"`
+		GitBranch json.RawMessage `json:"gitBranch"`
+		PrURL     json.RawMessage `json:"prUrl"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	branch, ok1 := patchString(body.GitBranch)
+	pr, ok2 := patchString(body.PrURL)
+	if !ok1 || !ok2 {
+		writeErr(w, http.StatusBadRequest, "gitBranch and prUrl must be strings or null")
+		return
+	}
+	if branch == nil && pr == nil {
+		writeErr(w, http.StatusBadRequest, "nothing to set: send gitBranch and/or prUrl")
 		return
 	}
 	id, err := s.issueID(r)
 	if handleStoreErr(w, err) {
 		return
 	}
-	is, err := s.store.SetIssueDev(r.Context(), ws(r), id, strPtr(body.GitBranch), strPtr(body.PrURL))
+	is, err := s.store.SetIssueDev(r.Context(), ws(r), id, branch, pr)
 	if handleStoreErr(w, err) {
 		return
 	}

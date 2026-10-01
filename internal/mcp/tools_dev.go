@@ -67,7 +67,8 @@ func (d *deps) registerDev(s *server.MCPServer) {
 
 	// ---- set_issue_dev ----
 	s.AddTool(mcp.NewTool("set_issue_dev",
-		mcp.WithDescription("Set the branch and/or pull-request URL that implemented an issue."),
+		mcp.WithDescription("Set the branch and/or pull-request URL that implemented an issue. Only the fields "+
+			"you send change; an empty string clears that field. Sending neither is an error."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		mcp.WithString("gitBranch", mcp.Description("Branch name")),
 		mcp.WithString("prUrl", mcp.Description("Pull request URL")),
@@ -81,7 +82,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
-		upd, err := d.store.SetIssueDev(ctx, wsID, is.ID, strp(req.GetString("gitBranch", "")), strp(req.GetString("prUrl", "")))
+		upd, err := d.store.SetIssueDev(ctx, wsID, is.ID, argString(req, "gitBranch"), argString(req, "prUrl"))
 		if err != nil {
 			return toolErr(err), nil
 		}
