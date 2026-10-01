@@ -166,3 +166,36 @@ export const PRIORITIES = [
 	{ value: 3, label: 'Medium' },
 	{ value: 4, label: 'Low' }
 ];
+
+// ---- Board-only filters: priority + a couple of client-side "saved views".
+// Layered on top of visibleIssues (search, already shared with every issue
+// view) rather than folded into it, so List/Tasks/Links keep their current
+// behaviour untouched.
+export const activePriority = writable(''); // '' = all, else 1..4
+export const activeSavedView = writable(''); // '' | 'my-review' | 'blocked'
+
+export const SAVED_VIEWS = [
+	{ id: 'my-review', label: 'My In Review' },
+	{ id: 'blocked', label: 'Blocked' }
+];
+
+export const boardVisibleIssues = derived(
+	[visibleIssues, activePriority, activeSavedView, states, me],
+	([list, pri, view, sts, meUser]) => {
+		let out = list;
+		if (pri !== '') out = out.filter((i) => i.priority === Number(pri));
+		if (view === 'blocked') {
+			const s = sts.find((x) => x.name.toLowerCase() === 'blocked');
+			out = out.filter((i) => i.stateId === s?.id);
+		} else if (view === 'my-review') {
+			const s = sts.find((x) => x.name.toLowerCase() === 'in review');
+			out = out.filter((i) => i.stateId === s?.id && meUser && i.assigneeId === meUser.id);
+		}
+		return out;
+	}
+);
+
+export function clearBoardFilters() {
+	activePriority.set('');
+	activeSavedView.set('');
+}

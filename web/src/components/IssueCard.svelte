@@ -2,11 +2,11 @@
 	import LabelPill from './LabelPill.svelte';
 	import PriorityIcon from './PriorityIcon.svelte';
 	import StateIcon from './StateIcon.svelte';
-	import { Box, Lock } from '@lucide/svelte';
-	import { openIssue, flashIssueId } from '$lib/ui.js';
+	import { Box } from '@lucide/svelte';
+	import { flashIssueId } from '$lib/ui.js';
 	import {
 		states, projects, activeProject, activeInitiative, activeLabel, loadIssues,
-		blockLinks, issues
+		blockLinks, issues, aiName
 	} from '$lib/store.js';
 
 	let { issue } = $props();
@@ -14,18 +14,30 @@
 	const state = $derived($states.find((s) => s.id === issue.stateId));
 	const project = $derived($projects.find((p) => p.id === issue.projectId));
 
-	// Tickets it still waits on (blocked by, not yet Done).
+	// Tickets it still waits on (blocked by, not yet Done) — one chip per key.
 	const waitingOn = $derived(
-		$blockLinks.filter((l) => l.issueId === issue.id && !l.done).map((l) => $issues.find((i) => i.id === l.blockerId)?.key || '')
+		$blockLinks.filter((l) => l.issueId === issue.id && !l.done).map((l) => $issues.find((i) => i.id === l.blockerId)?.key).filter(Boolean)
 	);
 
-	// Click the epic tag → filter the board to that epic.
+	// Summaries ride on the issue list payload (no per-card requests).
+	const crit = $derived({ done: issue.criteriaDone ?? 0, total: issue.criteriaTotal ?? 0 });
+	const lastActor = $derived(issue.lastActor || null);
+
+	// Click (or keyboard-activate) the epic tag → filter the board to that
+	// epic. It sits inside the card's <a>, so both the click and the keydown
+	// that browsers synthesize from a focused button's Enter/Space must be
+	// stopped here, or they bubble up and also navigate the card (the
+	// Enter-key bubbling bug this replaces).
 	function filterEpic(e) {
 		e.stopPropagation();
+		e.preventDefault();
 		activeProject.set(issue.projectId);
 		activeInitiative.set('');
 		activeLabel.set('');
 		loadIssues();
+	}
+	function stopKey(e) {
+		e.stopPropagation();
 	}
 
 	function shortDate(s) {
@@ -37,50 +49,55 @@
 	}
 </script>
 
-<div
-	class="card"
-	class:live={flashing}
-	role="button"
-	tabindex="0"
-	onclick={() => openIssue(issue.key)}
-	onkeydown={(e) => e.key === 'Enter' && openIssue(issue.key)}
->
+<a class="card" class:live={flashing} href={'/issue/' + encodeURIComponent(issue.key)}>
 	<div class="top">
 		{#if state}
-			<StateIcon category={state.category} color={state.color} />
+			<StateIcon category={state.category} color={state.color} name={state.name} />
 		{/if}
 		<span class="key">{issue.key}</span>
 		{#if issue.childCount > 0}
-			<span class="epic" title="{issue.childCount} sub-issues">↳ {issue.childCount}</span>
+			<span class="sub" title="{issue.childCount} sub-issues">↳ {issue.childCount}</span>
 		{/if}
 		{#if state?.category === 'completed' && !issue.docCount}
 			<span class="nodoc" title="No implementation doc yet">✦</span>
 		{/if}
 		<span class="spacer"></span>
-		{#if waitingOn.length}
-			<span class="lock" title="Blocked by {waitingOn.filter(Boolean).join(', ')}"><Lock size={11} strokeWidth={2.4} />{waitingOn.length}</span>
-		{/if}
-		<span class="assignee" class:on={issue.assigneeId}></span>
+		<span class="date">{shortDate(issue.createdAt)}</span>
 	</div>
 
 	<div class="title">{issue.title}</div>
 
+	{#if crit.total > 0}
+		<div class="prog-row" title="Done-when: {crit.done}/{crit.total}">
+			<div class="prog-bar"><span style:width="{(crit.done / crit.total) * 100}%"></span></div>
+			<span class="prog-txt">{crit.done}/{crit.total}</span>
+		</div>
+	{/if}
+
 	<div class="meta">
 		<PriorityIcon priority={issue.priority} />
 		{#if project}
-			<button class="epictag" onclick={filterEpic} title="Show all issues in {project.name}">
+			<button class="epictag" onclick={filterEpic} onkeydown={stopKey} title="Show all issues in {project.name}">
 				<Box size={12} strokeWidth={2.2} />{project.name}
 			</button>
 		{/if}
 		{#each issue.labels ?? [] as l (l.id)}
 			<LabelPill label={l} />
 		{/each}
+		{#each waitingOn as key (key)}
+			<span class="blk">⊘ {key}</span>
+		{/each}
+		<span class="sp2"></span>
+		<span
+			class="actor"
+			class:on={lastActor}
+			class:ai={lastActor === 'ai'}
+			title={lastActor === 'ai' ? `Last changed by ${$aiName}` : lastActor === 'human' ? 'Last changed by you' : 'No activity yet'}
+		>
+			{lastActor === 'ai' ? $aiName[0] : lastActor === 'human' ? 'Y' : ''}
+		</span>
 	</div>
-
-	<div class="foot">
-		<span class="created">Created {shortDate(issue.createdAt)}</span>
-	</div>
-</div>
+</a>
 
 <style>
 	.card {
@@ -92,11 +109,17 @@
 		flex-direction: column;
 		gap: 7px;
 		cursor: pointer;
+		color: inherit;
 		transition: border-color 0.12s, background 0.12s, box-shadow 0.3s;
 	}
 	.card:hover {
 		border-color: var(--line-strong);
 		background: var(--surface);
+	}
+	.card:focus-visible {
+		outline: none;
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--focus);
 	}
 	.card.live {
 		border-color: var(--accent);
@@ -118,11 +141,11 @@
 		color: var(--ink-3);
 		opacity: 0.6;
 	}
-	.epic {
-		font-size: 10.5px;
+	.sub {
+		font-size: 10px;
 		font-family: var(--mono);
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
+		color: var(--ink-3);
+		background: var(--hover);
 		padding: 1px 6px;
 		border-radius: 10px;
 		letter-spacing: -0.02em;
@@ -130,16 +153,10 @@
 	.spacer {
 		flex: 1;
 	}
-	.assignee {
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		border: 1.4px dashed var(--line-strong);
-		flex: none;
-	}
-	.assignee.on {
-		border-style: solid;
-		background: var(--line-strong);
+	.date {
+		font-size: 12px;
+		color: var(--ink-3);
+		white-space: nowrap;
 	}
 	.title {
 		font-size: 14px;
@@ -148,58 +165,91 @@
 		color: var(--ink);
 		letter-spacing: -0.011em;
 	}
+	.prog-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.prog-bar {
+		flex: 1;
+		height: 4px;
+		border-radius: 2px;
+		background: var(--sunken);
+		overflow: hidden;
+	}
+	.prog-bar span {
+		display: block;
+		height: 100%;
+		background: var(--st-done);
+	}
+	.prog-txt {
+		font-size: 10.5px;
+		font-family: var(--mono);
+		color: var(--ink-3);
+		flex: none;
+	}
 	.meta {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		flex-wrap: wrap;
 	}
-	/* Epic = structural (accent2 tint + box icon) → visually distinct from labels */
+	.sp2 {
+		flex: 1;
+	}
+	/* Epic = structural (accent tint + box icon) → visually distinct from labels */
 	.epictag {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
-		padding: 3px 9px 3px 7px;
+		height: 20px;
+		padding: 0 8px 0 6px;
 		border-radius: 6px;
-		font-size: 12.5px;
+		font-size: 11px;
 		font-weight: 500;
 		line-height: 1.3;
-		color: color-mix(in srgb, var(--accent) 55%, var(--ink));
-		background: color-mix(in srgb, var(--accent) 13%, var(--surface));
-		border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+		color: var(--accent);
+		background: var(--accent-soft);
+		border: none;
 		white-space: nowrap;
 		cursor: pointer;
 	}
-	.epictag :global(svg) {
-		color: var(--accent);
-		flex: none;
-	}
 	.epictag:hover {
-		background: color-mix(in srgb, var(--accent) 22%, var(--surface));
-		border-color: var(--accent);
+		filter: brightness(0.96);
 	}
-	.foot {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: 12px;
-		color: var(--ink-3);
-		margin-top: 1px;
-		min-width: 0;
-	}
-	.created {
-		margin-left: auto;
-		white-space: nowrap;
-	}
-	.lock {
+	.blk {
 		display: inline-flex;
 		align-items: center;
-		gap: 3px;
-		font-size: 11px;
-		color: var(--st-blocked);
-		background: color-mix(in srgb, var(--st-blocked) 12%, transparent);
-		border-radius: 5px;
-		padding: 1px 5px;
-		font-variant-numeric: tabular-nums;
+		gap: 5px;
+		height: 22px;
+		padding: 0 7px;
+		border-radius: 6px;
+		background: var(--danger-soft);
+		color: var(--danger);
+		font: 500 11px var(--mono);
+		white-space: nowrap;
+	}
+	.actor {
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		border: 1.4px dashed var(--line-strong);
+		flex: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font: 600 8.5px var(--mono);
+		color: var(--ink-2);
+		box-sizing: border-box;
+	}
+	.actor.on {
+		border-style: solid;
+		border-color: var(--line);
+		background: var(--surface);
+	}
+	.actor.on.ai {
+		background: var(--accent-soft);
+		color: var(--accent);
+		border-color: transparent;
 	}
 </style>

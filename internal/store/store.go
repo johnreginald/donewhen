@@ -99,7 +99,10 @@ const issueCols = `i.id, i.workspace_id, i.number, i.key, i.title, i.description
 	i.parent_key,
 	(SELECT count(*) FROM issues c WHERE c.parent_key = i.key AND c.workspace_id = i.workspace_id) AS child_count,
 	i.git_branch, i.pr_url,
-	i.created_at, i.updated_at`
+	i.created_at, i.updated_at,
+	(SELECT count(*) FROM issue_criteria c WHERE c.issue_id = i.id AND c.done) AS criteria_done,
+	(SELECT count(*) FROM issue_criteria c WHERE c.issue_id = i.id) AS criteria_total,
+	coalesce((SELECT a.actor FROM activity a WHERE a.issue_id = i.id ORDER BY a.created_at DESC LIMIT 1), '') AS last_actor`
 
 // issueDest is where each of issueCols lands, in order. Every query that
 // selects issueCols scans through this, so a new column is added in one place.
@@ -107,7 +110,7 @@ func issueDest(is *models.Issue) []any {
 	return []any{&is.ID, &is.WorkspaceID, &is.Number, &is.Key, &is.Title, &is.DescriptionMD,
 		&is.StateID, &is.ProjectID, &is.AssigneeID, &is.Priority, &is.Position,
 		&is.DocCount, &is.ParentKey, &is.ChildCount, &is.GitBranch, &is.PRURL,
-		&is.CreatedAt, &is.UpdatedAt}
+		&is.CreatedAt, &is.UpdatedAt, &is.CriteriaDone, &is.CriteriaTotal, &is.LastActor}
 }
 
 func scanIssue(row pgx.Row) (models.Issue, error) {

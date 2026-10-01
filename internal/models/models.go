@@ -124,6 +124,10 @@ type Issue struct {
 	PRURL         *string   `json:"prUrl"`      // the pull request
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
+	// Board-card summaries, so the list needs no per-issue follow-up requests.
+	CriteriaDone  int    `json:"criteriaDone"`
+	CriteriaTotal int    `json:"criteriaTotal"`
+	LastActor     string `json:"lastActor"` // human | ai | "" (no activity)
 }
 
 // InboxItem is a "needs review" entry — an issue the AI moved to In Review —

@@ -1,16 +1,32 @@
 <script>
 	import { dndzone } from 'svelte-dnd-action';
-	import { states, visibleIssues, issueQuery } from '$lib/store.js';
+	import { states, boardVisibleIssues, issueQuery, issues, loadIssues } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { showToast } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
 	import StateIcon from './StateIcon.svelte';
-	import { MoreHorizontal } from '@lucide/svelte';
+	import { ChevronDown, ChevronRight, Lock } from '@lucide/svelte';
 
 	let cols = $state([]);
 	let dragging = false;
 	let mobileCol = $state(1);
 	let mobileInit = false;
+	let collapsed = $state(new Set());
+	let collapseInit = false;
+
+	const loading = $derived($states.length === 0);
+	// The whole-board empty state (brand-new workspace) — distinct from a
+	// single empty column, which every column renders on its own below.
+	const isEmptyWorkspace = $derived(!loading && $issues.length === 0 && !$issueQuery.trim());
+
+	function canCollapse(col) {
+		return col.category === 'completed' || col.category === 'canceled';
+	}
+	function toggleCollapse(id) {
+		const n = new Set(collapsed);
+		n.has(id) ? n.delete(id) : n.add(id);
+		collapsed = n;
+	}
 
 	// Click-drag to pan the board horizontally (like Linear). Ignores presses on
 	// cards/controls so card clicks + dnd reordering still work.
@@ -42,7 +58,7 @@
 	// Rebuild columns from live data, except while a drag is in flight.
 	$effect(() => {
 		const st = $states;
-		const is = $visibleIssues;
+		const is = $boardVisibleIssues;
 		if (dragging) return;
 		cols = st.map((s) => ({
 			id: s.id,
@@ -53,6 +69,14 @@
 				.filter((i) => i.stateId === s.id)
 				.sort((a, b) => a.position - b.position)
 		}));
+		// Done and Canceled start collapsed (decided product rule) — only the
+		// first time columns load, so a manual expand/collapse sticks.
+		if (!collapseInit && cols.length) {
+			const init = new Set();
+			for (const c of cols) if (canCollapse(c)) init.add(c.id);
+			collapsed = init;
+			collapseInit = true;
+		}
 	});
 
 	function consider(i, e) {
@@ -60,85 +84,152 @@
 		cols[i].items = e.detail.items;
 	}
 
+	// One PATCH for the one card that moved — not one per card whose index
+	// shifted. `position` is a float made exactly for this: sit the dragged
+	// card between its new neighbours instead of renumbering the column.
 	async function finalize(i, e) {
 		const col = cols[i];
+		const movedId = e.detail.info?.id;
 		col.items = e.detail.items;
 		dragging = false;
+		const idx = col.items.findIndex((it) => it.id === movedId);
+		if (idx < 0) return; // this zone is where the card left from, not where it landed
+		const it = col.items[idx];
+		const prevItem = col.items[idx - 1];
+		const nextItem = col.items[idx + 1];
+		const newPos =
+			prevItem && nextItem
+				? (prevItem.position + nextItem.position) / 2
+				: prevItem
+					? prevItem.position + 1
+					: nextItem
+						? nextItem.position - 1
+						: 0;
+		const moved = it.stateId !== col.id;
+		const prevStateId = it.stateId;
+		const prevPos = it.position;
+		it.stateId = col.id;
+		it.position = newPos;
 		try {
-			for (let idx = 0; idx < col.items.length; idx++) {
-				const it = col.items[idx];
-				if (it.stateId !== col.id || it.position !== idx) {
-					const moved = it.stateId !== col.id;
-					it.stateId = col.id;
-					it.position = idx;
-					await api.updateIssue(it.id, { stateId: col.id, position: idx });
-					if (moved) showToast(`${it.key} → ${col.name}`);
-				}
-			}
+			await api.updateIssue(it.id, { stateId: col.id, position: newPos });
+			if (moved) showToast(`${it.key} → ${col.name}`);
 		} catch (err) {
 			showToast('Move failed: ' + err.message, 'error');
+			it.stateId = prevStateId;
+			it.position = prevPos;
+			await loadIssues();
 		}
 	}
 </script>
 
-<!-- Desktop: horizontal drag-and-drop columns -->
-<div
-	class="board desktop"
-	bind:this={boardEl}
-	onpointerdown={panDown}
-	onpointermove={panMove}
-	onpointerup={panEnd}
-	onpointercancel={panEnd}
->
-	{#each cols as col, i (col.id)}
-		<div class="column" style:--col-color={col.color}>
-			<div class="col-head">
-				<StateIcon category={col.category} color={col.color} />
-				<span class="col-name">{col.name}</span>
-				<span class="count">{col.items.length}</span>
-				<span class="spacer"></span>
-				<button class="ch-btn" title="Options"><MoreHorizontal size={15} strokeWidth={2} /></button>
+{#if loading}
+	<div class="board desktop loading">
+		{#each Array(9) as _, i (i)}
+			<div class="column">
+				<div class="col-head">
+					<span class="skel" style:width="14px" style:height="14px" style:border-radius="50%"></span>
+					<span class="skel" style:width="70px" style:height="11px"></span>
+				</div>
+				<div class="skelcard">
+					<span class="skel" style:width="38%" style:height="9px"></span>
+					<span class="skel" style:width="85%" style:height="13px"></span>
+					<span class="skel" style:width="46%" style:height="17px" style:border-radius="10px"></span>
+				</div>
 			</div>
-			<div
-				class="col-body"
-				use:dndzone={{ items: col.items, flipDurationMs: 150, dropTargetStyle: {}, dragDisabled: !!$issueQuery.trim() }}
-				onconsider={(e) => consider(i, e)}
-				onfinalize={(e) => finalize(i, e)}
-			>
-				{#each col.items as issue (issue.id)}
-					<div class="card-wrap">
-						<IssueCard {issue} />
-					</div>
-				{/each}
-			</div>
-		</div>
-	{/each}
-</div>
-
-<!-- Mobile: state-tab selector + a single scrolling column -->
-<div class="board mobile">
-	<div class="mtabs">
+		{/each}
+	</div>
+{:else if isEmptyWorkspace}
+	<div class="empty-board">
+		<div class="eglyph"><span></span><span></span><span></span></div>
+		<div class="eh">Nothing on the board yet</div>
+		<div class="ep">New workspace, empty record. Create the first issue and it lands in Triage.</div>
+	</div>
+{:else}
+	<!-- Desktop: horizontal drag-and-drop columns. The pointer handlers are a
+	     click-drag-to-pan convenience (ignored over cards/controls), not a
+	     control in their own right — pre-existing pattern, kept as-is. -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="board desktop"
+		bind:this={boardEl}
+		onpointerdown={panDown}
+		onpointermove={panMove}
+		onpointerup={panEnd}
+		onpointercancel={panEnd}
+	>
 		{#each cols as col, i (col.id)}
-			<button class="mtab" class:on={i === mobileCol} onclick={() => (mobileCol = i)}>
-				<StateIcon category={col.category} color={col.color} size={13} />
-				<span>{col.name}</span>
-				<span class="mcount">{col.items.length}</span>
-			</button>
+			{#if canCollapse(col) && collapsed.has(col.id)}
+				<div class="column is-collapsed">
+					<button class="colhv" onclick={() => toggleCollapse(col.id)} title="Expand {col.name}">
+						<StateIcon category={col.category} color={col.color} name={col.name} />
+						<span class="cn">{col.items.length}</span>
+						<span class="cname-v">{col.name}</span>
+						<ChevronRight size={13} strokeWidth={2.2} />
+					</button>
+				</div>
+			{:else}
+				<div class="column" style:--col-color={col.color}>
+					<div class="col-head">
+						<StateIcon category={col.category} color={col.color} name={col.name} />
+						<span class="col-name">{col.name}</span>
+						<span class="count">{col.items.length}</span>
+						<span class="spacer"></span>
+						{#if $issueQuery.trim()}
+							<span class="lockbadge" title="Drag disabled while filtered"><Lock size={11} strokeWidth={2.2} /></span>
+						{/if}
+						{#if canCollapse(col)}
+							<button class="ch-btn" title="Collapse {col.name}" onclick={() => toggleCollapse(col.id)}>
+								<ChevronDown size={14} strokeWidth={2.2} />
+							</button>
+						{/if}
+					</div>
+					<div class="col-body-wrap">
+						<div
+							class="col-body"
+							use:dndzone={{ items: col.items, flipDurationMs: 150, dropTargetStyle: {}, dragDisabled: !!$issueQuery.trim() }}
+							onconsider={(e) => consider(i, e)}
+							onfinalize={(e) => finalize(i, e)}
+						>
+							{#each col.items as issue (issue.id)}
+								<div class="card-wrap">
+									<IssueCard {issue} />
+								</div>
+							{/each}
+						</div>
+						{#if !col.items.length}
+							<div class="colempty">No issues</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
 		{/each}
 	</div>
-	<div class="mlist">
-		{#each cols[mobileCol]?.items ?? [] as issue (issue.id)}
-			<IssueCard {issue} />
-		{:else}
-			<div class="mempty faint">Nothing in {cols[mobileCol]?.name ?? 'this state'}.</div>
-		{/each}
+
+	<!-- Mobile: state-tab selector + a single scrolling column -->
+	<div class="board mobile">
+		<div class="mtabs">
+			{#each cols as col, i (col.id)}
+				<button class="mtab" class:on={i === mobileCol} onclick={() => (mobileCol = i)}>
+					<StateIcon category={col.category} color={col.color} name={col.name} size={13} />
+					<span>{col.name}</span>
+					<span class="mcount">{col.items.length}</span>
+				</button>
+			{/each}
+		</div>
+		<div class="mlist">
+			{#each cols[mobileCol]?.items ?? [] as issue (issue.id)}
+				<IssueCard {issue} />
+			{:else}
+				<div class="mempty faint">Nothing in {cols[mobileCol]?.name ?? 'this state'}.</div>
+			{/each}
+		</div>
 	</div>
-</div>
+{/if}
 
 <style>
 	.board {
 		display: flex;
-		gap: 12px;
+		gap: 10px;
 		height: 100%;
 		overflow-x: auto;
 		padding: 12px;
@@ -148,35 +239,68 @@
 		user-select: none;
 	}
 	.column {
-		flex: 0 0 320px;
+		flex: 0 0 252px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		/* neutral lane (Linear-style) — status color lives only on the icon + header */
-		background: color-mix(in srgb, var(--surface) 30%, var(--paper));
-		border: 1px solid var(--line);
-		border-radius: 12px;
-		padding: 8px 8px 4px;
+		background: var(--sunken);
+		border-radius: var(--r-lg);
+		padding: 9px 9px 4px;
+		box-sizing: border-box;
+	}
+	.column.is-collapsed {
+		flex: 0 0 44px;
+		align-items: center;
+		padding: 10px 0;
+	}
+	.colhv {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 9px;
+		background: none;
+		border: none;
+		color: var(--ink-2);
+		padding: 0;
+	}
+	.cname-v {
+		writing-mode: vertical-rl;
+		transform: rotate(180deg);
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--ink-2);
+		letter-spacing: 0.01em;
+	}
+	.cn {
+		font-size: 10.5px;
+		color: var(--ink-3);
+		font-family: var(--mono);
 	}
 	.col-head {
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		padding: 4px 6px 10px;
-		font-size: 13px;
+		padding: 2px 4px 8px;
+		font-size: 12.5px;
 		font-weight: 500;
 	}
 	.col-name {
 		color: var(--ink);
-		font-size: 14px;
+		font-size: 13.5px;
 		font-weight: 500;
 	}
 	.count {
 		color: var(--ink-3);
-		font-size: 12.5px;
+		font-size: 12px;
+		font-weight: 400;
 	}
 	.col-head .spacer {
 		flex: 1;
+	}
+	.lockbadge {
+		display: flex;
+		color: var(--ink-3);
+		opacity: 0.8;
 	}
 	.ch-btn {
 		width: 20px;
@@ -187,17 +311,17 @@
 		border: none;
 		color: var(--ink-3);
 		border-radius: 5px;
-		font-size: 14px;
-		line-height: 1;
-		opacity: 0;
-		transition: opacity 0.1s, background 0.1s;
-	}
-	.column:hover .ch-btn {
-		opacity: 1;
+		flex: none;
 	}
 	.ch-btn:hover {
 		background: var(--hover);
 		color: var(--ink);
+	}
+	.col-body-wrap {
+		position: relative;
+		flex: 1;
+		min-height: 40px;
+		display: flex;
 	}
 	.col-body {
 		display: flex;
@@ -207,8 +331,6 @@
 		flex: 1;
 		min-height: 40px;
 		padding: 2px;
-		/* overlay-thin scrollbar, revealed on column hover — no layout shift
-		   because the 8px gutter is always reserved, only the thumb fades in */
 		scrollbar-color: transparent transparent;
 		transition: scrollbar-color 0.2s ease;
 	}
@@ -236,6 +358,101 @@
 	}
 	.card-wrap {
 		outline: none;
+	}
+	.colempty {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 26px 8px;
+		text-align: center;
+		color: var(--ink-3);
+		font-size: 12.5px;
+		pointer-events: none;
+	}
+
+	/* drag feedback — the ghost sits where the card will land; the actively
+	   dragged element lifts with a stronger shadow, matching the design. */
+	.col-body :global([data-is-dnd-shadow-item-hint]) {
+		background: var(--hover) !important;
+		border: 1.5px dashed var(--line-strong) !important;
+		border-radius: var(--r);
+		box-shadow: none !important;
+		opacity: 0.7;
+	}
+	:global(#dnd-action-dragged-el) {
+		box-shadow: var(--shadow-2) !important;
+		border-radius: var(--r);
+	}
+	:global(#dnd-action-dragged-el .card) {
+		transform: rotate(-1.5deg);
+		border-color: var(--line-strong) !important;
+	}
+
+	/* loading skeleton */
+	.skelcard {
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: var(--r);
+		padding: 10px 11px;
+		display: flex;
+		flex-direction: column;
+		gap: 9px;
+	}
+	.skel {
+		display: block;
+		background: var(--hover);
+		border-radius: 4px;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.skel {
+			animation: shimmer 1.7s ease-in-out infinite;
+		}
+	}
+	@keyframes shimmer {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.55;
+		}
+	}
+
+	/* whole-board empty state (brand-new workspace) */
+	.empty-board {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		color: var(--ink-2);
+		text-align: center;
+		padding: 40px;
+	}
+	.eglyph {
+		display: flex;
+		gap: 8px;
+		margin-bottom: 4px;
+	}
+	.eglyph span {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		border: 1.8px solid var(--line-strong);
+	}
+	.eh {
+		font-family: var(--serif);
+		font-weight: 400;
+		font-size: var(--t-2xl);
+		color: var(--ink);
+	}
+	.ep {
+		max-width: 38ch;
+		color: var(--ink-2);
+		font-size: var(--t-base);
 	}
 
 	/* mobile board */
@@ -267,7 +484,7 @@
 		font-weight: 500;
 	}
 	.mtab.on {
-		background: var(--hover);
+		background: var(--sunken);
 		color: var(--ink);
 		border-color: var(--line-strong);
 	}
@@ -289,7 +506,7 @@
 	}
 
 	@media (max-width: 720px) {
-		.board.desktop {
+		.board.desktop:not(.loading) {
 			display: none;
 		}
 		.board.mobile {

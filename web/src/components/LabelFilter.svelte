@@ -72,9 +72,13 @@
 		color: var(--ink);
 		border-color: var(--line-strong);
 	}
+	/* active = the shared "filter chip" look (accent-soft, no border, pill) */
 	.lf-chip {
-		color: var(--ink);
-		border-color: var(--line-strong);
+		background: var(--accent-soft);
+		border-color: transparent;
+		border-radius: 999px;
+		color: var(--accent);
+		font-weight: 500;
 	}
 	.lf-dot {
 		width: 8px;
