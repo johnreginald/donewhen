@@ -70,11 +70,12 @@ func (n *Notifier) Run(ctx context.Context) {
 		log.Println("push: VAPID keys not set, Web Push disabled")
 		return
 	}
-	// The empty workspace id means "every workspace": the notifier is the one
-	// consumer that must see all events, because it fans out per event to that
-	// event's members rather than holding a single workspace open.
-	ch, unsub := n.bus.Subscribe("")
-	defer unsub()
+	// SubscribeAll: the notifier is the one consumer that must see every
+	// workspace's events, because it fans out per event to that event's members
+	// rather than holding a single workspace open.
+	sub := n.bus.SubscribeAll()
+	defer sub.Close()
+	ch := sub.Events
 	n.startWorkers(ctx)
 	for {
 		select {
