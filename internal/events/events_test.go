@@ -112,3 +112,68 @@ func TestHealthySubscriberNeverResyncs(t *testing.T) {
 	default:
 	}
 }
+
+// PP-201: Close unsubscribes, once or many times, without disturbing others.
+func TestUnsubscribeStopsDeliveryAndClosesChannel(t *testing.T) {
+	b := NewBus()
+	gone := b.Subscribe("A")
+	stays := b.Subscribe("A")
+	defer stays.Close()
+
+	gone.Close()
+	gone.Close() // safe to repeat
+
+	if _, ok := <-gone.Events; ok {
+		t.Fatal("Events not closed after Close")
+	}
+	b.Publish(Event{Type: IssueCreated, WorkspaceID: "A"}) // must not panic on the closed channel
+	if e := recv(t, stays.Events); e.Type != IssueCreated {
+		t.Fatalf("remaining subscriber got %+v", e)
+	}
+	b.mu.RLock()
+	n := len(b.subs)
+	b.mu.RUnlock()
+	if n != 1 {
+		t.Fatalf("%d subscribers registered, want 1", n)
+	}
+}
+
+// PP-201: a full buffer drops the new event, never blocks the publisher, and
+// does not starve other subscribers.
+func TestFullBufferDropsWithoutBlocking(t *testing.T) {
+	b := NewBus()
+	slow := b.Subscribe("A") // never read
+	defer slow.Close()
+	fast := b.Subscribe("A")
+	defer fast.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 40; i++ {
+			b.Publish(Event{Type: IssueUpdated, WorkspaceID: "A"})
+			select {
+			case <-fast.Events:
+			default:
+			}
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Publish blocked on a full subscriber")
+	}
+	if got := len(slow.Events); got != 32 {
+		t.Fatalf("slow subscriber buffered %d events, want its capacity of 32", got)
+	}
+	select {
+	case <-slow.Resync:
+	default:
+		t.Fatal("slow subscriber was not flagged for resync")
+	}
+	select {
+	case <-fast.Resync:
+		t.Fatal("a subscriber that kept up was flagged")
+	default:
+	}
+}

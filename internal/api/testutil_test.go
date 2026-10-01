@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/testdb"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,10 +23,7 @@ import (
 // and skips when it is unset, like the store tests.
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run API tests")
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)
 	if err != nil {

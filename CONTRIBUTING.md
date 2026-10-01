@@ -30,8 +30,8 @@ Run the app with `make web` (builds the frontend), then `make run`. Use `make we
 Run all three before you open a PR.
 
 ```sh
-# Go (needs the database above)
-DONEWHEN_TEST_DATABASE_URL='postgres://donewhen:donewhen@localhost:55433/donewhen?sslmode=disable' go test ./...
+# Go: starts a throwaway Postgres in Docker, runs `go vet` and `go test ./...`, then removes it
+make test
 
 # Web: the build runs check:ds first
 cd web && npm run build
@@ -40,7 +40,9 @@ cd web && npm run build
 node --test 'plugin/scripts/*.test.mjs'
 ```
 
-Also run `go vet ./...` and `gofmt -l .` (it must print nothing). There is no CI: run these checks before you open a PR.
+`make test` needs Docker and uses its own container on a free local port, so it never touches your dev database. It sets `DONEWHEN_TEST_STRICT=1`, so a database test that cannot find Postgres fails instead of skipping. To run one package against your own database, set `DONEWHEN_TEST_DATABASE_URL` and run `go test ./internal/api` (without `DONEWHEN_TEST_STRICT`, those tests skip when it is unset).
+
+Also run `gofmt -l .` (it must print nothing); `make test` already runs `go vet ./...`. There is no CI: run these checks before you open a PR.
 
 ## Design system
 

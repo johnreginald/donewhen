@@ -20,16 +20,14 @@ import (
 	"github.com/johnreginald/donewhen/internal/models"
 	"github.com/johnreginald/donewhen/internal/service"
 	"github.com/johnreginald/donewhen/internal/store"
+	"github.com/johnreginald/donewhen/internal/testdb"
 )
 
 // These tests need a throwaway Postgres. Set DONEWHEN_TEST_DATABASE_URL to run;
 // otherwise they skip, so `go test ./...` stays green without a database.
 func testDSN(t *testing.T) string {
 	t.Helper()
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run api tests")
-	}
+	dsn := testdb.DSN(t)
 	return dsn
 }
 

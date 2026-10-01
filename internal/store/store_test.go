@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/testdb"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,10 +18,7 @@ import (
 // otherwise they skip (so `go test ./...` stays green without a database).
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run store tests")
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)
 	if err != nil {

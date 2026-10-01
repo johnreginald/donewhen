@@ -7,18 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/johnreginald/donewhen/internal/config"
 	"github.com/johnreginald/donewhen/internal/db"
 	"github.com/johnreginald/donewhen/internal/events"
 	"github.com/johnreginald/donewhen/internal/service"
 	"github.com/johnreginald/donewhen/internal/store"
+	"github.com/johnreginald/donewhen/internal/testdb"
 )
 
 func TestSeedCountsAndIdempotent(t *testing.T) {
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run demo tests")
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)
 	if err != nil {

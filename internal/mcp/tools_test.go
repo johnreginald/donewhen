@@ -20,6 +20,7 @@ import (
 	"github.com/johnreginald/donewhen/internal/models"
 	"github.com/johnreginald/donewhen/internal/service"
 	"github.com/johnreginald/donewhen/internal/store"
+	"github.com/johnreginald/donewhen/internal/testdb"
 )
 
 // These tests need a throwaway Postgres. Set DONEWHEN_TEST_DATABASE_URL to run;
@@ -38,10 +39,7 @@ func uniq() string { return fmt.Sprintf("%d%d", time.Now().UnixNano()%1000000, s
 
 func newEnv(t *testing.T) *testEnv {
 	t.Helper()
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run mcp tool tests")
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)
 	if err != nil {
