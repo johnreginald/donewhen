@@ -33,5 +33,16 @@ export function safeLinkHref(href) {
 	return s === 'http' || s === 'https' || s === 'mailto' ? v : '#';
 }
 
+// safeNext reads the `?next=` the login page was sent with and returns a path
+// on this site to go back to, or '/'. Only a plain absolute path passes, so a
+// crafted link cannot bounce the user to another origin after login.
+export function safeNext(search) {
+	const n = new URLSearchParams(search || '').get('next') || '';
+	// eslint-disable-next-line no-control-regex
+	if (!n.startsWith('/') || n.startsWith('//') || n.startsWith('/\\') || /[\u0000-\u001f\u007f]/.test(n)) return '/';
+	if (n === '/login' || n.startsWith('/login?')) return '/';
+	return n;
+}
+
 // Every rendered link opts out of leaking the opener and the referrer.
 export const LINK_REL = 'noopener noreferrer';

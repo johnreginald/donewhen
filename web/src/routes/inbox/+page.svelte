@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import { aiName, states, projectById, inboxCount, inboxTotal, refreshInbox, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
 	import { api } from '$lib/api.js';
@@ -47,6 +47,7 @@
 	// good data on a transient failure, or re-stamp "seen" (that would erase the
 	// new-since-last-visit marks moments after they appear).
 	async function load({ background = false } = {}) {
+		let ok = false;
 		if (!background) {
 			loading = true;
 			error = null;
@@ -60,15 +61,7 @@
 			clampSelection();
 
 			await Promise.all([loadCriteria(needsReview), loadBlocked()]);
-
-			if (!seenStamped) {
-				seenStamped = true;
-				try {
-					await api.inboxSeen();
-				} catch {
-					seenStamped = false; // let the next successful load retry the stamp
-				}
-			}
+			ok = true;
 		} catch (e) {
 			if (background) {
 				flashToast("Couldn't refresh the inbox.", 'error');
@@ -77,6 +70,17 @@
 			}
 		} finally {
 			if (!background) loading = false;
+		}
+		// Stamp "seen" only once the list has been drawn, and only if it loaded:
+		// a failed load must not mark unseen activity as seen.
+		if (ok && !seenStamped) {
+			seenStamped = true;
+			await tick();
+			try {
+				await api.inboxSeen();
+			} catch {
+				seenStamped = false; // let the next successful load retry the stamp
+			}
 		}
 	}
 

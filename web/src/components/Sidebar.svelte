@@ -14,7 +14,7 @@
 		activeWorkspace,
 		me
 	} from '$lib/store.js';
-	import { paletteOpen, openComposer, askArchive, streamStatus } from '$lib/ui.js';
+	import { paletteOpen, openComposer, askArchive, streamStatus, showToast } from '$lib/ui.js';
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import {
 		FileText, Box, Plus, Archive, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
@@ -139,7 +139,15 @@
 
 	let userOpen = $state(false);
 	async function logout() {
-		await api.logout();
+		try {
+			await api.logout();
+		} catch (e) {
+			// 401 means the session is already gone, which is what was asked for.
+			if (e?.status !== 401) {
+				showToast("Couldn't log out: " + (e?.message || e), 'error');
+				return;
+			}
+		}
 		goto('/login');
 	}
 </script>

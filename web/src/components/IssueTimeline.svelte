@@ -30,6 +30,7 @@
 	};
 
 	let comments = $state([]);
+	let commentsFailed = $state(false); // the comments call failed: say so, not "No comments yet"
 	let events = $state([]);
 	let filter = $state('all');
 	let draft = $state('');
@@ -67,8 +68,10 @@
 
 	async function load(initial = false) {
 		const stick = initial || nearBottom;
-		const [c, a] = await Promise.all([api.comments(issue.id).catch(() => null), api.issueActivity(issue.id).catch(() => null)]);
-		if (c) comments = c;
+		const FAILED = Symbol('failed');
+		const [c, a] = await Promise.all([api.comments(issue.id).catch(() => FAILED), api.issueActivity(issue.id).catch(() => null)]);
+		commentsFailed = c === FAILED;
+		if (!commentsFailed) comments = c || [];
 		if (a) events = a;
 		if (stick) toBottom();
 	}
@@ -151,7 +154,7 @@
 				</div>
 			{/if}
 		{:else}
-			<div class="empty">{filter === 'comments' ? 'No comments yet. Be the first to leave one.' : 'No activity yet.'}</div>
+			<div class="empty" class:err={commentsFailed && filter !== 'history'}>{commentsFailed && filter !== 'history' ? "Couldn't load comments." : filter === 'comments' ? 'No comments yet. Be the first to leave one.' : 'No activity yet.'}</div>
 		{/each}
 	</div>
 	<div class="add">
@@ -287,6 +290,9 @@
 	}
 	.actor.ai {
 		color: var(--accent);
+	}
+	.empty.err {
+		color: var(--danger);
 	}
 	.empty {
 		font-size: var(--t-sm);

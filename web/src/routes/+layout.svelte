@@ -12,7 +12,7 @@
 	import ToastStack from '$components/ToastStack.svelte';
 	import Composer from '$components/Composer.svelte';
 	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
-	import { api } from '$lib/api.js';
+	import { api, expireSession, setNotifier } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, catchUp, me, activeWorkspace, workspaces, switchWorkspace, switching } from '$lib/store.js';
 	import {
@@ -41,6 +41,7 @@
 	let { children } = $props();
 	let ready = $state(false);
 	let noWorkspace = $state(false);
+	let bootFailed = $state(false); // the server could not be reached, or errored, while starting
 
 	const isLogin = $derived($page.url.pathname === '/login');
 
@@ -53,11 +54,21 @@
 		};
 	});
 
+	// After boot, a network failure is a toast and the screen keeps its data. At
+	// most one every few seconds: a dead server fails many calls at once.
+	let lastNetToast = 0;
+	function toastNetwork(message) {
+		if (Date.now() - lastNetToast < 5000) return;
+		lastNetToast = Date.now();
+		showToast(message, 'error');
+	}
+
 	async function boot() {
+		bootFailed = false;
 		try {
 			const status = await api.authStatus();
 			if (!status.authenticated) {
-				goto('/login');
+				expireSession();
 				return;
 			}
 			me.set(status.user);
@@ -69,8 +80,9 @@
 				return;
 			}
 			await loadMeta();
-			await loadIssues();
+			if (!(await loadIssues())) throw new Error("Couldn't load issues");
 			ready = true;
+			setNotifier(toastNetwork);
 		} catch (e) {
 			if (e?.status === 403) {
 				// Not a member of the stored workspace; api.js already cleared
@@ -79,7 +91,9 @@
 				ready = true;
 				return;
 			}
-			goto('/login');
+			// A 401 is already on its way to the login page. Anything else (the
+			// server is down, a 5xx) is not a logout: offer a retry instead.
+			if (e?.status !== 401) bootFailed = true;
 		}
 	}
 
@@ -155,6 +169,12 @@
 
 {#if isLogin}
 	{@render children()}
+{:else if bootFailed}
+	<div class="empty-shell">
+		<h1>Can't reach DoneWhen</h1>
+		<p>The server did not answer. Your session is still valid; check the connection and try again.</p>
+		<button class="btn" onclick={boot}>Retry</button>
+	</div>
 {:else if noWorkspace}
 	<div class="empty-shell">
 		<h1>No workspace</h1>
