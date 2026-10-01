@@ -4,7 +4,10 @@ import { goto } from '$app/navigation';
 export const paletteOpen = writable(false);
 export const navOpen = writable(false); // the sidebar, on a phone
 export const composer = writable(null); // { kind: 'issue'|'project'|'initiative', prefill }
-export const toast = writable(null);
+export const quickCapture = writable(false); // the "C" one-line issue composer
+export const shortcutHelp = writable(false); // the "?" keyboard-shortcut overlay
+export const connectionLost = writable(false); // true while the SSE stream is erroring
+export const toasts = writable([]); // stack of { id, message, kind, actionLabel, onAction }
 // liveEvent is the latest server event, for views that follow one thing (a
 // ticket's runs) rather than the issue list the layout already keeps current.
 export const liveEvent = writable(null);
@@ -41,11 +44,19 @@ export function flashIssue(id) {
 	flashTimer = setTimeout(() => flashIssueId.set(null), 3500);
 }
 
-let toastTimer;
-export function showToast(message, kind = 'info') {
-	toast.set({ message, kind });
-	clearTimeout(toastTimer);
-	toastTimer = setTimeout(() => toast.set(null), 3500);
+// showToast pushes a toast onto the stack; each dismisses itself on its own
+// timer, so several can be visible at once (e.g. a live-event toast landing
+// while an error toast is still up). opts.actionLabel + opts.onAction add a
+// button (e.g. "Retry") to the toast, per the design's action link.
+let toastSeq = 0;
+export function showToast(message, kind = 'info', opts = {}) {
+	const id = ++toastSeq;
+	toasts.update((list) => [...list, { id, message, kind, actionLabel: opts.actionLabel, onAction: opts.onAction }]);
+	setTimeout(() => dismissToast(id), 4000);
+	return id;
+}
+export function dismissToast(id) {
+	toasts.update((list) => list.filter((t) => t.id !== id));
 }
 
 // openIssue navigates to the full detail page (replaces the old right-side drawer).

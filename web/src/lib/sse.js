@@ -6,7 +6,7 @@
 
 import { getWorkspace } from './api.js';
 
-export function connectSSE(onEvent) {
+export function connectSSE(onEvent, onStatus) {
 	let es;
 	let closed = false;
 
@@ -30,8 +30,11 @@ export function connectSSE(onEvent) {
 				}
 			});
 		}
+		es.onopen = () => onStatus?.('open');
 		es.onerror = () => {
-			// EventSource retries on its own; nothing to do.
+			// EventSource retries on its own; nothing to do but surface it so the
+			// shell can show the connection-lost banner while it reconnects.
+			onStatus?.('error');
 		};
 	}
 

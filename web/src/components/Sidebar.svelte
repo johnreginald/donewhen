@@ -10,26 +10,59 @@
 		loadIssues,
 		issues,
 		inboxCount,
-		workspaces,
 		activeWorkspace,
-		switchWorkspace
+		me
 	} from '$lib/store.js';
 	import { paletteOpen, openComposer } from '$lib/ui.js';
-	import { me } from '$lib/store.js';
+	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import {
-		FileText, Box, Plus, Search, Pencil, History, Inbox, Check,
-		ChevronsUpDown, Settings, CircleCheckBig, LogOut, ChevronRight } from '@lucide/svelte';
+		FileText, Box, Plus, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
+		ChevronsUpDown, Settings, LogOut, ChevronRight, ChevronLeft
+	} from '@lucide/svelte';
+
+	// The broad app sections (design's sidebar nav). "Blocked" is left out: the
+	// design shows it as a filtered view, but no such view/route exists yet
+	// anywhere in the app, and inventing one is a different ticket's job.
+	const WORKSPACE_NAV = [
+		{ href: '/list', label: 'List', icon: List },
+		{ href: '/list', label: 'By epic', icon: Layers },
+		{ href: '/links', label: 'Links', icon: GitFork },
+		{ href: '/artifacts', label: 'Artifacts', icon: FileText },
+		{ href: '/log', label: 'Log', icon: History },
+		{ href: '/settings', label: 'Settings', icon: Settings }
+	];
+
+	let { onnavigate = () => {} } = $props();
+
+	// Sidebar / rail — collapsed to a 64px icon strip, remembered per device.
+	// The rail is a desktop affordance; below 720px this is a slide-in drawer
+	// instead (see +layout.svelte), which always shows expanded.
+	let collapsed = $state(false);
+	let isMobile = $state(false);
+	onMount(() => {
+		try {
+			collapsed = localStorage.getItem('raenil.sidebarCollapsed') === '1';
+		} catch {
+			/* storage blocked: stay expanded */
+		}
+		const mq = window.matchMedia('(max-width: 720px)');
+		isMobile = mq.matches;
+		const onChange = (e) => (isMobile = e.matches);
+		mq.addEventListener('change', onChange);
+		return () => mq.removeEventListener('change', onChange);
+	});
+	function toggleCollapsed() {
+		collapsed = !collapsed;
+		try {
+			localStorage.setItem('raenil.sidebarCollapsed', collapsed ? '1' : '0');
+		} catch {
+			/* not remembered */
+		}
+	}
 
 	// Workspace switcher — the top-level scope. Everything below it (epics,
 	// issues, labels, the inbox badge) belongs to the selected workspace only.
 	let wsOpen = $state(false);
-	async function pickWorkspace(slug) {
-		wsOpen = false;
-		if (slug === $activeWorkspace?.slug) return;
-		await switchWorkspace(slug);
-		if (!onIssues) goto('/board');
-		onnavigate();
-	}
 
 	// Full issue set (filter-independent) for the per-epic totals in the badge.
 	let allIssues = $state([]);
@@ -49,7 +82,6 @@
 		refreshCounts();
 	});
 
-	let { onnavigate = () => {} } = $props();
 	// Edit / delete an Epic (Raenil "project").
 	function editEpic(p) {
 		openComposer('project', {
@@ -104,7 +136,16 @@
 	}
 </script>
 
-<nav class="sidebar">
+<nav class="sidebar" class:collapsed={collapsed && !isMobile}>
+	<button
+		class="railtoggle"
+		onclick={toggleCollapsed}
+		title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+		aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+	>
+		{#if collapsed}<ChevronRight size={12} strokeWidth={2.4} />{:else}<ChevronLeft size={12} strokeWidth={2.4} />{/if}
+	</button>
+
 	<div class="ws">
 		<button class="ws-btn" onclick={() => (wsOpen = !wsOpen)} title="Switch workspace">
 			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}</span>
@@ -117,27 +158,21 @@
 		{#if wsOpen}
 			<div class="menu-backdrop" role="presentation" onclick={() => (wsOpen = false)}></div>
 			<div class="ws-menu">
-				{#each $workspaces as w (w.id)}
-					<button class="ws-item" class:on={w.id === $activeWorkspace?.id} onclick={() => pickWorkspace(w.slug)}>
-						<span class="ws-item-key">{w.keyPrefix}</span>
-						<span class="ws-item-name">{w.name}</span>
-						{#if w.id === $activeWorkspace?.id}<Check size={14} strokeWidth={2.4} />{/if}
-					</button>
-				{/each}
-				<a class="ws-item manage" href="/settings" onclick={() => (wsOpen = false)}>
-					<Settings size={13} strokeWidth={2} />Manage workspaces
-				</a>
+				<WorkspaceMenu onpick={() => (wsOpen = false)} />
 			</div>
 		{/if}
 	</div>
 
 	<div class="section">
 		<button class="nav-item" onclick={() => paletteOpen.set(true)}>
-			<span class="icon"><Search size={16} strokeWidth={2} /></span>Search<kbd class="kbd">⌘K</kbd>
+			<span class="icon"><Search size={16} strokeWidth={2} /></span><span class="lbl">Search</span><kbd class="kbd">⌘K</kbd>
 		</button>
 		<a href="/inbox" class="nav-item" class:active={$page.url.pathname === '/inbox'} onclick={onnavigate}>
-			<span class="icon"><Inbox size={16} strokeWidth={2} /></span>Inbox
-			{#if $inboxCount > 0}<span class="badge">{$inboxCount}</span>{/if}
+			<span class="icon" style="position:relative">
+				<Inbox size={16} strokeWidth={2} />
+				{#if collapsed && $inboxCount > 0}<span class="dotbadge"></span>{/if}
+			</span><span class="lbl">Inbox</span>
+			{#if !collapsed && $inboxCount > 0}<span class="badge">{$inboxCount}</span>{/if}
 		</a>
 	</div>
 
@@ -146,20 +181,25 @@
 		<a
 			href="/board"
 			class="nav-item"
-			class:active={onIssues && !$activeInitiative && !$activeProject}
+			class:active={$page.url.pathname === '/board'}
 			onclick={() => (activeInitiative.set(''), activeProject.set(''), loadIssues(), onnavigate())}
 		>
-			<span class="icon"><CircleCheckBig size={16} strokeWidth={2} /></span>Tasks
+			<span class="icon"><Columns3 size={16} strokeWidth={2} /></span><span class="lbl">Board</span>
 		</a>
-		<a href="/artifacts" class="nav-item" class:active={$page.url.pathname.startsWith('/artifacts')} onclick={onnavigate}>
-			<span class="icon"><FileText size={16} strokeWidth={2} /></span>Artifacts
-		</a>
-		<a href="/log" class="nav-item" class:active={$page.url.pathname === '/log'} onclick={onnavigate}>
-			<span class="icon"><History size={16} strokeWidth={2} /></span>Log
-		</a>
+		{#each WORKSPACE_NAV as n (n.label)}
+			{@const Icon = n.icon}
+			<a
+				href={n.href}
+				class="nav-item"
+				class:active={n.href === '/artifacts' ? $page.url.pathname.startsWith('/artifacts') : $page.url.pathname === n.href}
+				onclick={onnavigate}
+			>
+				<span class="icon"><Icon size={16} strokeWidth={2} /></span><span class="lbl">{n.label}</span>
+			</a>
+		{/each}
 	</div>
 
-	<div class="section">
+	<div class="section epics">
 		<div class="section-head">
 			<button class="section-toggle" onclick={toggleEpics} aria-expanded={epicsOpen}>
 				<span class="chev" class:open={epicsOpen}><ChevronRight size={12} strokeWidth={2.4} /></span>
@@ -179,8 +219,6 @@
 		{/each}
 		{/if}
 	</div>
-
-
 
 	<div class="foot">
 		<button class="user" onclick={() => (userOpen = !userOpen)}>
@@ -212,7 +250,7 @@
 	.section-toggle .chev {
 		display: inline-flex;
 		color: var(--ink-3);
-		transition: transform 0.15s;
+		transition: transform var(--dur) var(--ease);
 	}
 	.section-toggle .chev.open {
 		transform: rotate(90deg);
@@ -225,16 +263,53 @@
 	.sidebar {
 		width: 240px;
 		height: 100%;
-		background: var(--surface);
+		background: var(--sunken);
 		border-right: 1px solid var(--line);
 		display: flex;
 		flex-direction: column;
-		padding: 12px 10px;
+		padding: 10px 8px;
 		gap: 14px;
 		overflow-y: auto;
+		overflow-x: hidden;
+		position: relative;
+		transition: width var(--dur) var(--ease);
+	}
+	.sidebar.collapsed {
+		width: 64px;
+		align-items: center;
+		padding: 10px 6px;
+		overflow-y: visible;
+	}
+	.railtoggle {
+		position: absolute;
+		top: 18px;
+		right: -11px;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
+		color: var(--ink-3);
+		display: none;
+		align-items: center;
+		justify-content: center;
+		z-index: 6;
+		box-shadow: var(--shadow-1);
+	}
+	.sidebar:hover .railtoggle,
+	.railtoggle:focus-visible {
+		display: flex;
+	}
+	.sidebar.collapsed .railtoggle {
+		display: flex;
+	}
+	.railtoggle:hover {
+		color: var(--ink);
+		background: var(--hover);
 	}
 	.ws {
 		position: relative;
+		width: 100%;
 	}
 	.ws-btn {
 		display: flex;
@@ -244,9 +319,13 @@
 		padding: 5px 8px;
 		border: none;
 		background: none;
-		border-radius: 8px;
+		border-radius: var(--r-sm);
 		color: var(--ink-2);
 		text-align: left;
+	}
+	.sidebar.collapsed .ws-btn {
+		justify-content: center;
+		padding: 5px;
 	}
 	.ws-btn:hover {
 		background: var(--hover);
@@ -258,9 +337,13 @@
 		flex-direction: column;
 		line-height: 1.25;
 	}
+	.sidebar.collapsed .ws-text,
+	.sidebar.collapsed .ws-btn :global(svg:last-child) {
+		display: none;
+	}
 	.ws-name {
 		font-weight: 600;
-		font-size: 14px;
+		font-size: 13.5px;
 		color: var(--ink);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -268,24 +351,21 @@
 	}
 	.ws-key {
 		font-family: var(--mono);
-		font-size: 10.5px;
+		font-size: 10px;
 		color: var(--ink-3);
 		letter-spacing: 0.04em;
 	}
 	.ws-menu {
 		position: absolute;
-		top: 42px;
-		left: 4px;
-		right: 4px;
+		top: 44px;
+		left: 0;
+		right: 0;
 		z-index: 31;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 9px;
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
-		padding: 4px;
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
+		padding: 5px;
 	}
 	.ws-item {
 		display: flex;
@@ -296,7 +376,7 @@
 		color: var(--ink-2);
 		text-align: left;
 		padding: 7px 8px;
-		border-radius: 6px;
+		border-radius: var(--r-sm);
 		font-size: 13.5px;
 		width: 100%;
 		text-decoration: none;
@@ -305,55 +385,15 @@
 		background: var(--hover);
 		color: var(--ink);
 	}
-	.ws-item.on {
-		color: var(--ink);
-	}
-	.ws-item-key {
-		font-family: var(--mono);
-		font-size: 10px;
-		color: var(--ink-3);
-		background: var(--paper);
-		border-radius: 4px;
-		padding: 2px 5px;
-		flex: none;
-		min-width: 34px;
-		text-align: center;
-	}
-	.ws-item-name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.ws-item.manage {
-		border-top: 1px solid var(--line);
-		margin-top: 3px;
-		padding-top: 8px;
-		font-size: 12.5px;
-		color: var(--ink-3);
-	}
-	.brand {
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		padding: 4px 8px;
-	}
 	.logo {
-		width: 26px;
-		height: 26px;
-		border-radius: 8px;
-		background: var(--accent);
-		color: white;
-		display: grid;
-		place-items: center;
-		font-family: var(--font);
-		font-weight: 800;
-		box-shadow: 0 4px 14px var(--accent-soft);
-	}
-	.name {
-		font-weight: 600;
-		font-size: 15px;
+		width: 24px;
+		height: 24px;
+		border-radius: 7px;
+		background: var(--ink);
+		color: var(--paper);
+		font: 600 11px/24px var(--mono);
+		text-align: center;
+		flex: none;
 	}
 	kbd {
 		font-family: var(--mono);
@@ -366,12 +406,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
+		width: 100%;
 	}
-	.section-title,
-	.ini {
-		font-size: 11px;
+	.section-title {
+		font-family: var(--mono);
+		font-size: 10px;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.06em;
 		color: var(--ink-3);
 		padding: 6px 8px 2px;
 	}
@@ -382,79 +423,24 @@
 		justify-content: space-between;
 		padding-right: 4px;
 	}
+	.sidebar.collapsed .section-head,
+	.sidebar.collapsed .epics {
+		display: none;
+	}
 	.add-btn {
-		width: 20px;
-		height: 20px;
+		width: 18px;
+		height: 18px;
 		border-radius: 5px;
 		border: none;
 		background: none;
 		color: var(--ink-3);
-		font-size: 15px;
+		font-size: 13px;
 		line-height: 1;
 		display: grid;
 		place-items: center;
 	}
 	.add-btn:hover {
 		background: var(--hover);
-		color: var(--ink);
-	}
-	.ini {
-		text-transform: none;
-		font-size: 11px;
-		color: var(--ink-2);
-		padding-top: 8px;
-	}
-	.ini-head {
-		display: flex;
-		align-items: center;
-		padding-right: 4px;
-	}
-	.ini-toggle {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		flex: 1;
-		min-width: 0;
-		background: none;
-		border: none;
-		text-align: left;
-		color: var(--ink-2);
-		font-size: 11.5px;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		padding: 9px 8px 4px;
-	}
-	.ini-toggle:hover {
-		color: var(--ink);
-	}
-	.chev {
-		font-size: 9px;
-		color: var(--ink-3);
-		transition: transform 0.15s ease;
-		flex: none;
-	}
-	.chev.open {
-		transform: rotate(90deg);
-	}
-	.ini-name {
-		font-weight: 500;
-		letter-spacing: 0.01em;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.ini-count {
-		margin-left: auto;
-		min-width: 18px;
-		text-align: center;
-		color: var(--ink-2);
-		font-size: 11px;
-		font-variant-numeric: tabular-nums;
-		background: var(--surface);
-		border-radius: 9px;
-		padding: 1px 6px;
-	}
-	.ini-head:hover .ini-count {
 		color: var(--ink);
 	}
 	.epic-row {
@@ -480,12 +466,18 @@
 		color: var(--accent);
 		opacity: 0.85;
 	}
-	.epic-sub:hover {
-		color: var(--ink-2);
-	}
 	.epic-sub.active {
-		background: var(--hover);
+		background: var(--surface);
 		color: var(--ink);
+		box-shadow: var(--shadow-1);
+	}
+	.ini-count {
+		margin-left: auto;
+		min-width: 18px;
+		text-align: center;
+		color: var(--ink-3);
+		font-size: var(--t-xs);
+		font-variant-numeric: tabular-nums;
 	}
 	.row-edit {
 		opacity: 0;
@@ -499,7 +491,6 @@
 		border-radius: 5px;
 		flex: none;
 	}
-	.ini-head:hover .row-edit,
 	.epic-row:hover .row-edit {
 		opacity: 1;
 	}
@@ -511,35 +502,57 @@
 		display: flex;
 		align-items: center;
 		gap: 9px;
-		padding: 7px 8px;
-		border-radius: 6px;
-		font-size: 14.5px;
+		height: 30px;
+		padding: 0 8px;
+		border-radius: var(--r-sm);
+		font-size: var(--t-base);
 		color: var(--ink-2);
 		background: none;
 		border: none;
 		text-align: left;
 		width: 100%;
+		box-sizing: border-box;
 	}
 	.nav-item:hover {
 		background: var(--hover);
 		color: var(--ink);
 	}
 	.nav-item.active {
-		background: var(--hover);
+		background: var(--surface);
 		color: var(--ink);
+		font-weight: 500;
+		box-shadow: var(--shadow-1);
+	}
+	.sidebar.collapsed .nav-item {
+		justify-content: center;
+		padding: 0;
+	}
+	.sidebar.collapsed .nav-item .lbl,
+	.sidebar.collapsed .nav-item .kbd,
+	.sidebar.collapsed .nav-item .badge {
+		display: none;
 	}
 	.badge {
 		margin-left: auto;
 		min-width: 18px;
 		text-align: center;
-		font-size: 11px;
+		font-size: 10.5px;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		color: var(--accent-ink);
 		background: var(--accent);
-		border-radius: 9px;
+		border-radius: 999px;
 		padding: 1px 6px;
 		line-height: 1.4;
+	}
+	.dotbadge {
+		position: absolute;
+		top: -2px;
+		right: -2px;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--accent);
 	}
 	.icon {
 		width: 16px;
@@ -566,30 +579,33 @@
 		position: relative;
 		padding-top: 8px;
 		border-top: 1px solid var(--line);
+		width: 100%;
 	}
 	.user {
 		display: flex;
 		align-items: center;
-		gap: 9px;
+		gap: 8px;
 		width: 100%;
 		background: none;
 		border: none;
 		color: var(--ink-2);
 		padding: 5px 6px;
-		border-radius: 8px;
+		border-radius: var(--r-sm);
 		text-align: left;
-		font-size: 13px;
+		font-size: 12px;
+	}
+	.sidebar.collapsed .user {
+		justify-content: center;
 	}
 	.user:hover {
 		background: var(--hover);
-		color: var(--ink);
 	}
 	.avatar {
-		width: 24px;
-		height: 24px;
+		width: 23px;
+		height: 23px;
 		border-radius: 50%;
-		background: var(--accent);
-		color: var(--accent-ink);
+		background: var(--accent-soft);
+		color: var(--accent);
 		font-size: 10px;
 		font-weight: 600;
 		display: grid;
@@ -602,6 +618,9 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.sidebar.collapsed .uname {
+		display: none;
+	}
 	.user-menu {
 		position: absolute;
 		bottom: 42px;
@@ -610,14 +629,33 @@
 		z-index: 31;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: 9px;
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
+		min-width: 180px;
 	}
 	.ws-item.danger {
 		color: var(--danger);
+	}
+	@media (max-width: 720px) {
+		.railtoggle {
+			display: none !important;
+		}
+		/* Switcher menus become bottom sheets on phones, like the palette. */
+		.ws-menu,
+		.user-menu {
+			position: fixed;
+			top: auto;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			border-radius: var(--r-lg) var(--r-lg) 0 0;
+			max-height: 70vh;
+			overflow-y: auto;
+			padding: 10px 10px calc(14px + env(safe-area-inset-bottom, 0px));
+		}
 	}
 </style>

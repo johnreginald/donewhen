@@ -28,11 +28,11 @@ export function setWorkspace(slug) {
 	}
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, wsOverride) {
 	const headers = {};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	if (method !== 'GET') headers['X-CSRF-Token'] = getCookie('raenil_csrf');
-	const wsp = getWorkspace();
+	const wsp = wsOverride || getWorkspace();
 	if (wsp) headers['X-Workspace'] = wsp;
 	const res = await fetch('/api' + path, {
 		method,
@@ -69,7 +69,10 @@ async function request(method, path, body) {
 }
 
 export const api = {
-	get: (p) => request('GET', p),
+	// wsOverride lets a caller read another of the user's workspaces without
+	// switching the active one — used for the per-workspace counts in the
+	// workspace switcher, which must show every membership at once.
+	get: (p, wsOverride) => request('GET', p, undefined, wsOverride),
 	post: (p, b) => request('POST', p, b ?? {}),
 	patch: (p, b) => request('PATCH', p, b ?? {}),
 	put: (p, b) => request('PUT', p, b ?? {}),

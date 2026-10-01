@@ -5,12 +5,16 @@
 	import { issueQuery } from '$lib/store.js';
 	import ProjectSwitcher from './ProjectSwitcher.svelte';
 	import LabelFilter from './LabelFilter.svelte';
-	import { Search, List, Rows3, Columns3, GitFork } from '@lucide/svelte';
+	import { Search, List, Layers, Columns3, GitFork, ListChecks } from '@lucide/svelte';
 
+	// Board · List · By epic · Tasks · Links (PP-209). The state-grouped List
+	// view is PP-213's job; until it exists, "List" points at the same route as
+	// "By epic" — the only "list" URL there is today — per the PP-209 spec.
 	const views = [
 		{ href: '/board', label: 'Board', icon: Columns3 },
-		{ href: '/tasks', label: 'List', icon: List },
-		{ href: '/list', label: 'By epic', icon: Rows3 },
+		{ href: '/list', label: 'List', icon: List },
+		{ href: '/list', label: 'By epic', icon: Layers },
+		{ href: '/tasks', label: 'Tasks', icon: ListChecks },
 		{ href: '/links', label: 'Links', icon: GitFork }
 	];
 </script>
@@ -24,7 +28,7 @@
 	<LabelFilter />
 	<div class="spacer"></div>
 	<div class="vtoggle" role="tablist">
-		{#each views as v (v.href)}
+		{#each views as v (v.label)}
 			{@const Icon = v.icon}
 			<a href={v.href} class="vt" class:on={$page.url.pathname === v.href} aria-label={v.label}>
 				<Icon size={14} strokeWidth={2} /><span class="vt-txt">{v.label}</span>

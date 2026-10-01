@@ -9,6 +9,14 @@ export const states = writable([]);
 export const projects = writable([]);
 export const initiatives = writable([]);
 export const labels = writable([]);
+export const labelGroups = writable([]); // { id, name, exclusive }
+// The quick-capture chips (bug/feature/chore/tech-debt) are the workspace's
+// "type" group specifically — every other group (repo, platform, …) is left
+// to the full label picker on the issue page.
+export const typeLabels = derived([labels, labelGroups], ([ls, groups]) => {
+	const typeGroup = groups.find((g) => g.name === 'type');
+	return typeGroup ? ls.filter((l) => l.groupId === typeGroup.id) : [];
+});
 // "Blocked by" links in the workspace: { issueId, blockerId, done }.
 export const blockLinks = writable([]);
 export async function loadBlockLinks() {
@@ -28,6 +36,25 @@ export const activeInitiative = writable(''); // '' = all (Project-level filter)
 export const activeLabel = writable(''); // '' = all (label filter)
 export const inboxCount = writable(0); // needs-review queue size (sidebar badge)
 export const issueQuery = writable(''); // the search box above every issue view
+
+// workspaceCounts mirrors inboxCount but for every membership at once, keyed
+// by workspace id — what the workspace switcher's badge shows. Same signal
+// (needs-review + waiting): "things that need you", not a raw issue total.
+export const workspaceCounts = writable({});
+export async function loadWorkspaceCounts() {
+	const list = get(workspaces);
+	const entries = await Promise.all(
+		list.map(async (w) => {
+			try {
+				const r = await api.get('/inbox', w.slug);
+				return [w.id, (r?.needsReview || []).length + (r?.waiting || []).length];
+			} catch {
+				return [w.id, 0];
+			}
+		})
+	);
+	workspaceCounts.set(Object.fromEntries(entries));
+}
 
 // visibleIssues is the issue list narrowed by the search box, by title or key.
 export const visibleIssues = derived([issues, issueQuery], ([list, q]) => {
@@ -73,11 +100,12 @@ export async function switchWorkspace(slug) {
 }
 
 export async function loadMeta() {
-	const [st, pr, ini, lb, cfg] = await Promise.all([
+	const [st, pr, ini, lb, lg, cfg] = await Promise.all([
 		api.states(),
 		api.projects(),
 		api.initiatives(),
 		api.labels(),
+		api.labelGroups(),
 		api.config()
 	]);
 	loadBlockLinks();
@@ -85,6 +113,7 @@ export async function loadMeta() {
 	projects.set(pr || []);
 	initiatives.set(ini || []);
 	labels.set(lb || []);
+	labelGroups.set(lg || []);
 	appConfig.set(cfg || {});
 }
 

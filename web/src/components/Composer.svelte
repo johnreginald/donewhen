@@ -117,7 +117,7 @@
 
 {#if $composer}
 	<div class="backdrop" role="presentation" onclick={closeComposer}></div>
-	<div class="modal" role="dialog" aria-modal="true" onkeydown={onKey}>
+	<div class="modal" role="dialog" aria-modal="true" tabindex="-1" onkeydown={onKey}>
 		<div class="head">
 			<span class="dot" class:project={kind === 'project'}></span>
 			<span class="htitle">{heading}</span>

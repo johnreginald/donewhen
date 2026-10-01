@@ -2,15 +2,29 @@
 	import { aiName } from '$lib/store.js';
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Sidebar from '$components/Sidebar.svelte';
 	import CommandPalette from '$components/CommandPalette.svelte';
+	import QuickCapture from '$components/QuickCapture.svelte';
+	import ShortcutHelp from '$components/ShortcutHelp.svelte';
+	import ToastStack from '$components/ToastStack.svelte';
 	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
 	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount } from '$lib/store.js';
-	import { paletteOpen, toast, showToast, flashIssue, liveEvent, navOpen } from '$lib/ui.js';
+	import {
+		paletteOpen,
+		quickCapture,
+		shortcutHelp,
+		connectionLost,
+		composer,
+		showToast,
+		flashIssue,
+		liveEvent,
+		navOpen
+	} from '$lib/ui.js';
 	import { registerServiceWorker } from '$lib/push.js';
 	import { CircleCheckBig, Inbox, History, FileText } from '@lucide/svelte';
 
@@ -56,7 +70,7 @@
 			}
 			await loadMeta();
 			await loadIssues();
-			disconnect = connectSSE(handleEvent);
+			disconnect = connectSSE(handleEvent, handleSSEStatus);
 			ready = true;
 		} catch (e) {
 			if (e?.status === 403) {
@@ -78,7 +92,7 @@
 		if (!ready || !wsp || streamFor === wsp.id) return;
 		streamFor = wsp.id;
 		disconnect && disconnect();
-		disconnect = connectSSE(handleEvent);
+		disconnect = connectSSE(handleEvent, handleSSEStatus);
 	});
 
 	function handleEvent(ev) {
@@ -91,11 +105,34 @@
 		}
 	}
 
+	// Drives the connection-lost banner (PP-209): EventSource retries on its
+	// own, we just surface whether the stream is currently up.
+	function handleSSEStatus(status) {
+		connectionLost.set(status === 'error');
+	}
+
+	function isTypingTarget(el) {
+		if (!el) return false;
+		const tag = el.tagName;
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+	}
+
 	function globalKeys(e) {
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			paletteOpen.update((v) => !v);
 			return;
+		}
+		// "C" (quick capture) and "?" (shortcut help) — never while typing, and
+		// never stacked on top of another dialog that's already up.
+		if (isTypingTarget(e.target)) return;
+		if (get(paletteOpen) || get(quickCapture) || get(shortcutHelp) || get(composer)) return;
+		if (e.key === 'c' || e.key === 'C') {
+			e.preventDefault();
+			quickCapture.set(true);
+		} else if (e.key === '?') {
+			e.preventDefault();
+			shortcutHelp.set(true);
 		}
 	}
 
@@ -137,14 +174,14 @@
 		{/each}
 	</nav>
 	<CommandPalette />
+	<QuickCapture />
+	<ShortcutHelp />
 	<Composer />
 {:else}
 	<div class="booting">Loading Raenil…</div>
 {/if}
 
-{#if $toast}
-	<div class="toast" class:error={$toast.kind === 'error'}>{$toast.message}</div>
-{/if}
+<ToastStack />
 
 <style>
 	.empty-shell {
@@ -197,24 +234,6 @@
 	}
 	.nav-backdrop {
 		display: none;
-	}
-	.toast {
-		position: fixed;
-		bottom: 20px;
-		left: 50%;
-		transform: translateX(-50%);
-		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		color: var(--ink);
-		padding: 10px 16px;
-		border-radius: var(--r);
-		box-shadow: var(--shadow-2);
-		z-index: 80;
-		font-size: 13px;
-	}
-	.toast.error {
-		border-color: var(--danger);
-		color: var(--danger);
 	}
 	.btabs {
 		display: none;
