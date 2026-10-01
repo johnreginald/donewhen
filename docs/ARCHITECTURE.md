@@ -148,4 +148,4 @@ The web app is in `web/`. It is a SvelteKit single-page app, built with the stat
 
 - `Dockerfile` builds the web app, then the Go binary, and copies both into a small Alpine image.
 - `compose.yaml` runs Postgres, the app, and an optional Caddy proxy.
-- Hosting steps are in the README and in `docs/DEPLOY.md`.
+- Hosting steps are in the README and in [SELF-HOSTING.md](SELF-HOSTING.md).

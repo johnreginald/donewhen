@@ -1,201 +1,235 @@
-# Raenil
+# DoneWhen
 
-Self-hosted, single-user issue tracker in the spirit of Linear — driven by you in
-the browser and by Claude over MCP. Continuous-flow Kanban, no sprints/estimates.
+A self-hosted issue tracker that keeps the record of AI-built work.
 
-- **Stack:** Go (single binary) · PostgreSQL · SvelteKit PWA
-- **Realtime:** SSE for live board updates · Web Push (VAPID) for background phone notifications
-- **AI:** an MCP server whose tools mirror Linear's verbs (`save_issue`, `list_issues`, …)
-- **Docs:** markdown with rendered ```mermaid diagrams
-- **Hierarchy:** Workspaces → Projects (initiatives) → Epics → Issues
-- **Tenancy:** every workspace is a hard boundary — its own issues, epics, labels, board columns, artifacts and activity log, visible only to its members
-- **States:** Triage → Backlog → Aligning → Ready → In Progress → In Review → Done → Canceled
+![Board](docs/images/board-light.png)
 
-## Quick start (local, no containers)
+## What and why
+
+AI agents build fast, but the record of what was built gets lost. The chat is gone and the commit says "fix".
+
+DoneWhen fixes this. Every ticket has a **done-when checklist**, written before the work starts. The AI ticks each item as it is met. A ticket cannot move to In Review or Done while an item is open.
+
+When the work ends, DoneWhen keeps the commits, the branch and an engineering document. You review code you did not watch being written, and you know what "done" meant.
+
+Read [docs/CONCEPTS.md](docs/CONCEPTS.md) for the full idea.
+
+## Features
+
+- **Board and states.** Continuous-flow Kanban: Triage, Backlog, Aligning, Ready, In Progress, Blocked, In Review, Done, Canceled. No sprints, no estimates.
+- **Done-when gate.** Each ticket has a checklist. Open items block In Review and Done.
+- **Commits and engineering docs.** Link commits, branches and PRs to a ticket. Save a document (with Mermaid diagrams) for each change.
+- **MCP for AI agents.** An MCP server at `/mcp`. Any MCP client works, including Claude Code.
+- **Live updates.** The board updates in real time with Server-Sent Events.
+- **Installable PWA with Web Push.** Add it to your phone. Get notified in the background.
+- **Light and dark theme.**
+- **Multi-workspace.** Each workspace has its own issues, epics, labels and members. It is a hard boundary.
+
+## Quick start
+
+You need Docker with the Compose plugin, and Git. On Podman, see [docs/PODMAN.md](docs/PODMAN.md).
+
+1. Clone the repo.
+
+   ```bash
+   git clone https://github.com/johnreginald/donewhen.git
+   cd donewhen
+   ```
+
+2. Copy the example config.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Set the secrets in `.env`. Generate a session secret and put it in `DONEWHEN_SESSION_SECRET`.
+
+   ```bash
+   openssl rand -hex 32
+   ```
+
+   Also change `POSTGRES_PASSWORD`. If you do, change the password inside `DONEWHEN_DATABASE_URL` too (only the local, non-Docker use reads that line).
+
+4. For a local try-out, set the public URL to the port that Compose publishes:
+
+   ```
+   DONEWHEN_BASE_URL=http://localhost:8090
+   ```
+
+   Leave `DONEWHEN_ENV=dev`. In `prod` mode cookies need HTTPS. For a real server, follow [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md).
+
+5. Start it.
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+6. Create the first user.
+
+   ```bash
+   docker compose exec donewhen /app/donewhen user you@example.com 'a-strong-password'
+   ```
+
+   The password needs at least 8 characters.
+
+7. Open <http://localhost:8090> and sign in.
+
+   Compose publishes the app on `127.0.0.1:8090` only. Change the port with `DONEWHEN_HOST_PORT`.
+
+Next, create a workspace in the app, or run `docker compose exec donewhen /app/donewhen workspace create "My Work" MYW`.
+
+## Try the demo
+
+Three commands start DoneWhen with sample data:
 
 ```bash
-# 1. Postgres (any instance). Example with Docker (or Podman):
-docker run -d --name raenil-pg -e POSTGRES_USER=raenil -e POSTGRES_PASSWORD=raenil \
-  -e POSTGRES_DB=raenil -p 5432:5432 postgres:18-alpine
-
-# 2. Config
-cp .env.example .env      # edit RAENIL_SESSION_SECRET at least
-export $(grep -v '^#' .env | xargs)
-
-# 3. Build frontend + binary
-make web
-make build
-
-# 4. Migrate + create your account + an API token for Claude
-./raenil migrate
-./raenil user you@example.com 'a-strong-password'
-./raenil workspace create "My Work" MYW   # first workspace; keys become MYW-1, MYW-2, …
-./raenil genvapid          # paste the two lines into .env, then re-export
-./raenil token claude      # copy the printed token
-
-# 5. Run
-./raenil serve             # http://localhost:8080
-```
-
-## Quick start (Docker Compose — the 24/7 box)
-
-> Commands below use `docker compose`, which is what the production box runs.
-> On a Podman dev machine use `podman compose` instead — or just `make up`,
-> which picks the engine automatically. See [docs/PODMAN.md](docs/PODMAN.md).
-
-```bash
-cp .env.example .env
-# set RAENIL_SESSION_SECRET, RAENIL_SITE_ADDRESS=tracker.yourdomain.com,
-# RAENIL_BASE_URL=https://tracker.yourdomain.com, and VAPID keys (./raenil genvapid)
 docker compose up -d --build
-
-# first-time account + token (exec into the running container)
-docker compose exec raenil /app/raenil user you@example.com 'a-strong-password'
-docker compose exec raenil /app/raenil workspace create "My Work" MYW
-docker compose exec raenil /app/raenil token claude
+docker compose exec donewhen /app/donewhen user you@example.com 'a-strong-password'
+docker compose exec donewhen /app/donewhen demo
 ```
 
-Caddy terminates TLS automatically for `RAENIL_SITE_ADDRESS`. Point your domain's
-DNS at the box and open 80/443.
+`donewhen demo` fills a workspace with example tickets, checklists and documents. It arrives with ticket PP-234, so it is not in older versions.
 
-## Connecting Claude Code (MCP)
+## Connect Claude Code
 
-Register the remote MCP server (served at `<BASE_URL>/mcp`, Streamable HTTP):
+DoneWhen has an MCP endpoint at `<your-server>/mcp` (Streamable HTTP, bearer token).
+
+1. Mint a token.
+
+   ```bash
+   docker compose exec donewhen /app/donewhen token claude
+   ```
+
+   The token is shown once. Copy it.
+
+2. Register the server.
+
+   ```bash
+   claude mcp add --transport http donewhen http://localhost:8090/mcp \
+     --header "Authorization: Bearer <token>"
+   ```
+
+   Use your real server address in place of `http://localhost:8090`, for example `https://tracker.example.com`. The tools appear as `mcp__donewhen__*`.
+
+### Pinned tokens
+
+A normal token reaches all of your workspaces. A **pinned** token reaches one. Give the workspace slug as the second argument:
 
 ```bash
-claude mcp add --transport http raenil https://tracker.yourdomain.com/mcp \
-  --header "Authorization: Bearer <the-token-from-raenil-token>"
+docker compose exec donewhen /app/donewhen token acme-agent acme
 ```
 
-Tools appear as `mcp__raenil__save_issue`, `mcp__raenil__list_issues`, etc. — the
-same verbs as the Linear MCP, so existing workflow habits carry over.
+Use a pinned token for an agent that works in one repo.
 
-### Workspaces and MCP
+### The plugin: `/donewhen:tasks`
 
-You rarely have to say which workspace you mean. Listing tools span every
-workspace the token can reach, and a call that names an existing issue, epic,
-initiative or document has the workspace derived from it — issue keys are
-globally unique, so `get_issue R-8` is a lookup, not a guess. Membership is
-checked on whatever comes back, so deriving can never reach a workspace the
-account is not in.
+The plugin adds one command. It lists open issues grouped by epic. It reads the REST API directly, so it costs no model tokens.
 
-The one genuinely ambiguous case is creating something with no parent to inherit
-from. There, pass `workspace: "acme"` (or belong to a single workspace).
+1. Install it. This repo is its own marketplace.
 
-Pin a token when an agent should be confined to one repo's tracker:
+   ```bash
+   claude plugin marketplace add johnreginald/donewhen
+   claude plugin install donewhen@donewhen
+   ```
 
-```bash
-raenil token acme-agent acme    # sees only the 'acme' workspace
-```
+2. Set two environment variables, for example in your shell profile.
 
-A pinned token needs no argument at all and is refused any other workspace.
-`list_workspaces` shows what a token can reach.
+   ```bash
+   export DONEWHEN_URL=https://tracker.example.com   # your server
+   export DONEWHEN_TOKEN=donewhen_...                # a token from `donewhen token`
+   ```
 
-### Mermaid convention
+3. Run `/donewhen:tasks` in Claude Code.
 
-Backend-labeled issues should include a ```mermaid diagram in the description.
-The global `~/.claude/hooks/require-mermaid.py` hook enforces this on `save_issue`;
-add `mcp__raenil__save_issue` to its PreToolUse matcher (see `docs/DEPLOY.md`).
-
-## Claude Code plugin: `/tasks`
-
-`plugin/` is a Claude Code plugin. Its `/raenil:tasks` command prints a
-workspace's open issues grouped by epic. It reads the REST API directly, so it
-costs no model tokens to fetch.
-
-```
-Acme · 18 open
-
-Platform — Data integrity               0/3 done
-  ○ ACM-12  Backlog      Update only the fields that were sent
-  ◐ ACM-15  In Progress  Issue page refuses to overwrite a newer edit
-
-Platform — Realtime                     0/2 done
-  ○ ACM-19  Backlog      Catch up after a reconnect  ⊘ ACM-18
-```
-
-Install it from this repo, which is its own marketplace:
-
-```bash
-claude plugin marketplace add /path/to/raenil
-claude plugin install raenil@raenil
-```
-
-Set a token. Any `raenil token` works, and a pinned token also picks the
-workspace for you:
-
-```bash
-export RAENIL_TOKEN=raenil_…                     # required
-export RAENIL_URL=https://tracker.example.com    # required: your Raenil server
-```
-
-Give each repo a default workspace, and optionally a default project, in
-`.claude/raenil.json`:
+A pinned token also picks the workspace for you. Otherwise, set a default for a repo in `.claude/donewhen.json`:
 
 ```json
-{ "workspace": "platform", "project": "Core" }
+{ "workspace": "acme", "project": "Core" }
 ```
 
 Usage:
 
 ```
-/raenil:tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
-/raenil:tasks workspaces
-/raenil:tasks use <workspace> [--project <text>]
+/donewhen:tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
+/donewhen:tasks workspaces
+/donewhen:tasks use <workspace> [--project <text>]
 ```
 
-`workspaces` lists every workspace the token reaches, with open counts per
-project. `▸` marks the current default:
+Done and Canceled issues are hidden unless you pass `--all`.
 
-```
-  Workspace                 Prefix  Open  Projects
-▸ platform                  PLT       70  Core (62)
-  engineering               ENG      139  Engineering (101)
-  unsorted                  UNS        2  —
-```
+The repo also has a skill that teaches Claude how to use the tools well. See [skills/README.md](skills/README.md). For the full loop, see [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md).
 
-`use` switches the default. It writes `.claude/raenil.json` at the git root, or
-`~/.config/raenil/default.json` outside a repo, and then shows the new view.
-`--project` stores a default project too, and leaving it out clears one. An
-unknown workspace, or a project name that matches nothing or several, is
-refused and leaves the file untouched.
+## Configuration
 
-| Glyph | State |
-|---|---|
-| `◌` | Triage |
-| `○` | Backlog, Aligning, Ready |
-| `◐` | In Progress |
-| `⊘` | Blocked |
-| `◕` | In Review |
-| `●` | Done |
-| `×` | Canceled |
+Set these in `.env` (Compose) or in the environment. The old `RAENIL_*` names keep working for one release. Use the `DONEWHEN_*` names.
 
-A trailing `⊘ KEY` means the issue still waits on that blocker. Done and
-Canceled issues are hidden unless you pass `--all`. Run the tests with
-`node --test 'plugin/scripts/*.test.mjs'`.
+| Name | Default | Meaning |
+|---|---|---|
+| `DONEWHEN_BASE_URL` | `http://localhost:8080` | Public URL of the app. Used for cookies, the Web Push origin and links. |
+| `DONEWHEN_LISTEN_ADDR` | `:8080` | Address the server listens on. Compose sets `:8080` inside the container. |
+| `DONEWHEN_DATABASE_URL` | `postgres://donewhen:donewhen@localhost:5432/donewhen?sslmode=disable` | Postgres connection string. Compose builds it from the `POSTGRES_*` values. |
+| `DONEWHEN_ENV` | `dev` (Compose: `prod`) | `dev` or `prod`. `prod` needs a session secret and always sets Secure cookies (HTTPS). |
+| `DONEWHEN_SESSION_SECRET` | none | Secret for sessions. At least 16 characters. Required in `prod`. Generate with `openssl rand -hex 32`. |
+| `DONEWHEN_ISSUE_PREFIX` | `R` | Key prefix of the legacy default workspace. New workspaces choose their own prefix. |
+| `DONEWHEN_TRUSTED_PROXY_HEADER` | empty | Header your proxy sets to the real client IP. Used for login rate limiting. See [SELF-HOSTING.md](docs/SELF-HOSTING.md#trusted-proxy-header). |
+| `DONEWHEN_VAPID_PUBLIC` | empty | Web Push public key. Push is off if this or the private key is empty. |
+| `DONEWHEN_VAPID_PRIVATE` | empty | Web Push private key. Make a pair with `donewhen genvapid`. |
+| `DONEWHEN_VAPID_SUBJECT` | `mailto:admin@localhost` | Contact for push services. Use `mailto:you@example.com`. |
+| `DONEWHEN_HOST_PORT` | `8090` | Compose only. Host port on `127.0.0.1` for the app. |
+| `DONEWHEN_SITE_ADDRESS` | `:80` | Compose only. Domain for the bundled Caddy (`edge` profile). |
+| `POSTGRES_USER` | `donewhen` | Compose only. Database user. |
+| `POSTGRES_PASSWORD` | `donewhen` | Compose only. Database password. Change it. |
+| `POSTGRES_DB` | `donewhen` | Compose only. Database name. |
+| `DONEWHEN_URL` | none | Plugin only. Your server address. Set in your shell. |
+| `DONEWHEN_TOKEN` | none | Plugin only. An API token. Set in your shell. |
 
-## Commands
+## Upgrading and backups
 
-| Command | Purpose |
-| --- | --- |
-| `raenil serve` | API + SSE + Web Push + MCP endpoint |
-| `raenil migrate` | apply DB migrations |
-| `raenil mcp` | MCP over stdio (local fallback transport) |
-| `raenil user <email> <pass>` | create the account |
-| `raenil token <name> [workspace]` | create an API token (shown once); pass a workspace slug to pin it |
-| `raenil workspace list` | show workspaces and member counts |
-| `raenil workspace create <name> <prefix>` | create a workspace |
-| `raenil workspace add <slug> <email> [role]` | grant a user access (owner/admin/member) |
-| `raenil genvapid` | print a fresh VAPID keypair |
-
-## Backups
+Upgrade:
 
 ```bash
-make backup     # pg_dump | gzip -> ./backups/raenil-<timestamp>.sql.gz
+git pull
+docker compose up -d --build
 ```
 
-Add to cron for nightly dumps — see `docs/DEPLOY.md`.
+Migrations run when the app starts. Back up first.
 
-A pending destructive migration (`-- raenil:destructive`) blocks startup until you
-confirm a backup with `RAENIL_BACKUP_CONFIRMED=<name>`; `make migrate` backs up
-and confirms for you. Details in `docs/DEPLOY.md`.
+Back up the database:
+
+```bash
+docker compose exec -T db pg_dump -U donewhen donewhen | gzip > donewhen-$(date +%Y%m%d-%H%M%S).sql.gz
+```
+
+Or run `make backup`, which writes to `./backups`.
+
+Restore into an empty database:
+
+```bash
+gunzip -c donewhen-YYYYMMDD-HHMMSS.sql.gz | docker compose exec -T db psql -U donewhen donewhen
+```
+
+More in [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md).
+
+## Development
+
+You need Go, Node 22 and Docker. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and the PR process.
+
+## Documentation
+
+| Page | What it covers |
+|---|---|
+| [docs/CONCEPTS.md](docs/CONCEPTS.md) | The idea, vocabulary and states |
+| [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md) | How an AI agent drives a ticket |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Parts, packages and data flow |
+| [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md) | Put it on a server, with HTTPS |
+| [docs/PODMAN.md](docs/PODMAN.md) | Run it with Podman |
+| [skills/README.md](skills/README.md) | The Claude skill |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+
+## Security
+
+Report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
+
+## License
+
+[AGPL-3.0](LICENSE).
