@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"raenil/internal/auth"
+	"raenil/internal/events"
 	"raenil/internal/models"
 	"raenil/internal/store"
 )
@@ -185,6 +186,8 @@ func (d *deps) registerContent(s *server.MCPServer) {
 			}
 			saved, _ = d.store.GetDocument(ctx, wsID, saved.ID)
 		}
+		// Live: the web Artifacts list refreshes on this without a reload.
+		d.svc.Bus.Publish(events.Event{Type: events.DocumentSaved, WorkspaceID: wsID, Actor: saved.Author, Document: &saved})
 		return jsonResult(saved)
 	})
 

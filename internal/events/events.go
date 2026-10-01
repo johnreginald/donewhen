@@ -16,6 +16,8 @@ const (
 	IssueStateChanged = "issue.state_changed"
 	IssueDeleted      = "issue.deleted"
 	CommentAdded      = "comment.added"
+	DocumentSaved     = "document.saved"
+	DocumentDeleted   = "document.deleted"
 )
 
 type Event struct {
@@ -29,6 +31,8 @@ type Event struct {
 	From        *models.WorkflowState `json:"from,omitempty"`
 	To          *models.WorkflowState `json:"to,omitempty"`
 	Comment     *models.Comment       `json:"comment,omitempty"`
+	Document    *models.Document      `json:"document,omitempty"`
+	DocumentID  string                `json:"documentId,omitempty"`
 	At          time.Time             `json:"at"`
 }
 

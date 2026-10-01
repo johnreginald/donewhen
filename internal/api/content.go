@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"raenil/internal/auth"
+	"raenil/internal/events"
 	"raenil/internal/models"
 	"raenil/internal/store"
 )
@@ -123,12 +124,16 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 		}
 		saved, _ = s.store.GetDocument(r.Context(), ws(r), saved.ID)
 	}
+	// Live: every connected client refreshes its document list on this.
+	s.bus.Publish(events.Event{Type: events.DocumentSaved, WorkspaceID: ws(r), Actor: saved.Author, Document: &saved})
 	writeJSON(w, 200, saved)
 }
 
 func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.store.DeleteDocument(r.Context(), ws(r), r.PathValue("id"))) {
+	id := r.PathValue("id")
+	if handleStoreErr(w, s.store.DeleteDocument(r.Context(), ws(r), id)) {
 		return
 	}
+	s.bus.Publish(events.Event{Type: events.DocumentDeleted, WorkspaceID: ws(r), DocumentID: id})
 	writeJSON(w, 200, map[string]string{"status": "deleted"})
 }

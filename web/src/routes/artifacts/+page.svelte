@@ -1,52 +1,60 @@
 <script>
+	import { onMount } from 'svelte';
 	import { aiName } from '$lib/store.js';
 	import PageHeader from '$components/PageHeader.svelte';
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
 	import { projects, initiatives, issues, labels as allLabels } from '$lib/store.js';
-	import { showToast, openIssue } from '$lib/ui.js';
+	import { showToast, openIssue, onLive } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
-	import { Trash2, ChevronDown } from '@lucide/svelte';
+	import { rel } from '$lib/format.js';
 
 	const TYPES = {
 		change: { label: 'Change', icon: '⟳', color: 'var(--accent)' },
 		feature: { label: 'Feature', icon: '◈', color: 'var(--st-done)' },
 		decision: { label: 'Decision', icon: '◆', color: 'var(--st-progress)' },
 		overview: { label: 'Overview', icon: '◇', color: 'var(--st-ready)' },
-		reference: { label: 'Reference', icon: '▤', color: 'var(--ink-2)' }
+		reference: { label: 'Reference', icon: '▤', color: 'var(--ink-3)' }
 	};
 	const typeMeta = (t) => TYPES[t] || TYPES.reference;
+	function fmtDate(iso) {
+		return iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+	}
 
+	// ---- the list ----
 	let docs = $state([]);
-	let sel = $state(null);
+	let loading = $state(false);
+	let docsError = $state(null);
 	let query = $state('');
 	let typeFilter = $state('');
 	let aiOnly = $state(false);
-	let attachOpen = $state(false);
-	let typeOpen = $state(false);
-	let filterOpen = $state(false);
-	let labelPickerOpen = $state(false);
-	let contentEl = $state(null);
-
 	let missing = $state([]);
-	let showGaps = $state(false);
-	onMount(async () => {
-		await load();
-		missing = (await api.missingDocs().catch(() => [])) || [];
-		const wanted = $page.url.searchParams.get('doc');
-		// On mobile, show the list first (single-pane); auto-open only on desktop or a deep link.
-		const d =
-			(wanted && docs.find((x) => x.id === wanted)) || (window.innerWidth > 720 ? docs[0] : null);
-		if (d) open(d);
-	});
+	let showGaps = $state(true);
 
-	function back() {
-		sel = null;
-	}
+	let loadSeq = 0;
 	async function load() {
-		docs = (await api.documents()) || [];
+		const seq = ++loadSeq;
+		loading = true;
+		docsError = null;
+		try {
+			const list = await api.documents();
+			if (seq !== loadSeq) return; // a newer load already landed — drop this stale response
+			docs = list || [];
+		} catch (e) {
+			if (seq !== loadSeq) return;
+			docsError = e?.message || 'Failed to load documents.';
+		} finally {
+			if (seq === loadSeq) loading = false;
+		}
+	}
+	async function refreshMissing() {
+		try {
+			missing = (await api.missingDocs()) || [];
+		} catch {
+			/* the coverage panel just stays as it was */
+		}
 	}
 
 	const filtered = $derived(
@@ -58,10 +66,57 @@
 		})
 	);
 
-	async function open(d) {
-		sel = await api.document(d.id);
+	// ---- the reader ----
+	// selId drives which view shows and rides in the URL (?doc=) so the back
+	// button and deep links work; sel is the fetched detail for that id.
+	let selId = $state(null);
+	let sel = $state(null);
+	let selLoading = $state(false);
+	let selError = $state(null);
+	let attachOpen = $state(false);
+	let typeOpen = $state(false);
+	let labelPickerOpen = $state(false);
+	let confirmDel = $state(false);
+	let contentEl = $state(null);
+
+	let openSeq = 0;
+	async function selectDoc(id) {
 		attachOpen = typeOpen = labelPickerOpen = confirmDel = false;
+		sel = null;
+		selError = null;
+		selLoading = true;
+		const seq = ++openSeq;
+		try {
+			const doc = await api.document(id);
+			if (seq !== openSeq) return; // a newer open already landed
+			sel = doc;
+		} catch (e) {
+			if (seq !== openSeq) return;
+			selError = e?.message || 'Failed to load this document.';
+		} finally {
+			if (seq === openSeq) selLoading = false;
+		}
 	}
+	function open(d) {
+		goto(`/artifacts?doc=${d.id}`, { keepFocus: true, noScroll: true });
+	}
+	function back() {
+		goto('/artifacts', { keepFocus: true, noScroll: true });
+	}
+	// Mirrors the URL into selId/sel — covers clicks, deep links, and the
+	// browser's own back/forward.
+	let urlDoc = undefined;
+	$effect(() => {
+		const id = $page.url.searchParams.get('doc') || null;
+		if (id === urlDoc) return;
+		urlDoc = id;
+		selId = id;
+		if (id) selectDoc(id);
+		else {
+			sel = null;
+			selError = null;
+		}
+	});
 
 	const toc = $derived(extractToc(sel?.bodyMd || ''));
 	function extractToc(md) {
@@ -84,8 +139,14 @@
 
 	async function persist(extra) {
 		if (!sel) return;
-		sel = await api.saveDocument({ id: sel.id, title: sel.title, bodyMd: sel.bodyMd, type: sel.type, ...extra });
-		await load();
+		const prev = sel;
+		try {
+			sel = await api.saveDocument({ id: sel.id, title: sel.title, bodyMd: sel.bodyMd, type: sel.type, ...extra });
+			load();
+		} catch (e) {
+			sel = prev;
+			showToast('Could not save: ' + (e?.message || 'unknown error'), 'error');
+		}
 	}
 	async function setType(t) {
 		typeOpen = false;
@@ -101,22 +162,24 @@
 	}
 	function toggleLabel(id) {
 		const has = sel.labels.some((l) => l.id === id);
-		const ids = has
-			? sel.labels.filter((l) => l.id !== id).map((l) => l.id)
-			: [...sel.labels.map((l) => l.id), id];
+		const ids = has ? sel.labels.filter((l) => l.id !== id).map((l) => l.id) : [...sel.labels.map((l) => l.id), id];
 		persist({ labelIds: ids });
 	}
-	let confirmDel = $state(false);
 	async function del() {
 		if (!sel) return;
 		if (!confirmDel) {
 			confirmDel = true;
 			return;
 		}
-		await api.deleteDocument(sel.id);
-		sel = null;
-		confirmDel = false;
-		await load();
+		try {
+			await api.deleteDocument(sel.id);
+			confirmDel = false;
+			back();
+			load();
+		} catch (e) {
+			confirmDel = false;
+			showToast('Could not delete: ' + (e?.message || 'unknown error'), 'error');
+		}
 	}
 
 	function attachOf(d) {
@@ -128,94 +191,51 @@
 		}
 		return null;
 	}
-	function relTime(iso) {
-		const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-		if (s < 60) return 'just now';
-		if (s < 3600) return Math.floor(s / 60) + 'm ago';
-		if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-		if (s < 604800) return Math.floor(s / 86400) + 'd ago';
-		return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	function issueKeyOf(d) {
+		const a = attachOf(d);
+		return a && a.kind === 'issue' ? a.label : null;
 	}
+	function epicOf(d) {
+		const a = attachOf(d);
+		return a && a.kind !== 'issue' ? a : null;
+	}
+
+	onMount(() => {
+		load();
+		refreshMissing();
+		return onLive((ev) => {
+			if (ev.type === 'document.saved' || ev.type === 'document.deleted') {
+				load();
+				if (ev.type === 'document.deleted' && ev.documentId === selId) back();
+				else if (ev.type === 'document.saved' && ev.document?.id === selId) sel = ev.document;
+			}
+			if (ev.type === 'document.saved' || ev.type === 'document.deleted' || ev.type === 'issue.state_changed' || ev.type === 'issue.deleted') {
+				refreshMissing();
+			}
+		});
+	});
 </script>
 
 <div class="pg">
-	<PageHeader crumbs={[{ label: 'Artifacts' }]} />
+	<PageHeader
+		crumbs={selId
+			? [{ label: 'Artifacts', href: '/artifacts' }, { label: sel?.title || 'Document' }]
+			: [{ label: 'Artifacts' }]}
+	/>
 	<div class="pg-body">
-<div class="docs" class:reading={sel}>
-	<aside class="index">
-		<div class="ihead"><span class="it">Artifacts</span><span class="isub">{docs.length}</span></div>
-		{#if missing.length}
-			<button class="cov" class:open={showGaps} onclick={() => (showGaps = !showGaps)}>
-				<span class="cov-dot"></span>{missing.length} done {missing.length === 1 ? 'issue has' : 'issues have'} no artifact
-			</button>
-			{#if showGaps}
-				<div class="cov-list">
-					{#each missing as m (m.id)}
-						<button class="cov-item" onclick={() => openIssue(m.key)}>
-							<span class="mono">{m.key}</span><span class="cov-t">{m.title}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
-		{/if}
-		<input class="search" placeholder="Search…" bind:value={query} />
-		<div class="filters">
-			<div class="dd tflt">
-				<button class="dd-btn" onclick={() => (filterOpen = !filterOpen)}>
-					{#if typeFilter}<span style:color={typeMeta(typeFilter).color}>{typeMeta(typeFilter).icon}</span>{/if}
-					<span class="dd-label">{typeFilter ? typeMeta(typeFilter).label : 'All types'}</span>
-					<ChevronDown size={14} strokeWidth={2} class="dd-chev" />
-				</button>
-				{#if filterOpen}
-					<div class="dd-bd" role="presentation" onclick={() => (filterOpen = false)}></div>
-					<div class="dd-menu">
-						<button class="dd-item" class:on={!typeFilter} onclick={() => { typeFilter = ''; filterOpen = false; }}>All types</button>
-						{#each Object.entries(TYPES) as [k, t] (k)}
-							<button class="dd-item" class:on={typeFilter === k} onclick={() => { typeFilter = k; filterOpen = false; }}>
-								<span style:color={t.color}>{t.icon}</span>{t.label}
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-			<button class="ai-toggle" class:on={aiOnly} onclick={() => (aiOnly = !aiOnly)} title="{$aiName}-written only">✦ {$aiName}</button>
-		</div>
-		<div class="list">
-			{#each filtered as d (d.id)}
-				<button class="item" class:active={sel && sel.id === d.id} onclick={() => open(d)}>
-					<div class="i-top">
-						<span class="i-ic" style:color={typeMeta(d.type).color}>{typeMeta(d.type).icon}</span>
-						<span class="i-title">{d.title || 'Untitled'}</span>
-						{#if d.author === 'ai'}<span class="ai-badge">✦</span>{/if}
-					</div>
-					<div class="i-sub">
-						{#if attachOf(d)}<span class="i-at">{attachOf(d).icon} {attachOf(d).label}</span><span class="sep">·</span>{/if}
-						<span>{relTime(d.updatedAt)}</span>
-						{#each d.labels ?? [] as l (l.id)}<span class="i-dot" style:background={l.color}></span>{/each}
-					</div>
-				</button>
-			{:else}
-				<div class="empty faint">{query || typeFilter || aiOnly ? 'No matches.' : 'No artifacts yet — Claude writes them as it works.'}</div>
-			{/each}
-		</div>
-	</aside>
-
-	<section class="view">
-		{#if sel}
-			{@const at = attachOf(sel)}
-			<div class="topbar">
-				<button class="mback" onclick={back} aria-label="Back to artifacts list">←</button>
-				<div class="crumb">
-					<span class="ci">▤</span>Artifacts
-					{#if at}<span class="sepp">›</span><button class="crumb-lnk" onclick={() => at.kind === 'issue' && at.issue && openIssue(at.issue.key)}>{at.icon} {at.label}</button>{/if}
-				</div>
-				<div class="grow"></div>
+<div class="artifacts">
+	{#if selId}
+		<div class="rtop">
+			<button class="mback" onclick={back} aria-label="Back to artifacts">←</button>
+			<div class="crumb"><button class="crumb-lnk" onclick={back}>Artifacts</button>{#if sel}<span class="sep">›</span><b>{sel.title}</b>{/if}</div>
+			<span class="rsp"></span>
+			{#if sel}
 				<div class="typewrap">
-					<button class="chip" onclick={() => (typeOpen = !typeOpen)}>
+					<button class="tchip ghost" onclick={() => (typeOpen = !typeOpen)}>
 						<span style:color={typeMeta(sel.type).color}>{typeMeta(sel.type).icon}</span>{typeMeta(sel.type).label}
 					</button>
 					{#if typeOpen}
-						<button class="bd" aria-label="x" onclick={() => (typeOpen = false)}></button>
+						<button class="bd" aria-label="Close" onclick={() => (typeOpen = false)}></button>
 						<div class="pop">
 							{#each Object.entries(TYPES) as [k, t] (k)}
 								<button class="pi" class:on={sel.type === k} onclick={() => setType(k)}><span style:color={t.color}>{t.icon}</span>{t.label}</button>
@@ -223,31 +243,49 @@
 						</div>
 					{/if}
 				</div>
-				<button class="btn" class:danger={confirmDel} class:ghost={!confirmDel} onclick={del} title="Delete document">
-					{#if confirmDel}Confirm delete{:else}<Trash2 size={15} strokeWidth={2} />{/if}
-				</button>
-			</div>
-
-			<div class="body">
-				<div class="scroll" bind:this={contentEl}>
-					<div class="doc">
-						<h1 class="doctitle">{sel.title}</h1>
-						<div class="prov">
-							{#if sel.author === 'ai'}<span class="by ai">✦ Written by {$aiName}</span>{:else}<span class="by">Written by you</span>{/if}
-							{#if at && at.kind === 'issue' && at.issue}<span class="sep">·</span><button class="prov-lnk" onclick={() => openIssue(at.issue.key)}>from {at.issue.key}</button>{/if}
-							<span class="sep">·</span><span>{relTime(sel.updatedAt)}</span>
+				<button class="delbtn" class:danger={confirmDel} onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
+			{/if}
+		</div>
+		<div class="rbody">
+			<div class="rmain" bind:this={contentEl}>
+				<div class="rwrap">
+					{#if sel}
+						<h1 class="rtitle">{sel.title}</h1>
+						<div class="rmeta">
+							{#if sel.author === 'ai'}<span class="ai">✦ Written by {$aiName}</span>{:else}<span>Written by you</span>{/if}
+							{#if attachOf(sel) && attachOf(sel).kind === 'issue' && attachOf(sel).issue}
+								<span class="sep">·</span>
+								<span>Attached to <button class="lnk mono" onclick={() => openIssue(attachOf(sel).issue.key)}>{attachOf(sel).issue.key}</button></span>
+							{/if}
+							<span class="sep">·</span><span>Created {fmtDate(sel.createdAt)}</span>
+							<span class="sep">·</span><span>Updated {rel(sel.updatedAt)}</span>
 						</div>
-						{#if sel.labels.length}
-							<div class="dlabels">
+						{#if sel.labels?.length}
+							<div class="rlabels">
 								{#each sel.labels as l (l.id)}
 									<button class="lbtn" onclick={() => toggleLabel(l.id)}><LabelPill label={l} /><span class="x">✕</span></button>
 								{/each}
 							</div>
 						{/if}
-						<div class="rendered"><Markdown source={sel.bodyMd} /></div>
-					</div>
+						<div class="rc"><Markdown source={sel.bodyMd} /></div>
+					{:else if selError}
+						<div class="rerr">
+							<span>{selError}</span>
+							<button class="btn ghost" onclick={() => selectDoc(selId)}>Try again</button>
+						</div>
+					{:else}
+						<div class="rsk">
+							<span class="skb" style="width:60%;height:30px;margin-bottom:14px"></span>
+							<span class="skb" style="width:40%;height:13px;margin-bottom:26px"></span>
+							<span class="skb" style="width:100%;height:11px;margin-bottom:8px"></span>
+							<span class="skb" style="width:92%;height:11px;margin-bottom:8px"></span>
+							<span class="skb" style="width:76%;height:11px"></span>
+						</div>
+					{/if}
 				</div>
+			</div>
 
+			{#if sel}
 				<aside class="rail">
 					{#if toc.length}
 						<div><div class="rh">On this page</div>
@@ -259,11 +297,11 @@
 					<div>
 						<div class="rh">Attached to</div>
 						<div class="attachwrap">
-							<button class="chip full" onclick={() => (attachOpen = !attachOpen)}>
-								{#if at}<span class="ci">{at.icon}</span>{at.label}{:else}＋ Attach{/if}
+							<button class="attach" onclick={() => (attachOpen = !attachOpen)}>
+								{#if attachOf(sel)}<span class="mono">{attachOf(sel).icon} {attachOf(sel).label}</span>{:else}＋ Attach{/if}
 							</button>
 							{#if attachOpen}
-								<button class="bd" aria-label="x" onclick={() => (attachOpen = false)}></button>
+								<button class="bd" aria-label="Close" onclick={() => (attachOpen = false)}></button>
 								<div class="pop wide">
 									<button class="pi" onclick={() => setAttach('none', '')}>No attachment</button>
 									{#if $projects.length}<div class="ps">Epics</div>{/if}
@@ -280,7 +318,7 @@
 							{#each sel.labels as l (l.id)}<button class="lbtn" onclick={() => toggleLabel(l.id)}><LabelPill label={l} /><span class="x">✕</span></button>{/each}
 							<button class="chip" onclick={() => (labelPickerOpen = !labelPickerOpen)}>＋</button>
 							{#if labelPickerOpen}
-								<button class="bd" aria-label="x" onclick={() => (labelPickerOpen = false)}></button>
+								<button class="bd" aria-label="Close" onclick={() => (labelPickerOpen = false)}></button>
 								<div class="pop">
 									{#each $allLabels as l (l.id)}<button class="pi" class:on={sel.labels.some((x) => x.id === l.id)} onclick={() => toggleLabel(l.id)}><span class="dot" style:background={l.color}></span>{l.name}</button>{/each}
 								</div>
@@ -288,92 +326,229 @@
 						</div>
 					</div>
 				</aside>
+			{/if}
+		</div>
+	{:else}
+		<div class="main">
+			<div class="mtop"><span class="ptitle">Artifacts</span><span class="msub">{docs.length} document{docs.length === 1 ? '' : 's'}</span></div>
+
+			{#if docsError}
+				<div class="err">
+					<span>{docsError}</span>
+					<button class="btn ghost" onclick={load}>Retry</button>
+				</div>
+			{/if}
+
+			{#if missing.length}
+				<div class="gaps">
+					<button class="gaps-h" onclick={() => (showGaps = !showGaps)} aria-expanded={showGaps}>
+						<span class="gdot">◐</span>Coverage gaps<span class="n">{missing.length}</span>
+					</button>
+					{#if showGaps}
+						<div class="gaps-list">
+							{#each missing as m (m.id)}
+								<button class="gaps-item" onclick={() => openIssue(m.key)}>
+									<span class="k mono">{m.key}</span><span class="gaps-t">{m.title}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
+			<div class="toolsrow">
+				<input class="inp" placeholder="Search documents…" bind:value={query} />
+				<div class="tchips">
+					<button class="tchip" class:on={!typeFilter} onclick={() => (typeFilter = '')}>All</button>
+					{#each Object.entries(TYPES) as [k, t] (k)}
+						<button class="tchip" class:on={typeFilter === k} onclick={() => (typeFilter = k)}>
+							<span class="gd" style:background={t.color}></span>{t.label}
+						</button>
+					{/each}
+				</div>
+				<span class="sp1"></span>
+				<button class="tchip" class:on={aiOnly} onclick={() => (aiOnly = !aiOnly)}>✦ {$aiName} only</button>
 			</div>
-		{:else}
-			<div class="ph">
-				<div class="ph-ic">✦</div>
-				<div class="ph-t">{$aiName}'s engineering journal</div>
-				<div class="faint">Claude writes a document when it implements or changes something — what it is, how it works, a mermaid diagram, key files. Pick one on the left to read.</div>
-			</div>
-		{/if}
-	</section>
+
+			{#if loading && !docs.length}
+				<div class="dlist sk">
+					{#each [72, 55, 64, 40, 60] as w, i (i)}
+						<div class="skrow">
+							<span class="skb" style="width:14px"></span>
+							<span class="skb" style="width:{w}%"></span>
+							<span class="skb" style="width:50px"></span>
+							<span class="skb" style="width:80px"></span>
+							<span class="skb" style="width:60px"></span>
+							<span class="skb" style="width:30px"></span>
+						</div>
+					{/each}
+				</div>
+			{:else if docs.length === 0 && !docsError}
+				<div class="hero">
+					<span class="ic">✦</span>
+					<span class="t">{$aiName}'s engineering journal</span>
+					<span class="d faint">{$aiName} writes a document when it implements or changes something — what it is, how it works, a mermaid diagram, key files. Nothing recorded yet.</span>
+				</div>
+			{:else}
+				<div class="dlist">
+					<div class="dhead"><span></span><span>Title</span><span>Issue</span><span>Epic</span><span>Author</span><span>Updated</span></div>
+					{#each filtered as d (d.id)}
+						{@const key = issueKeyOf(d)}
+						{@const epic = epicOf(d)}
+						<button class="drow" onclick={() => open(d)}>
+							<span class="d-top">
+								<span class="d-ic" style:color={typeMeta(d.type).color}>{typeMeta(d.type).icon}</span>
+								<span class="d-title">{d.title || 'Untitled'}{#if d.author === 'ai'}<span class="ai">✦</span>{/if}</span>
+							</span>
+							<span class="d-key">{key || '—'}</span>
+							<span class="d-epic" class:d-dash={!epic}>{#if epic}<span class="ic">{epic.icon}</span>{epic.label}{:else}—{/if}</span>
+							<span class="d-auth"><span class="av" class:ai={d.author === 'ai'}>{d.author === 'ai' ? $aiName.charAt(0).toUpperCase() : 'Y'}</span>{d.author === 'ai' ? $aiName : 'You'}</span>
+							<span class="d-time">{rel(d.updatedAt)}</span>
+							<span class="d-msub">
+								{#if key}<span class="mono">{key}</span><span class="sep">·</span>{:else if epic}<span class="ic">{epic.icon}</span>{epic.label}<span class="sep">·</span>{/if}
+								<span>{rel(d.updatedAt)}</span>
+							</span>
+						</button>
+					{:else}
+						<div class="empty faint">No matches.</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
 </div>
 	</div>
 </div>
 
 <style>
-	.docs { display: flex; height: 100%; min-height: 0; }
-	.index { width: 300px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-	.ihead { display: flex; align-items: baseline; gap: 8px; padding: 15px 14px 8px; }
-	.it { font: 600 15px/1 var(--font); }
-	.isub { font-size: 12px; color: var(--ink-3); }
-	.search { margin: 0 12px 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 13px; outline: none; }
-	.cov { display: flex; align-items: center; gap: 7px; margin: 0 12px 8px; background: color-mix(in srgb, var(--st-progress) 12%, var(--paper)); border: 1px solid color-mix(in srgb, var(--st-progress) 30%, var(--line)); border-radius: 8px; color: var(--ink); padding: 7px 10px; font-size: 12.5px; text-align: left; }
-	.cov:hover { border-color: color-mix(in srgb, var(--st-progress) 50%, var(--line)); }
-	.cov-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st-progress); flex: none; }
-	.cov-list { margin: 0 12px 8px; display: flex; flex-direction: column; gap: 1px; max-height: 200px; overflow-y: auto; }
-	.cov-item { display: flex; align-items: center; gap: 8px; background: none; border: none; color: var(--ink-2); text-align: left; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; }
-	.cov-item:hover { background: var(--hover); color: var(--ink); }
-	.cov-item .mono { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); flex: none; }
-	.cov-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.search:focus { border-color: var(--accent); }
-	.filters { display: flex; gap: 6px; padding: 0 12px 10px; border-bottom: 1px solid var(--line); }
-	.tflt { flex: 1; }
-	.ai-toggle { display: inline-flex; align-items: center; gap: 4px; background: var(--paper); border: 1px solid var(--line); color: var(--ink-2); border-radius: 7px; padding: 6px 10px; font-size: 12.5px; flex: none; }
-	.ai-toggle:hover { border-color: var(--line-strong); color: var(--ink); }
-	.ai-toggle.on { background: color-mix(in srgb, var(--accent) 16%, var(--paper)); border-color: var(--accent); color: var(--ink); }
-	.list { flex: 1; overflow-y: auto; padding: 6px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
-	.item { text-align: left; background: none; border: none; color: var(--ink); padding: 8px 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
-	.item:hover { background: var(--surface); }
-	.item.active { background: var(--hover); }
-	.i-top { display: flex; align-items: center; gap: 7px; }
-	.i-ic { font-size: 13px; flex: none; }
-	.i-title { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-	.ai-badge { color: var(--accent); font-size: 11px; flex: none; }
-	.i-sub { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); padding-left: 20px; }
-	.i-at { color: var(--ink-2); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.i-dot { width: 7px; height: 7px; border-radius: 50%; }
+	.artifacts { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+	/* ---- index ---- */
+	.main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 18px clamp(16px, 4vw, 28px) 24px; overflow-y: auto; }
+	.mtop { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex: none; }
+	.ptitle { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
+	.msub { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+
+	.err { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 10px 14px; margin-bottom: 14px; background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--r); color: var(--danger); font-size: 13px; flex: none; }
+
+	.gaps { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 11px 14px; margin-bottom: 14px; flex: none; }
+	.gaps-h { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink); background: none; border: none; padding: 0; text-align: left; }
+	.gaps-h .gdot { color: var(--st-progress); font-size: 13px; }
+	.gaps-h .n { font-family: var(--mono); font-weight: 500; color: var(--st-progress); background: color-mix(in srgb, var(--st-progress) 16%, var(--surface)); border-radius: 999px; padding: 0 8px; height: 18px; display: inline-flex; align-items: center; font-size: 11px; }
+	.gaps-list { display: flex; flex-direction: column; gap: 1px; max-height: 220px; overflow-y: auto; }
+	.gaps-item { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; font-size: var(--t-sm); color: var(--ink-2); background: none; border: none; text-align: left; }
+	.gaps-item:hover { background: var(--hover); color: var(--ink); }
+	.gaps-item .k { color: var(--ink-3); font-size: var(--t-xs); flex: none; width: 54px; }
+	.gaps-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+	.toolsrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 13px; border-bottom: 1px solid var(--line); margin-bottom: 12px; flex: none; }
+	.inp { height: 30px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); font: var(--t-base) var(--font); color: var(--ink); box-sizing: border-box; width: 220px; outline: none; }
+	.inp:focus { border-color: var(--accent); }
+	.inp::placeholder { color: var(--ink-3); }
+	.tchips { display: flex; gap: 6px; flex-wrap: wrap; }
+	.tchip { display: inline-flex; align-items: center; gap: 6px; height: 27px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: var(--t-sm); color: var(--ink-2); box-sizing: border-box; white-space: nowrap; }
+	.tchip:hover { border-color: var(--line-strong); color: var(--ink); }
+	.tchip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+	.tchip.ghost { background: var(--surface); }
+	.tchip .gd { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+	.sp1 { flex: 1; }
+
+	.dlist { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); overflow: hidden; flex: none; }
+	.dhead, .drow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 88px 150px 110px 56px; gap: 12px; align-items: center; padding: 0 14px; box-sizing: border-box; width: 100%; }
+	.dhead { height: 28px; font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); background: var(--sunken); }
+	.drow { height: 46px; border-bottom: 1px solid var(--line); background: none; border-left: none; border-right: none; border-top: none; text-align: left; color: var(--ink); }
+	.drow:hover { background: var(--hover); }
+	.drow:last-child { border-bottom: 0; }
+	.d-top { display: contents; }
+	.d-ic { font-size: 14px; }
+	.d-title { font-family: var(--serif); font-size: 14.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
+	.d-title .ai { color: var(--accent); font-size: 10px; flex: none; }
+	.d-key { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink-3); }
+	.d-epic { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+	.d-epic .ic { color: var(--ink-3); flex: none; }
+	.d-epic.d-dash { color: var(--ink-3); }
+	.d-auth { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); }
+	.av { width: 18px; height: 18px; border-radius: 50%; background: var(--sunken); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font: 600 9px var(--font); color: var(--ink-2); flex: none; }
+	.av.ai { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+	.d-time { font-size: var(--t-xs); color: var(--ink-3); text-align: right; }
+	.d-msub { display: none; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); padding-left: 21px; }
+	.d-msub .sep { color: var(--ink-3); }
 	.empty { padding: 30px 14px; text-align: center; font-size: 13px; line-height: 1.5; }
 
-	.view { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-	.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--line); }
-	.crumb { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--dim); }
-	.crumb .ci { color: var(--ink-3); }
-	.crumb .sepp { color: var(--ink-3); }
-	.crumb-lnk { background: none; border: none; color: var(--ink); font-size: 12.5px; padding: 0; }
-	.crumb-lnk:hover { color: var(--accent); }
-	.grow { flex: 1; }
-	.body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
-	.scroll { flex: 1; overflow-y: auto; min-width: 0; }
-	.doc { max-width: 720px; margin: 0 auto; padding: 30px 36px 80px; }
-	.doctitle { font: 700 30px/1.2 var(--font); letter-spacing: -0.015em; margin: 0 0 10px; }
-	.prov { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); margin-bottom: 14px; }
-	.prov .by.ai { color: var(--accent); }
-	.prov .sep, .i-sub .sep { color: var(--ink-3); }
-	.prov-lnk { background: none; border: none; color: var(--ink-2); font-size: 12.5px; padding: 0; }
-	.prov-lnk:hover { color: var(--accent); }
-	.dlabels { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-	.rendered { font-size: 15px; }
-	.rendered :global(h1) { font: 700 24px/1.3 var(--font); margin: 22px 0 10px; }
-	.rendered :global(h2) { font: 650 19px/1.3 var(--font); margin: 26px 0 10px; }
-	.rendered :global(h3) { font: 600 16px/1.3 var(--font); margin: 20px 0 8px; }
+	.hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; text-align: center; padding: 40px 20px; }
+	.hero .ic { font-size: 24px; color: var(--accent); }
+	.hero .t { font-family: var(--serif); font-size: 19px; color: var(--ink); }
+	.hero .d { font-size: var(--t-sm); max-width: 340px; line-height: 1.6; }
 
-	.rail { width: 232px; flex: none; border-left: 1px solid var(--line); padding: 26px 16px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
-	.rh { font: 600 10.5px/1 var(--font); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
+	.skrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 88px 150px 110px 56px; gap: 12px; align-items: center; height: 46px; padding: 0 14px; border-bottom: 1px solid var(--line); box-sizing: border-box; }
+	.skrow:last-child { border-bottom: 0; }
+	.skb { height: 9px; border-radius: 4px; background: var(--line); display: inline-block; }
+	@media (prefers-reduced-motion: no-preference) {
+		.sk .skb, .rsk .skb { animation: skshim 1.6s ease-in-out infinite; }
+	}
+	@keyframes skshim { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+	/* ---- reader ---- */
+	.rtop { display: flex; align-items: center; gap: 12px; padding: 14px clamp(16px, 4vw, 24px); border-bottom: 1px solid var(--line); flex: none; }
+	.crumb { display: none; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-3); min-width: 0; overflow: hidden; }
+	.crumb b { color: var(--ink-2); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.crumb .sep { flex: none; }
+	.crumb-lnk { background: none; border: none; color: var(--ink-3); font-size: var(--t-sm); padding: 0; text-transform: none; }
+	.crumb-lnk:hover { color: var(--ink); }
+	.rsp { flex: 1; }
+	.delbtn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: var(--t-sm); box-sizing: border-box; }
+	.delbtn:hover { border-color: var(--line-strong); color: var(--ink); }
+	.delbtn.danger { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); font-weight: 500; }
+
+	.rbody { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+	.rmain { flex: 1; overflow-y: auto; min-width: 0; }
+	.rwrap { max-width: 68ch; margin: 0 auto; padding: 36px 32px 100px; }
+	.rtitle { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.15; margin: 0 0 14px; letter-spacing: -0.01em; color: var(--ink); }
+	.rmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 16px; margin-bottom: 6px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); color: var(--ink-2); }
+	.rmeta .sep { color: var(--ink-3); }
+	.rmeta .ai { color: var(--accent); }
+	.lnk { background: none; border: none; color: var(--ink-2); padding: 0; font-size: inherit; }
+	.lnk:hover { color: var(--accent); }
+	.rlabels { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
+	.lbtn { background: none; border: none; padding: 0; display: inline-flex; align-items: center; }
+	.lbtn .x { font-size: 9px; color: var(--ink-3); margin-left: 3px; }
+
+	.rc { font-family: var(--serif); font-size: var(--t-md); line-height: 1.7; color: var(--ink); margin-top: 22px; }
+	.rwrap .rc :global(h1) { font-family: var(--serif); font-weight: 500; font-size: 26px; margin: 0 0 14px; }
+	.rwrap .rc :global(h2) { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 30px 0 12px; }
+	.rwrap .rc :global(h2:first-child) { margin-top: 0; }
+	.rwrap .rc :global(h3) { font-family: var(--serif); font-weight: 500; font-size: 18px; margin: 24px 0 10px; }
+	.rwrap .rc :global(p) { margin: 0 0 15px; }
+	.rwrap .rc :global(ul), .rwrap .rc :global(ol) { margin: 0 0 16px; padding-left: 1.3em; }
+	.rwrap .rc :global(li) { margin-bottom: 5px; }
+	.rwrap .rc :global(code) { font-family: var(--mono); font-size: 13px; background: var(--sunken); padding: 1px 5px; border-radius: 4px; }
+	.rwrap .rc :global(table) { border-collapse: collapse; width: 100%; margin: 0 0 20px; font-family: var(--font); font-size: 13px; }
+	.rwrap .rc :global(th), .rwrap .rc :global(td) { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
+	.rwrap .rc :global(th) { background: var(--sunken); font-weight: 600; color: var(--ink-2); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+	.rwrap .rc :global(pre) { background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; overflow-x: auto; margin: 0 0 20px; }
+	.rwrap .rc :global(pre code) { background: none; padding: 0; font-size: 12.5px; }
+	.rwrap .rc :global(blockquote) { border-left: 3px solid var(--line-strong); margin: 0 0 16px; padding-left: 1em; color: var(--ink-2); }
+	.rwrap .rc :global(.mermaid-container) { margin: 4px 0 20px; }
+
+	.rerr { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--r); color: var(--danger); font-size: 13.5px; }
+	.rsk { padding-top: 4px; }
+	.rsk .skb { border-radius: 4px; background: var(--line); display: block; }
+	@media (prefers-reduced-motion: no-preference) { .rsk .skb { animation: skshim 1.6s ease-in-out infinite; } }
+
+	.rail { width: 232px; flex: none; border-left: 1px solid var(--line); padding: 24px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 22px; box-sizing: border-box; }
+	.rh { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
 	.toc { display: flex; flex-direction: column; gap: 1px; }
-	.ta { text-align: left; background: none; border: none; border-left: 2px solid transparent; color: var(--ink-2); font-size: 13px; padding: 5px 10px; }
-	.ta.sub { padding-left: 22px; font-size: 12.5px; }
-	.ta:hover { color: var(--ink); border-left-color: var(--accent); }
+	.ta { text-align: left; background: none; border: none; border-left: 2px solid transparent; color: var(--ink-2); font-size: 13px; padding: 5px 8px; }
+	.ta.sub { padding-left: 20px; font-size: 12.5px; }
+	.ta:hover, .ta.on { color: var(--ink); border-left-color: var(--accent); font-weight: 500; }
+	.attach { display: flex; align-items: center; gap: 8px; height: 30px; width: 100%; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); font-size: var(--t-sm); color: var(--ink); text-align: left; box-sizing: border-box; }
+	.attach:hover { border-color: var(--accent); }
 
 	.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--ink-2); border-radius: 7px; padding: 5px 10px; font-size: 12.5px; }
 	.chip:hover { background: var(--hover); color: var(--ink); }
-	.chip.full { width: 100%; justify-content: flex-start; }
-	.chip .ci { color: var(--ink-3); }
 	.typewrap, .attachwrap, .railwrap { position: relative; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-	.lbtn { background: none; border: none; padding: 0; display: inline-flex; align-items: center; }
-	.lbtn .x { font-size: 9px; color: var(--ink-3); margin-left: 3px; }
 	.bd { position: fixed; inset: 0; z-index: 30; background: none; border: none; }
-	.pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; min-width: 170px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-2); padding: 5px; }
+	.pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; min-width: 170px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-2); padding: 5px; }
 	.pop.wide { width: 250px; max-height: 320px; overflow-y: auto; }
 	.ps { font: 600 10px/1 var(--font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 8px 9px 3px; }
 	.pi { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; color: var(--ink); padding: 7px 9px; border-radius: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -382,35 +557,23 @@
 	.pi .mono { font-family: var(--mono); color: var(--ink-3); font-size: 11px; }
 	.pi .dim { color: var(--ink-3); }
 
-	.ph { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 40px; }
-	.ph-ic { font-size: 30px; color: var(--accent); }
-	.ph-t { font: 600 17px/1 var(--font); }
-	.ph .faint { max-width: 420px; line-height: 1.6; font-size: 13.5px; }
-
 	.mback { display: none; }
 
 	@media (max-width: 720px) {
-		/* single-pane: list full-width, tap opens the reader full-width */
-		.index { width: 100%; border-right: none; }
-		.view { display: none; }
-		.docs.reading .index { display: none; }
-		.docs.reading .view { display: flex; }
+		.main { padding: 14px 14px 20px; }
+		.inp { width: 100%; }
+		.dhead { display: none; }
+		.drow { grid-template-columns: none; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; height: auto; padding: 10px 14px; }
+		.d-top { display: flex; align-items: center; gap: 7px; width: 100%; }
+		.d-key, .d-epic, .d-auth, .d-time { display: none; }
+		.d-msub { display: flex; }
+
+		.rtop { padding: 10px 14px; }
+		.rwrap { padding: 18px 16px 60px; }
+		.rtitle { font-size: 26px; }
 		.rail { display: none; }
-		.doc { padding: 18px 16px 60px; }
-		.topbar { padding: 10px 14px; }
-		.mback {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			width: 32px;
-			height: 32px;
-			border-radius: 8px;
-			border: 1px solid var(--line);
-			background: var(--surface);
-			color: var(--ink-2);
-			font-size: 18px;
-			flex: none;
-		}
+		.mback { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 18px; flex: none; }
 		.mback:hover { color: var(--ink); }
+		.crumb { display: none; }
 	}
 </style>
