@@ -108,7 +108,13 @@ async function renderMermaidNow(root) {
 			wrap.innerHTML = svg;
 			const toggle = document.createElement('button');
 			toggle.className = 'mermaid-toggle';
+			toggle.type = 'button';
 			toggle.textContent = 'code';
+			const expand = document.createElement('button');
+			expand.className = 'mermaid-expand';
+			expand.type = 'button';
+			expand.textContent = 'Expand';
+			expand.setAttribute('aria-label', 'Open diagram full-screen');
 			const codeEl = document.createElement('pre');
 			codeEl.className = 'mermaid-source';
 			codeEl.style.display = 'none';
@@ -118,10 +124,16 @@ async function renderMermaidNow(root) {
 				codeEl.style.display = showing ? 'none' : 'block';
 				wrap.style.display = showing ? 'block' : 'none';
 				toggle.textContent = showing ? 'code' : 'diagram';
+				expand.style.display = showing ? '' : 'none';
 			};
 			const container = document.createElement('div');
 			container.className = 'mermaid-container';
-			container.append(toggle, wrap, codeEl);
+			// The source rides on the block so the full-screen viewer can copy it.
+			container.dataset.source = code;
+			const actions = document.createElement('div');
+			actions.className = 'mermaid-actions';
+			actions.append(expand, toggle);
+			container.append(actions, wrap, codeEl);
 			block.replaceWith(container);
 		} catch (e) {
 			block.innerHTML = `<code>mermaid error: ${escapeHtml(String(e))}</code>`;

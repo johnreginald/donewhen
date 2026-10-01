@@ -1,8 +1,23 @@
 <script>
 	import { renderMarkdown, renderMermaid } from '$lib/markdown.js';
+	import DiagramViewer from './DiagramViewer.svelte';
 
 	let { source = '' } = $props();
 	let el = $state(null);
+	let viewer = $state(null); // { svg, source } while the overlay is open
+
+	// One delegated handler serves every diagram in this Markdown: the Expand
+	// button and a click on the diagram itself both open the viewer.
+	function onclick(e) {
+		const t = e.target;
+		if (!(t instanceof Element)) return;
+		const box = t.closest('.mermaid-container');
+		if (!box || t.closest('.mermaid-toggle')) return;
+		if (!t.closest('.mermaid-expand') && !t.closest('.mermaid-rendered')) return;
+		const svg = box.querySelector('.mermaid-rendered svg');
+		if (!svg) return;
+		viewer = { svg: svg.outerHTML, source: box.dataset.source || '' };
+	}
 
 	$effect(() => {
 		const src = source;
@@ -12,7 +27,12 @@
 	});
 </script>
 
-<div class="markdown" bind:this={el}></div>
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="markdown" bind:this={el} {onclick}></div>
+
+{#if viewer}
+	<DiagramViewer svg={viewer.svg} source={viewer.source} onclose={() => (viewer = null)} />
+{/if}
 
 <style>
 	/* The record reads as prose: issue descriptions (and comments, via the same
@@ -90,17 +110,32 @@
 		padding: 12px;
 		margin: 0.8em 0;
 	}
-	.markdown :global(.mermaid-toggle) {
+	.markdown :global(.mermaid-actions) {
 		position: absolute;
 		top: 8px;
 		right: 8px;
+		display: flex;
+		gap: 6px;
+		z-index: 2;
+	}
+	.markdown :global(.mermaid-toggle),
+	.markdown :global(.mermaid-expand) {
 		background: var(--surface);
 		border: 1px solid var(--line);
 		color: var(--ink-2);
 		border-radius: 5px;
 		font-size: 11px;
 		padding: 2px 8px;
-		z-index: 2;
+		font-family: var(--font);
+		cursor: pointer;
+	}
+	.markdown :global(.mermaid-toggle:hover),
+	.markdown :global(.mermaid-expand:hover) {
+		background: var(--hover);
+		color: var(--ink);
+	}
+	.markdown :global(.mermaid-rendered) {
+		cursor: zoom-in;
 	}
 	.markdown :global(.mermaid-rendered svg) {
 		max-width: 100%;
