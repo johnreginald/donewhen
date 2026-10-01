@@ -64,6 +64,10 @@
 				return 'renamed the issue';
 			case 'artifact_written':
 				return `wrote artifact “${a.detail}”`;
+			case 'epic_archived':
+				return a.detail ? `archived epic “${a.detail}”` : 'archived an epic';
+			case 'epic_unarchived':
+				return a.detail ? `unarchived epic “${a.detail}”` : 'unarchived an epic';
 			case 'deleted':
 				return 'deleted';
 			default: {

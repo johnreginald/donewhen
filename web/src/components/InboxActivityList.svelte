@@ -44,10 +44,14 @@
 				return `commented: ${a.detail}`;
 			case 'artifact_written':
 				return `wrote a document “${a.detail}”`;
+			case 'epic_archived':
+				return a.detail ? `archived epic “${a.detail}”` : 'archived an epic';
+			case 'epic_unarchived':
+				return a.detail ? `unarchived epic “${a.detail}”` : 'unarchived an epic';
 			case 'deleted':
 				return `deleted`;
 			default:
-				return a.kind;
+				return a.kind.replace(/_/g, ' ');
 		}
 	}
 
