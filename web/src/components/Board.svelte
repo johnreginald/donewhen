@@ -1,6 +1,6 @@
 <script>
 	import { dndzone } from 'svelte-dnd-action';
-	import { states, boardVisibleIssues, issueQuery, issues, loadIssues, activeWorkspace } from '$lib/store.js';
+	import { states, boardVisibleIssues, issueQuery, issues, moveIssueTo, activeWorkspace } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { gateFailure, gateSummary } from '$lib/gate.js';
 	import { showToast } from '$lib/ui.js';
@@ -106,9 +106,10 @@
 		cols[i].items = e.detail.items;
 	}
 
-	// One PATCH for the one card that moved — not one per card whose index
-	// shifted. `position` is a float made exactly for this: sit the dragged
-	// card between its new neighbours instead of renumbering the column.
+	// One request for the one card that moved. The server ranks it between the
+	// two neighbours at the drop point (`after` above, `before` below), so cards
+	// hidden by a filter keep their order. Store objects are never edited in
+	// place: the optimistic move is a copy, and a failure puts the original back.
 	async function finalize(i, e) {
 		const col = cols[i];
 		const movedId = e.detail.info?.id;
@@ -116,34 +117,18 @@
 		dragging = false;
 		const idx = col.items.findIndex((it) => it.id === movedId);
 		if (idx < 0) return; // this zone is where the card left from, not where it landed
-		const it = col.items[idx];
 		const prevItem = col.items[idx - 1];
 		const nextItem = col.items[idx + 1];
-		const newPos =
-			prevItem && nextItem
-				? (prevItem.position + nextItem.position) / 2
-				: prevItem
-					? prevItem.position + 1
-					: nextItem
-						? nextItem.position - 1
-						: 0;
-		const moved = it.stateId !== col.id;
-		const prevStateId = it.stateId;
-		const prevPos = it.position;
-		it.stateId = col.id;
-		it.position = newPos;
+		const key = col.items[idx].key;
 		try {
-			await api.updateIssue(it.id, { stateId: col.id, position: newPos });
-			if (moved) showToast(`${it.key} → ${col.name}`);
+			const r = await moveIssueTo(movedId, col.id, prevItem, nextItem);
+			if (r && r.original.stateId !== col.id) showToast(`${r.original.key} → ${col.name}`);
 		} catch (err) {
 			const g = gateFailure(err);
 			showToast(
-				g ? gateSummary(g, it.key) + ' ' + g.open.map((o) => `${o.index}. ${o.text}`).join('; ') : 'Move failed: ' + err.message,
+				g ? gateSummary(g, key) + ' ' + g.open.map((o) => `${o.index}. ${o.text}`).join('; ') : 'Move failed: ' + err.message,
 				'error'
 			);
-			it.stateId = prevStateId;
-			it.position = prevPos;
-			await loadIssues();
 		}
 	}
 </script>

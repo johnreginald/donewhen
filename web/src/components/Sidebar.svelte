@@ -8,8 +8,9 @@
 		activeProject,
 		activeInitiative,
 		loadIssues,
-		issues,
+		allIssues,
 		inboxCount,
+		refreshInbox,
 		activeWorkspace,
 		me
 	} from '$lib/store.js';
@@ -81,22 +82,12 @@
 		wsOpen = !wsOpen;
 	}
 
-	// Full issue set (filter-independent) for the per-epic totals in the badge.
-	let allIssues = $state([]);
-	async function refreshCounts() {
-		allIssues = (await api.issues()) || [];
-		try {
-			const r = await api.inbox();
-			inboxCount.set((r?.needsReview || []).length + (r?.waiting || []).length);
-		} catch {
+	// Per-epic totals come from the store's unfiltered list, which live events
+	// keep current; moving a card never refetches anything here.
+	onMount(() => {
+		refreshInbox().catch(() => {
 			/* not logged in yet / offline — leave badge as-is */
-		}
-	}
-	onMount(refreshCounts);
-	// re-pull when issues change (create / move / delete via the board or SSE)
-	$effect(() => {
-		$issues;
-		refreshCounts();
+		});
 	});
 
 	// Edit / delete an Epic (DoneWhen "project").
@@ -122,7 +113,7 @@
 	// The workspace (top left) already names the project, so the sidebar
 	// lists its epics directly, each with how many tasks it holds.
 	const epics = $derived(
-		$projects.map((p) => ({ ...p, count: allIssues.filter((is) => is.projectId === p.id).length }))
+		$projects.map((p) => ({ ...p, count: $allIssues.filter((is) => is.projectId === p.id).length }))
 	);
 
 	// Epics fold away; the choice is kept per browser.

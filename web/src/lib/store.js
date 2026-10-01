@@ -31,6 +31,13 @@ export function openBlockersByIssue(links) {
 	return m;
 }
 export const issues = writable([]);
+// Every issue in the workspace, whatever the epic / label filter says. The
+// sidebar's per-epic totals read this one, and live events keep it current, so
+// a drag never has to refetch the list to update a count.
+export const allIssues = writable([]);
+// Issues with a move in flight: live events for them are ignored until the move
+// returns, so a stale echo cannot undo the optimistic position.
+export const movingIds = new Set();
 export const appConfig = writable({});
 export const me = writable(null);
 export const activeProject = writable(''); // '' = all (epic-level filter)
@@ -110,6 +117,8 @@ export async function switchWorkspace(slug) {
 	activeProject.set('');
 	activeLabel.set('');
 	issues.set([]);
+	allIssues.set([]);
+	issueQuery.set('');
 	// Remember the choice server-side so a new session lands here too, and only
 	// then let the live stream reopen on the new workspace.
 	switching.set(true);
@@ -122,6 +131,7 @@ export async function switchWorkspace(slug) {
 	}
 	await loadMeta();
 	await loadIssues();
+	refreshInbox().catch(() => {});
 }
 
 export async function loadMeta() {
@@ -144,7 +154,9 @@ export async function loadMeta() {
 	appConfig.set(cfg || {});
 }
 
-export async function loadIssues() {
+// refreshAll also re-reads the unfiltered list; a filter change does not need it,
+// live events keep that list current.
+export async function loadIssues(refreshAll = false) {
 	const initiative = get(activeInitiative);
 	const project = get(activeProject);
 	const label = get(activeLabel);
@@ -152,8 +164,12 @@ export async function loadIssues() {
 	if (initiative) f.initiative = initiative;
 	else if (project) f.project = project;
 	if (label) f.label = label;
-	const list = await api.issues(f);
-	issues.set(list || []);
+	const filtered = Object.keys(f).length > 0;
+	const list = (await api.issues(f)) || [];
+	issues.set(list);
+	// Unfiltered, the one fetch serves both; filtered, the totals need their own.
+	if (!filtered) allIssues.set(list);
+	else if (refreshAll || get(allIssues).length === 0) allIssues.set((await api.issues()) || []);
 }
 
 // catchUp refetches everything a live event could have changed. It runs after
@@ -161,7 +177,7 @@ export async function loadIssues() {
 // one is running share it.
 export const catchUp = coalesce(async () => {
 	await Promise.all([
-		loadIssues(),
+		loadIssues(true),
 		loadBlockLinks(),
 		refreshInbox().catch(() => {}),
 		loadWorkspaceCounts()
@@ -176,10 +192,15 @@ export function applyEvent(ev) {
 	const wsId = get(activeWorkspace)?.id;
 	const evWs = ev.workspaceId || ev.issue?.workspaceId;
 	if (wsId && evWs && evWs !== wsId) return;
-	// A ticket moving can free (or re-block) the tickets it blocks.
+	// A ticket moving can free (or re-block) the tickets it blocks, and can
+	// change what is waiting on the user.
 	if (ev.type === 'issue.blockers' || ev.type === 'issue.state_changed') loadBlockLinks();
+	if (ev.type === 'issue.state_changed') scheduleInboxRefresh();
+	const id = ev.issue?.id || ev.issueId;
+	if (id && movingIds.has(id)) return;
 	if (ev.type === 'issue.deleted') {
 		issues.update((l) => l.filter((i) => i.id !== ev.issueId));
+		allIssues.update((l) => l.filter((i) => i.id !== ev.issueId));
 		return;
 	}
 	if (ev.issue) {
@@ -190,17 +211,54 @@ export function applyEvent(ev) {
 			label: get(activeLabel),
 			projects: get(projects)
 		});
-		issues.update((l) => {
-			const idx = l.findIndex((i) => i.id === ev.issue.id);
-			if (!fits) return idx >= 0 ? l.filter((i) => i.id !== ev.issue.id) : l;
-			if (idx >= 0) {
-				const copy = [...l];
-				copy[idx] = ev.issue;
-				return copy;
-			}
-			return [...l, ev.issue];
-		});
+		issues.update((l) => upsert(l, ev.issue, fits));
+		allIssues.update((l) => upsert(l, ev.issue, true));
 	}
+}
+
+// upsert puts one issue into a list (replacing it by id) or, when it does not
+// belong, takes it out. Always returns a new array and never edits an issue.
+function upsert(list, issue, keep) {
+	const idx = list.findIndex((i) => i.id === issue.id);
+	if (!keep) return idx >= 0 ? list.filter((i) => i.id !== issue.id) : list;
+	if (idx < 0) return [...list, issue];
+	const copy = [...list];
+	copy[idx] = issue;
+	return copy;
+}
+
+// moveIssueTo is a board drop: move the card optimistically, send one request,
+// and on failure put the original back (and rethrow). prev / next are the cards
+// above and below the drop point as the board shows them.
+export async function moveIssueTo(id, stateId, prev, next) {
+	const original = get(allIssues).find((x) => x.id === id) || get(issues).find((x) => x.id === id);
+	if (!original) return null;
+	const position = prev && next ? (prev.position + next.position) / 2 : prev ? prev.position + 1 : next ? next.position - 1 : 0;
+	movingIds.add(id);
+	replaceIssue({ ...original, stateId, position });
+	try {
+		const saved = await api.moveIssue(id, { state: stateId, after: prev?.id ?? null, before: next?.id ?? null });
+		replaceIssue(saved);
+		return { original, saved };
+	} catch (err) {
+		replaceIssue(original);
+		throw err;
+	} finally {
+		movingIds.delete(id);
+	}
+}
+
+// The sidebar badge follows state changes; a burst of them is one refresh.
+let inboxTimer;
+function scheduleInboxRefresh() {
+	clearTimeout(inboxTimer);
+	inboxTimer = setTimeout(() => refreshInbox().catch(() => {}), 500);
+}
+
+// replaceIssue swaps one issue in both lists without touching the others.
+export function replaceIssue(issue) {
+	issues.update((l) => l.map((i) => (i.id === issue.id ? issue : i)));
+	allIssues.update((l) => l.map((i) => (i.id === issue.id ? issue : i)));
 }
 
 // archiveProject / unarchiveProject flip an epic's archived status, then

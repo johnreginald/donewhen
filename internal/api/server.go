@@ -234,6 +234,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/issues", s.wsGuard(s.handleCreateIssue))
 	mux.HandleFunc("GET /api/issues/{id}", s.wsGuard(s.handleGetIssue))
 	mux.HandleFunc("PATCH /api/issues/{id}", s.wsGuard(s.handleUpdateIssue))
+	mux.HandleFunc("POST /api/issues/{id}/move", s.wsGuard(s.handleMoveIssue))
 	mux.HandleFunc("DELETE /api/issues/{id}", s.wsGuard(s.handleDeleteIssue))
 	mux.HandleFunc("GET /api/issues/{id}/activity", s.wsGuard(s.handleIssueActivity))
 	mux.HandleFunc("GET /api/activity", s.wsGuard(s.handleActivity))

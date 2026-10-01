@@ -137,6 +137,8 @@ export const api = {
 	createIssue: (b) => request('POST', '/issues', b),
 	updateIssue: (id, b) => request('PATCH', `/issues/${id}`, b),
 	deleteIssue: (id) => request('DELETE', `/issues/${id}`),
+	// One request for a board drag: new column plus the neighbours at the drop point.
+	moveIssue: (id, b) => request('POST', `/issues/${id}/move`, b),
 	comments: (id) => request('GET', `/issues/${id}/comments`),
 	addComment: (id, bodyMd) => request('POST', `/issues/${id}/comments`, { bodyMd }),
 	issueActivity: (id) => request('GET', `/issues/${id}/activity`),
