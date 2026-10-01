@@ -8,6 +8,7 @@
 //	donewhen token <name> [ws]     create an API token, optionally pinned to a workspace
 //	donewhen user <email> <pass>   create the initial user
 //	donewhen workspace ...         list/create workspaces and grant access
+//	donewhen demo [--workspace s]  seed a sample "Demo" workspace
 //	donewhen genvapid              print a fresh VAPID keypair
 package main
 
@@ -27,6 +28,7 @@ import (
 	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/config"
 	"github.com/johnreginald/donewhen/internal/db"
+	"github.com/johnreginald/donewhen/internal/demo"
 	"github.com/johnreginald/donewhen/internal/events"
 	appmcp "github.com/johnreginald/donewhen/internal/mcp"
 	"github.com/johnreginald/donewhen/internal/push"
@@ -58,6 +60,8 @@ func main() {
 		runUser(os.Args[2:])
 	case "workspace", "ws":
 		runWorkspace(os.Args[2:])
+	case "demo":
+		runDemo(os.Args[2:])
 	case "genvapid":
 		runGenVAPID()
 	case "help", "-h", "--help":
@@ -80,6 +84,8 @@ usage:
   donewhen token <name> [ws]     create an API token; pass a workspace slug to pin it
   donewhen user <email> <pass>   create the initial user
   donewhen genvapid              print a fresh VAPID keypair
+
+  donewhen demo [--workspace <slug>]           seed a sample workspace (needs a user; safe to repeat)
 
   donewhen workspace list                      show workspaces + member counts
   donewhen workspace create <name> <prefix>    create a workspace
@@ -114,6 +120,10 @@ func runServe() {
 	st := connect(ctx, cfg)
 	bus := events.NewBus()
 	svc := service.New(st, bus)
+
+	if config.Getenv("DONEWHEN_DEMO") == "1" {
+		seedDemoOnStart(ctx, st, svc)
+	}
 
 	// Web Push consumer.
 	notifier := push.NewNotifier(st, bus, cfg)
@@ -330,4 +340,57 @@ func runGenVAPID() {
 		log.Fatalf("genvapid: %v", err)
 	}
 	fmt.Printf("DONEWHEN_VAPID_PRIVATE=%s\nDONEWHEN_VAPID_PUBLIC=%s\n", priv, pub)
+}
+
+// seedDemoOnStart honours DONEWHEN_DEMO=1: seed the demo if a user exists and
+// the demo is not there yet. Never fatal, since the demo is optional.
+func seedDemoOnStart(ctx context.Context, st *store.Store, svc *service.Service) {
+	u, err := st.FirstUser(ctx)
+	if err != nil {
+		log.Printf("DONEWHEN_DEMO=1: no user yet; create one, then restart or run `donewhen demo`")
+		return
+	}
+	res, err := demo.Seed(ctx, svc, u.ID, "")
+	switch {
+	case errors.Is(err, demo.ErrExists):
+		log.Printf("demo already exists")
+	case err != nil:
+		log.Printf("demo: %v", err)
+	default:
+		log.Printf("demo workspace %q seeded: %d issues", res.WorkspaceSlug, res.Issues)
+	}
+}
+
+func runDemo(args []string) {
+	slug := demo.Slug
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--workspace" && i+1 < len(args):
+			slug = args[i+1]
+			i++
+		case strings.HasPrefix(args[i], "--workspace="):
+			slug = strings.TrimPrefix(args[i], "--workspace=")
+		default:
+			log.Fatalf("usage: donewhen demo [--workspace <slug>]")
+		}
+	}
+	cfg := mustConfig()
+	ctx := context.Background()
+	st := connect(ctx, cfg)
+	defer st.Pool().Close()
+
+	u, err := st.FirstUser(ctx)
+	if err != nil {
+		log.Fatalf("no user yet — run `donewhen user <email> <pass>` first")
+	}
+	res, err := demo.Seed(ctx, service.New(st, events.NewBus()), u.ID, slug)
+	if errors.Is(err, demo.ErrExists) {
+		fmt.Printf("demo already exists (workspace %q), nothing changed\n", slug)
+		return
+	}
+	if err != nil {
+		log.Fatalf("demo: %v", err)
+	}
+	fmt.Printf("seeded workspace %q: %d epics, %d issues (%d in review), %d documents.\nSign in as %s and open it.\n",
+		res.WorkspaceSlug, res.Epics, res.Issues, res.InReview, res.Documents, u.Email)
 }
