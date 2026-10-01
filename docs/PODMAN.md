@@ -1,8 +1,8 @@
-# Running Raenil under Podman (dev machine)
+# Running DoneWhen under Podman
 
-Production runs Docker. The dev Mac runs Podman. Both read the same
-`compose.yaml` — nothing in it is engine-specific, on purpose. This file
-collects the Podman-only friction so `compose.yaml` stays portable.
+Docker and Podman both read the same `compose.yaml`. Nothing in it is
+engine-specific, on purpose. This file collects the Podman-only
+friction so `compose.yaml` stays portable.
 
 `make up` / `make down` / `make logs` auto-detect the engine (Podman if it's on
 PATH, else Docker). Check with:
@@ -16,7 +16,7 @@ make up COMPOSE="docker compose"   # force the other one
 
 Podman's `:U` mount option chowns a bind mount into the rootless user-namespace
 range. It solves the Postgres permissions problem below — but **Docker rejects
-`:U` outright**, so putting it in `compose.yaml` breaks production.
+`:U` outright**, so putting it in `compose.yaml` breaks Docker users.
 
 Fix the host directory instead, once, before the first `make up`:
 
@@ -87,13 +87,13 @@ Compose restart policies only hold while the engine is supervising. For a
 machine that must come back after reboot, Quadlet + systemd is the real answer:
 
 ```bash
-podman generate systemd --new --files --name raenil   # one-off units
+podman generate systemd --new --files --name donewhen   # one-off units
 # or write .container files under ~/.config/containers/systemd/ (Quadlet)
-systemctl --user enable --now raenil.service
+systemctl --user enable --now donewhen.service
 loginctl enable-linger "$USER"     # so user units start without a login
 ```
 
-Not needed on the dev Mac. Relevant if a Podman host ever becomes production.
+Use this when a Podman host must restart the service after a reboot.
 
 ## Verifying a migration locally
 
@@ -101,15 +101,15 @@ Migrations are embedded and auto-apply on boot, so the fastest check is a
 throwaway database rather than the full stack:
 
 ```bash
-podman run -d --name raenil-mig-test --pull=never \
-  -e POSTGRES_USER=raenil -e POSTGRES_PASSWORD=raenil -e POSTGRES_DB=raenil \
+podman run -d --name donewhen-mig-test --pull=never \
+  -e POSTGRES_USER=donewhen -e POSTGRES_PASSWORD=donewhen -e POSTGRES_DB=donewhen \
   -p 55432:5432 docker.io/library/postgres:18-alpine
 
-go build -o ./raenil ./cmd/raenil
-RAENIL_DATABASE_URL='postgres://raenil:raenil@localhost:55432/raenil?sslmode=disable' \
-  ./raenil migrate
+go build -o ./donewhen ./cmd/donewhen
+RAENIL_DATABASE_URL='postgres://donewhen:donewhen@localhost:55432/donewhen?sslmode=disable' \
+  ./donewhen migrate
 
-podman rm -f raenil-mig-test
+podman rm -f donewhen-mig-test
 ```
 
 Port 55432 avoids colliding with a real Postgres on 5432.
