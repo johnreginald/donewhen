@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import { api, getWorkspace, setWorkspace } from './api.js';
+import { belongsInView, coalesce } from './live.js';
 
 export const workspaces = writable([]); // the caller's memberships
 export const activeWorkspace = writable(null); // the one everything is scoped to
@@ -36,6 +37,21 @@ export const activeProject = writable(''); // '' = all (epic-level filter)
 export const activeInitiative = writable(''); // '' = all (Project-level filter)
 export const activeLabel = writable(''); // '' = all (label filter)
 export const inboxCount = writable(0); // needs-review queue size (sidebar badge)
+// True from the moment a workspace switch starts until the server has recorded
+// it. The live stream stays closed meanwhile (see the layout).
+export const switching = writable(false);
+
+// inboxTotal is the one inbox formula: what needs review plus what is waiting.
+export function inboxTotal(r) {
+	return (r?.needsReview || []).length + (r?.waiting || []).length;
+}
+// refreshInbox re-reads the inbox and updates the badge. Returns the inbox so
+// the inbox page can render from the same call.
+export async function refreshInbox() {
+	const r = await api.inbox();
+	inboxCount.set(inboxTotal(r));
+	return r;
+}
 export const issueQuery = writable(''); // the search box above every issue view
 
 // workspaceCounts mirrors inboxCount but for every membership at once, keyed
@@ -48,7 +64,7 @@ export async function loadWorkspaceCounts() {
 		list.map(async (w) => {
 			try {
 				const r = await api.get('/inbox', w.slug);
-				return [w.id, (r?.needsReview || []).length + (r?.waiting || []).length];
+				return [w.id, inboxTotal(r)];
 			} catch {
 				return [w.id, 0];
 			}
@@ -94,8 +110,16 @@ export async function switchWorkspace(slug) {
 	activeProject.set('');
 	activeLabel.set('');
 	issues.set([]);
-	// Remember the choice server-side so a new session lands here too.
-	api.activateWorkspace(target.id).catch(() => {});
+	// Remember the choice server-side so a new session lands here too, and only
+	// then let the live stream reopen on the new workspace.
+	switching.set(true);
+	try {
+		await api.activateWorkspace(target.id);
+	} catch {
+		/* the X-Workspace header already scopes every request */
+	} finally {
+		switching.set(false);
+	}
 	await loadMeta();
 	await loadIssues();
 }
@@ -132,9 +156,26 @@ export async function loadIssues() {
 	issues.set(list || []);
 }
 
-// applyEvent reconciles a live SSE event into the issues store.
+// catchUp refetches everything a live event could have changed. It runs after
+// the stream reconnects, says `resync`, or the tab comes back; calls made while
+// one is running share it.
+export const catchUp = coalesce(async () => {
+	await Promise.all([
+		loadIssues(),
+		loadBlockLinks(),
+		refreshInbox().catch(() => {}),
+		loadWorkspaceCounts()
+	]);
+});
+
+// applyEvent reconciles a live SSE event into the issues store. Events for
+// another workspace are dropped, and an issue outside the active epic / label
+// filter is removed from the list rather than added to it.
 export function applyEvent(ev) {
 	if (!ev) return;
+	const wsId = get(activeWorkspace)?.id;
+	const evWs = ev.workspaceId || ev.issue?.workspaceId;
+	if (wsId && evWs && evWs !== wsId) return;
 	// A ticket moving can free (or re-block) the tickets it blocks.
 	if (ev.type === 'issue.blockers' || ev.type === 'issue.state_changed') loadBlockLinks();
 	if (ev.type === 'issue.deleted') {
@@ -142,8 +183,16 @@ export function applyEvent(ev) {
 		return;
 	}
 	if (ev.issue) {
+		const fits = belongsInView(ev.issue, {
+			workspaceId: wsId,
+			project: get(activeProject),
+			initiative: get(activeInitiative),
+			label: get(activeLabel),
+			projects: get(projects)
+		});
 		issues.update((l) => {
 			const idx = l.findIndex((i) => i.id === ev.issue.id);
+			if (!fits) return idx >= 0 ? l.filter((i) => i.id !== ev.issue.id) : l;
 			if (idx >= 0) {
 				const copy = [...l];
 				copy[idx] = ev.issue;

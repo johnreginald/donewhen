@@ -14,12 +14,13 @@
 	import ArchiveEpicDialog from '$components/ArchiveEpicDialog.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount, workspaces, switchWorkspace } from '$lib/store.js';
+	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, catchUp, me, activeWorkspace, workspaces, switchWorkspace, switching } from '$lib/store.js';
 	import {
 		paletteOpen,
 		quickCapture,
 		shortcutHelp,
 		connectionLost,
+		streamStatus,
 		composer,
 		showToast,
 		flashIssue,
@@ -40,7 +41,6 @@
 	let { children } = $props();
 	let ready = $state(false);
 	let noWorkspace = $state(false);
-	let disconnect;
 
 	const isLogin = $derived($page.url.pathname === '/login');
 
@@ -50,7 +50,6 @@
 		boot();
 		return () => {
 			window.removeEventListener('keydown', globalKeys);
-			disconnect && disconnect();
 		};
 	});
 
@@ -71,7 +70,6 @@
 			}
 			await loadMeta();
 			await loadIssues();
-			disconnect = connectSSE(handleEvent, handleSSEStatus);
 			ready = true;
 		} catch (e) {
 			if (e?.status === 403) {
@@ -85,15 +83,21 @@
 		}
 	}
 
-	// The SSE stream is bound to the workspace it opened with, so it has to be
-	// torn down and reopened whenever the active workspace changes.
-	let streamFor = $state(null);
+	// The SSE stream is bound to the workspace it opened with. This effect owns
+	// it: exactly one stream per workspace, closed while a switch is in flight
+	// and reopened once the server has recorded the new workspace.
+	const streamWs = $derived($activeWorkspace?.id);
 	$effect(() => {
-		const wsp = $activeWorkspace;
-		if (!ready || !wsp || streamFor === wsp.id) return;
-		streamFor = wsp.id;
-		disconnect && disconnect();
-		disconnect = connectSSE(handleEvent, handleSSEStatus);
+		if (!ready || !streamWs || $switching) return;
+		const close = connectSSE(streamWs, {
+			onEvent: handleEvent,
+			onStatus: handleSSEStatus,
+			onCatchUp: () => catchUp().catch(() => {})
+		});
+		return () => {
+			close();
+			streamStatus.set('');
+		};
 	});
 
 	function handleEvent(ev) {
@@ -106,10 +110,10 @@
 		}
 	}
 
-	// Drives the connection-lost banner (PP-209): EventSource retries on its
-	// own, we just surface whether the stream is currently up.
+	// Drives the sidebar dot and the connection-lost banner (PP-209).
 	function handleSSEStatus(status) {
-		connectionLost.set(status === 'error');
+		streamStatus.set(status);
+		connectionLost.set(status === 'reconnecting' || status === 'offline');
 	}
 
 	function isTypingTarget(el) {
