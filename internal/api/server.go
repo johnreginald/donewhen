@@ -11,6 +11,7 @@ import (
 	"raenil/internal/auth"
 	"raenil/internal/config"
 	"raenil/internal/events"
+	"raenil/internal/push"
 	"raenil/internal/service"
 	"raenil/internal/sse"
 	"raenil/internal/store"
@@ -25,6 +26,9 @@ type Server struct {
 	sse       *sse.Handler
 	mcp       http.Handler // mounted at /mcp (may be nil)
 	staticDir string
+
+	// pushResolve resolves push endpoint hosts; nil means the system resolver.
+	pushResolve push.Resolver
 }
 
 func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *events.Bus, mcp http.Handler) *Server {

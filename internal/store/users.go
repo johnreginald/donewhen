@@ -165,7 +165,7 @@ func (s *Store) SavePushSubscription(ctx context.Context, userID string, sub mod
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
 		VALUES ($1,$2,$3,$4)
-		ON CONFLICT (endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth`,
+		ON CONFLICT (endpoint) DO UPDATE SET user_id=EXCLUDED.user_id, p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth`,
 		userID, sub.Endpoint, sub.P256dh, sub.Auth)
 	return err
 }
@@ -194,6 +194,23 @@ func (s *Store) ListPushSubscriptions(ctx context.Context, wsID string) ([]model
 	return out, rows.Err()
 }
 
+// DeletePushSubscription removes one of userID's own subscriptions. An endpoint
+// that belongs to someone else (or does not exist) is ErrNotFound and nothing
+// is deleted.
+func (s *Store) DeletePushSubscription(ctx context.Context, userID, endpoint string) error {
+	ct, err := s.pool.Exec(ctx, `DELETE FROM push_subscriptions WHERE endpoint=$1 AND user_id=$2`, endpoint, userID)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeletePushSubscriptionByEndpoint removes a subscription whatever its owner.
+// Only for the notifier, when the push service reports the endpoint gone; never
+// call it on behalf of a user request.
 func (s *Store) DeletePushSubscriptionByEndpoint(ctx context.Context, endpoint string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM push_subscriptions WHERE endpoint=$1`, endpoint)
 	return err
