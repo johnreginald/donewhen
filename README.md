@@ -2,7 +2,7 @@
 
 A self-hosted issue tracker that keeps the record of AI-built work.
 
-![Board](docs/images/board-light.png)
+![The DoneWhen board with the demo workspace](docs/images/board-light.png)
 
 ## What and why
 
@@ -88,7 +88,21 @@ docker compose exec donewhen /app/donewhen user you@example.com 'a-strong-passwo
 docker compose exec donewhen /app/donewhen demo
 ```
 
-`donewhen demo` fills a workspace with example tickets, checklists and documents. It arrives with ticket PP-234, so it is not in older versions.
+`donewhen demo` makes a workspace called Demo (key `DEMO`). It holds about 24 tickets in every state, done-when checklists, blockers, three engineering documents with diagrams, and 3 tickets waiting for your review in the Inbox. The data is fictional. Run it again and it says "demo already exists" and changes nothing.
+
+Prefer to seed on start? Set `DONEWHEN_DEMO=1` in `.env`. Compose then seeds the demo at start, once a user exists. Create the user first, then run `docker compose restart donewhen`.
+
+![A short walkthrough: board, ticket, done-when, inbox, artifacts](docs/images/walkthrough.gif)
+
+### Screenshots
+
+| | Light | Dark |
+|---|---|---|
+| Board | [light](docs/images/board-light.png) | [dark](docs/images/board-dark.png) |
+| Issue and done-when | [light](docs/images/issue-light.png) | [dark](docs/images/issue-dark.png) |
+| Inbox | [light](docs/images/inbox-light.png) | [dark](docs/images/inbox-dark.png) |
+| Artifacts reader | [light](docs/images/artifacts-light.png) | [dark](docs/images/artifacts-dark.png) |
+| List | [light](docs/images/list-light.png) | [dark](docs/images/list-dark.png) |
 
 ## Connect Claude Code
 
