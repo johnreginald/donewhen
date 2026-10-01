@@ -1,7 +1,7 @@
 {
-  "name": "raenil",
+  "name": "donewhen",
   "version": "0.2.0",
-  "description": "Raenil tracker helpers for Claude Code: /tasks lists a workspace's open issues grouped by epic.",
+  "description": "DoneWhen tracker helpers for Claude Code: /tasks lists a workspace's open issues grouped by epic.",
   "author": { "name": "Htet Wai Yan Soe" },
-  "repository": "https://github.com/johnreginald/raenil"
+  "repository": "https://github.com/johnreginald/donewhen"
 }

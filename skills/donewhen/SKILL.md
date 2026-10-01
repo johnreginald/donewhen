@@ -1,12 +1,12 @@
 ---
-name: raenil
-description: Work with Raenil, a self-hosted issue tracker, over its MCP tools (mcp__raenil__*). Use whenever creating, writing, updating, moving or finishing a ticket, epic or project in Raenil; turning a spec or plan into tickets; writing or ticking done-when criteria; or recording commits and documents on a ticket.
-argument-hint: "What to do in Raenil, e.g. 'turn specs/x.md into tickets' or 'finish ACM-42'"
+name: donewhen
+description: Work with DoneWhen, a self-hosted issue tracker, over its MCP tools (mcp__donewhen__*). Use whenever creating, writing, updating, moving or finishing a ticket, epic or project in DoneWhen; turning a spec or plan into tickets; writing or ticking done-when criteria; or recording commits and documents on a ticket.
+argument-hint: "What to do in DoneWhen, e.g. 'turn specs/x.md into tickets' or 'finish ACM-42'"
 ---
 
-# Raenil
+# DoneWhen
 
-Raenil is a self-hosted tracker and record-keeper. Its MCP endpoint is `<your-server>/mcp` (see the README for `claude mcp add`). Its tools are `mcp__raenil__*`; if they are deferred, load the ones you need with ToolSearch in one call.
+DoneWhen is a self-hosted tracker and record-keeper. Its MCP endpoint is `<your-server>/mcp` (see the README for `claude mcp add`). Its tools are `mcp__donewhen__*`; if they are deferred, load the ones you need with ToolSearch in one call.
 
 The hard rules (confirm before creating, the checklist gates In Review and Done, `repo` labels) are in CLAUDE.md and always apply. This skill is the how.
 

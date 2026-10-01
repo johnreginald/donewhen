@@ -1,6 +1,6 @@
 # Mermaid rules
 
-Raenil renders diagrams with Mermaid 11. A diagram that fails to parse shows as a red "Diagram error" box, and is listed under **Artifacts → Diagram errors**. Follow these rules for every ```` ```mermaid ```` block in a ticket, comment or document.
+DoneWhen renders diagrams with Mermaid 11. A diagram that fails to parse shows as a red "Diagram error" box, and is listed under **Artifacts → Diagram errors**. Follow these rules for every ```` ```mermaid ```` block in a ticket, comment or document.
 
 ## Node ids
 

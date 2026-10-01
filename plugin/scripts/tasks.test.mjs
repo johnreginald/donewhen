@@ -37,7 +37,7 @@ const issue = (n, stateId, projectId, title = `Issue ${n}`) => ({
 });
 const issues = [
 	issue(210, 's-bl', 'p-ui', 'Board screen redesign'),
-	issue(208, 's-prog', 'p-ui', 'Raenil design system in Claude Design'),
+	issue(208, 's-prog', 'p-ui', 'DoneWhen design system in Claude Design'),
 	issue(181, 's-bl', 'p-data'),
 	issue(185, 's-prog', 'p-data'),
 	issue(187, 's-done', 'p-data'),
@@ -100,7 +100,7 @@ test('--epic, --state and --project filter', () => {
 
 	const p = render(data, opts({ project: 'zeta' }));
 	assert.match(p, /Other epic/);
-	assert.doesNotMatch(p, /Raenil|No epic/);
+	assert.doesNotMatch(p, /DoneWhen|No epic/);
 });
 
 test('nothing matches → friendly line', () => {
@@ -132,11 +132,11 @@ test('parseArgs', () => {
 	assert.throws(() => parseArgs(['--bogus']), /Unknown option/);
 });
 
-test('findConfig walks up to .claude/raenil.json', () => {
-	const root = mkdtempSync(join(tmpdir(), 'raenil-'));
+test('findConfig walks up to .claude/donewhen.json', () => {
+	const root = mkdtempSync(join(tmpdir(), 'donewhen-'));
 	mkdirSync(join(root, '.claude'));
 	mkdirSync(join(root, 'a', 'b'), { recursive: true });
-	writeFileSync(join(root, '.claude', 'raenil.json'), '{"workspace":"platform"}');
+	writeFileSync(join(root, '.claude', 'donewhen.json'), '{"workspace":"platform"}');
 	assert.deepEqual(findConfig(join(root, 'a', 'b')), { workspace: 'platform' });
 });
 
@@ -158,18 +158,18 @@ const okRoutes = {
 	'/api/blockers': json(200, blockers),
 	'/api/workspaces': json(200, [{ id: 'ws-pp', slug: 'platform', keyPrefix: 'PLT', name: 'Platform' }])
 };
-const env = { RAENIL_TOKEN: 't', RAENIL_URL: 'http://raenil.test' };
-const noCfg = mkdtempSync(join(tmpdir(), 'raenil-nocfg-'));
+const env = { DONEWHEN_TOKEN: 't', DONEWHEN_URL: 'http://donewhen.test' };
+const noCfg = mkdtempSync(join(tmpdir(), 'donewhen-nocfg-'));
 
 test('run: no server URL', async () => {
 	assert.equal(
-		await run([], { RAENIL_TOKEN: 't' }, noCfg),
-		'Set RAENIL_URL (the address of your Raenil server, e.g. https://tracker.example.com)'
+		await run([], { DONEWHEN_TOKEN: 't' }, noCfg),
+		'Set DONEWHEN_URL (the address of your DoneWhen server, e.g. https://tracker.example.com)'
 	);
 });
 
 test('run: no token', async () => {
-	assert.equal(await run([], {}, noCfg), 'Set RAENIL_TOKEN (mint one: raenil token <name> [workspace])');
+	assert.equal(await run([], {}, noCfg), 'Set DONEWHEN_TOKEN (mint one: donewhen token <name> [workspace])');
 });
 
 test('run: happy path sends the workspace header', async () => {
@@ -180,21 +180,21 @@ test('run: happy path sends the workspace header', async () => {
 });
 
 test('run: repo config supplies workspace and project', async () => {
-	const root = mkdtempSync(join(tmpdir(), 'raenil-cfg-'));
+	const root = mkdtempSync(join(tmpdir(), 'donewhen-cfg-'));
 	mkdirSync(join(root, '.claude'));
-	writeFileSync(join(root, '.claude', 'raenil.json'), '{"workspace":"platform","project":"zeta"}');
+	writeFileSync(join(root, '.claude', 'donewhen.json'), '{"workspace":"platform","project":"zeta"}');
 	const seen = [];
 	const out = await run([], env, root, fakeFetch(okRoutes, seen));
 	assert.ok(seen.some((s) => s.ws === 'platform'));
 	assert.match(out, /Other epic/);
-	assert.doesNotMatch(out, /Raenil —/);
+	assert.doesNotMatch(out, /DoneWhen —/);
 });
 
 test('run: unreachable', async () => {
 	const out = await run([], env, noCfg, async () => {
 		throw new TypeError('fetch failed');
 	});
-	assert.equal(out, 'Raenil unreachable at http://raenil.test — is the server running and reachable?');
+	assert.equal(out, 'DoneWhen unreachable at http://donewhen.test — is the server running and reachable?');
 });
 
 test('run: 401', async () => {
@@ -273,14 +273,14 @@ const lumData = {
 };
 const byWs = { 'ws-pp': ppData, 'ws-glx': lumData };
 const repo = () => {
-	const root = mkdtempSync(join(tmpdir(), 'raenil-repo-'));
-	return { root, home: mkdtempSync(join(tmpdir(), 'raenil-home-')), gitRoot: () => root };
+	const root = mkdtempSync(join(tmpdir(), 'donewhen-repo-'));
+	return { root, home: mkdtempSync(join(tmpdir(), 'donewhen-home-')), gitRoot: () => root };
 };
 
 test('run workspaces: every workspace, default marked', async () => {
 	const r = repo();
 	mkdirSync(join(r.root, '.claude'));
-	writeFileSync(join(r.root, '.claude', 'raenil.json'), '{"workspace":"acme"}');
+	writeFileSync(join(r.root, '.claude', 'donewhen.json'), '{"workspace":"acme"}');
 	const out = await run(['workspaces'], env, r.root, multiFetch(byWs), r);
 	assert.match(out, /^  platform\s+PLT\s+6  Platform \(4\), Zeta \(1\)$/m);
 	assert.match(out, /^▸ acme\s+ACM\s+1  Acme \(1\), Acme Labs \(0\)$/m);
@@ -289,9 +289,9 @@ test('run workspaces: every workspace, default marked', async () => {
 test('run use: writes the git root config, keeps other keys, prints the view', async () => {
 	const r = repo();
 	mkdirSync(join(r.root, '.claude'));
-	writeFileSync(join(r.root, '.claude', 'raenil.json'), '{"workspace":"platform","project":"Zeta","keep":1}');
+	writeFileSync(join(r.root, '.claude', 'donewhen.json'), '{"workspace":"platform","project":"Zeta","keep":1}');
 	const out = await run(['use', 'ACM'], env, r.root, multiFetch(byWs), r);
-	const cfg = JSON.parse(readFileSync(join(r.root, '.claude', 'raenil.json'), 'utf8'));
+	const cfg = JSON.parse(readFileSync(join(r.root, '.claude', 'donewhen.json'), 'utf8'));
 	assert.deepEqual(cfg, { workspace: 'acme', keep: 1 }); // project cleared
 	assert.match(out, /→ Acme\n\nAcme · 1 open/);
 	// next plain /tasks uses the new default
@@ -301,7 +301,7 @@ test('run use: writes the git root config, keeps other keys, prints the view', a
 test('run use --project: exact name wins, stored, view scoped', async () => {
 	const r = repo();
 	const out = await run(['use', 'acme', '--project', 'acme'], env, r.root, multiFetch(byWs), r);
-	const cfg = JSON.parse(readFileSync(join(r.root, '.claude', 'raenil.json'), 'utf8'));
+	const cfg = JSON.parse(readFileSync(join(r.root, '.claude', 'donewhen.json'), 'utf8'));
 	assert.deepEqual(cfg, { workspace: 'acme', project: 'Acme' });
 	assert.match(out, /→ Acme › Acme/);
 	assert.match(out, /Kernel/);
@@ -309,7 +309,7 @@ test('run use --project: exact name wins, stored, view scoped', async () => {
 
 test('run use: refusals leave the file untouched', async () => {
 	const r = repo();
-	const f = join(r.root, '.claude', 'raenil.json');
+	const f = join(r.root, '.claude', 'donewhen.json');
 	assert.match(await run(['use', 'nope'], env, r.root, multiFetch(byWs), r), /^No access to workspace 'nope'\n  platform/);
 	assert.match(await run(['use', 'acme', '--project', 'xyz'], env, r.root, multiFetch(byWs), r), /^No project matching 'xyz' in acme\n  Acme\n  Acme Labs/);
 	assert.match(await run(['use', 'platform', '--project', 'a'], env, r.root, multiFetch(byWs), r), /^Several projects match 'a'/);
@@ -319,8 +319,42 @@ test('run use: refusals leave the file untouched', async () => {
 test('run use outside a git repo writes the user-wide default', async () => {
 	const r = repo();
 	await run(['use', 'acme'], env, r.root, multiFetch(byWs), { home: r.home, gitRoot: () => null });
-	const cfg = JSON.parse(readFileSync(join(r.home, '.config', 'raenil', 'default.json'), 'utf8'));
+	const cfg = JSON.parse(readFileSync(join(r.home, '.config', 'donewhen', 'default.json'), 'utf8'));
 	assert.equal(cfg.workspace, 'acme');
 	// and a plain /tasks anywhere picks it up
 	assert.match(await run([], env, r.root, multiFetch(byWs), { home: r.home }), /^Acme · 1 open/);
+});
+
+// ---- compatibility with the pre-rename (Raenil) names ----
+
+test('compat: old RAENIL_TOKEN / RAENIL_URL still work, new names win', async () => {
+	const old = { RAENIL_TOKEN: 't', RAENIL_URL: 'http://old.test' };
+	const out = await run(['platform'], old, noCfg, fakeFetch(okRoutes));
+	assert.match(out, /^Platform · 6 open/);
+	const hosts = [];
+	const both = { ...old, DONEWHEN_TOKEN: 't2', DONEWHEN_URL: 'http://new.test' };
+	await run(['platform'], both, noCfg, async (url, init) => {
+		hosts.push(new URL(url).host);
+		assert.equal(init.headers.Authorization, 'Bearer t2');
+		return fakeFetch(okRoutes)(url, init);
+	});
+	assert.ok(hosts.length > 0 && hosts.every((h) => h === 'new.test'));
+});
+
+test('compat: reads .claude/raenil.json and ~/.config/raenil/default.json; new files win', () => {
+	const root = mkdtempSync(join(tmpdir(), 'compat-repo-'));
+	const home = mkdtempSync(join(tmpdir(), 'compat-home-'));
+	mkdirSync(join(root, '.claude'));
+	writeFileSync(join(root, '.claude', 'raenil.json'), '{"workspace":"old-repo"}');
+	assert.deepEqual(findConfig(root, home), { workspace: 'old-repo' });
+	writeFileSync(join(root, '.claude', 'donewhen.json'), '{"workspace":"new-repo"}');
+	assert.deepEqual(findConfig(root, home), { workspace: 'new-repo' });
+
+	const bare = mkdtempSync(join(tmpdir(), 'compat-bare-'));
+	mkdirSync(join(home, '.config', 'raenil'), { recursive: true });
+	writeFileSync(join(home, '.config', 'raenil', 'default.json'), '{"workspace":"old-user"}');
+	assert.deepEqual(findConfig(bare, home), { workspace: 'old-user' });
+	mkdirSync(join(home, '.config', 'donewhen'), { recursive: true });
+	writeFileSync(join(home, '.config', 'donewhen', 'default.json'), '{"workspace":"new-user"}');
+	assert.deepEqual(findConfig(bare, home), { workspace: 'new-user' });
 });

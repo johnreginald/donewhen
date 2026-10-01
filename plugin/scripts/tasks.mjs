@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// /tasks — print a workspace's open Raenil issues grouped by epic.
-// Zero dependencies: Node built-ins only. Reads the Raenil REST API with a
-// bearer token (RAENIL_TOKEN) so the output is deterministic and costs no
+// /tasks — print a workspace's open DoneWhen issues grouped by epic.
+// Zero dependencies: Node built-ins only. Reads the DoneWhen REST API with a
+// bearer token (DONEWHEN_TOKEN) so the output is deterministic and costs no
 // model tokens to fetch.
 
 import { execFileSync } from 'node:child_process';
@@ -40,9 +40,9 @@ export class UsageError extends Error {}
 
 // ---- config ----
 
-// locateConfig walks up from dir looking for .claude/raenil.json (the repo's
+// locateConfig walks up from dir looking for .claude/donewhen.json (the repo's
 // default workspace and project), then falls back to the user-wide
-// ~/.config/raenil/default.json. Returns the file it used, or path null.
+// ~/.config/donewhen/default.json. Returns the file it used, or path null.
 export function locateConfig(dir, home = homedir()) {
 	const read = (p) => {
 		try {
@@ -53,26 +53,32 @@ export function locateConfig(dir, home = homedir()) {
 	};
 	let d = resolve(dir);
 	for (;;) {
-		const p = join(d, '.claude', 'raenil.json');
-		if (existsSync(p)) return { path: p, data: read(p) };
+		// donewhen.json wins; raenil.json is the pre-rename name, read as a fallback.
+		for (const name of ['donewhen.json', 'raenil.json']) {
+			const p = join(d, '.claude', name);
+			if (existsSync(p)) return { path: p, data: read(p) };
+		}
 		const up = dirname(d);
 		if (up === d) break;
 		d = up;
 	}
-	const p = userConfigPath(home);
-	if (existsSync(p)) return { path: p, data: read(p) };
+	for (const p of [userConfigPath(home), legacyUserConfigPath(home)]) {
+		if (existsSync(p)) return { path: p, data: read(p) };
+	}
 	return { path: null, data: {} };
 }
 
 export const findConfig = (dir, home) => locateConfig(dir, home).data;
 
-const userConfigPath = (home) => join(home, '.config', 'raenil', 'default.json');
+const userConfigPath = (home) => join(home, '.config', 'donewhen', 'default.json');
+// Pre-rename location, still read when the new one is absent.
+const legacyUserConfigPath = (home) => join(home, '.config', 'raenil', 'default.json');
 
-// configTarget is where `use` writes: the git root's .claude/raenil.json, or
+// configTarget is where `use` writes: the git root's .claude/donewhen.json, or
 // the user-wide default outside a repo.
 export function configTarget(cwd, home, gitRoot = findGitRoot) {
 	const root = gitRoot(cwd);
-	return root ? join(root, '.claude', 'raenil.json') : userConfigPath(home);
+	return root ? join(root, '.claude', 'donewhen.json') : userConfigPath(home);
 }
 
 function findGitRoot(cwd) {
@@ -301,10 +307,10 @@ export async function run(argv, env, cwd, fetchImpl = fetch, ctx = {}) {
 		if (e instanceof UsageError) return `${e.message}\n${USAGE}`;
 		throw e;
 	}
-	const token = env.RAENIL_TOKEN;
-	if (!token) return 'Set RAENIL_TOKEN (mint one: raenil token <name> [workspace])';
-	const url = env.RAENIL_URL;
-	if (!url) return 'Set RAENIL_URL (the address of your Raenil server, e.g. https://tracker.example.com)';
+	const token = env.DONEWHEN_TOKEN || env.RAENIL_TOKEN;
+	if (!token) return 'Set DONEWHEN_TOKEN (mint one: donewhen token <name> [workspace])';
+	const url = env.DONEWHEN_URL || env.RAENIL_URL;
+	if (!url) return 'Set DONEWHEN_URL (the address of your DoneWhen server, e.g. https://tracker.example.com)';
 	const cfg = findConfig(cwd, home);
 	const get = client(url, token, fetchImpl);
 
@@ -383,7 +389,7 @@ async function explain(e, url, workspace, get) {
 			return '';
 		}
 	};
-	if (e instanceof Unreachable) return `Raenil unreachable at ${url} — is the server running and reachable?`;
+	if (e instanceof Unreachable) return `DoneWhen unreachable at ${url} — is the server running and reachable?`;
 	if (e instanceof ApiError) {
 		if (e.status === 401) return 'Token rejected — mint a new one';
 		if (e.status === 400 && /workspace/i.test(e.message)) {
@@ -392,7 +398,7 @@ async function explain(e, url, workspace, get) {
 		if (e.status === 403 || e.status === 404) {
 			return `No access to workspace '${workspace}'\n${await listWorkspaces()}`.trimEnd();
 		}
-		return `Raenil error ${e.status}${e.message ? `: ${e.message}` : ''}`;
+		return `DoneWhen error ${e.status}${e.message ? `: ${e.message}` : ''}`;
 	}
 	return `Unexpected error: ${e?.message || e}`;
 }
