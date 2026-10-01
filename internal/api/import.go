@@ -8,8 +8,8 @@ import (
 )
 
 // handleImport bulk-loads an external tracker export (Linear-native JSON shape)
-// into DoneWhen, preserving keys/timestamps/state/labels. Auth: any authenticated
-// caller (session or bearer). The body is decoded leniently (Linear objects
+// into DoneWhen, preserving keys/timestamps/state/labels. Auth: owner/admin
+// browser session only (see adminSessionOnly). The body is decoded leniently (Linear objects
 // carry many fields we ignore) with a generous size cap.
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20)) // 16 MiB

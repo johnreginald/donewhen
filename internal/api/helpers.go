@@ -66,11 +66,30 @@ func writeGateErr(w http.ResponseWriter, ge *store.GateError) {
 	})
 }
 
-// internalErr answers 500 with a plain message. Driver and SQL detail can leak
-// schema, so it goes to the log, never to the client.
+// internalErr answers 500 with a generic body and a request id. Driver and SQL
+// detail can leak schema, so the full error goes to the log under that id,
+// never to the client. The id comes from the requestID middleware.
 func internalErr(w http.ResponseWriter, err error) {
-	log.Printf("api: internal error: %v", err)
-	writeErr(w, http.StatusInternalServerError, "internal error")
+	id := w.Header().Get(requestIDHeader)
+	log.Printf("api: internal error (request %s): %v", id, err)
+	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal", "requestId": id})
+}
+
+// requestIDHeader carries the per-request id on the response so a client can
+// quote it and an operator can find the matching log line.
+const requestIDHeader = "X-Request-Id"
+
+// requestID stamps every response with a fresh random id. An inbound value is
+// ignored: it would let a caller forge log correlation.
+func requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := auth.RandomToken(8)
+		if err != nil {
+			raw = "unknown"
+		}
+		w.Header().Set(requestIDHeader, raw)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ws returns the workspace id this request acts on. Handlers behind wsGuard can

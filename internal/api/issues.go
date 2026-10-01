@@ -153,7 +153,11 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		p.LabelIDs = req.LabelIds
 		p.LabelNames = req.LabelNames
 	}
-	is, err := s.svc.UpdateIssue(r.Context(), ws(r), r.PathValue("id"), p, auth.ActorFrom(r.Context()))
+	cur, err := s.resolveIssue(r, r.PathValue("id"))
+	if handleStoreErr(w, err) {
+		return
+	}
+	is, err := s.svc.UpdateIssue(r.Context(), ws(r), cur.ID, p, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
@@ -161,7 +165,11 @@ func (s *Server) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.svc.DeleteIssue(r.Context(), ws(r), r.PathValue("id"), auth.ActorFrom(r.Context()))) {
+	cur, err := s.resolveIssue(r, r.PathValue("id"))
+	if handleStoreErr(w, err) {
+		return
+	}
+	if handleStoreErr(w, s.svc.DeleteIssue(r.Context(), ws(r), cur.ID, auth.ActorFrom(r.Context()))) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})

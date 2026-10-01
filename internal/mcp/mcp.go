@@ -275,7 +275,7 @@ func jsonResult(v any) (*mcp.CallToolResult, error) {
 	// Compact: indentation is whitespace a model pays for and does not read.
 	b, err := json.Marshal(v)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	return mcp.NewToolResultText(string(b)), nil
 }
@@ -399,7 +399,7 @@ func (d *deps) register(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		wsIDs, err := d.scopeAll(ctx, req)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		limit := listLimit(req)
 		f := store.IssueFilter{
@@ -421,7 +421,7 @@ func (d *deps) register(s *server.MCPServer) {
 		}
 		issues, err := d.store.ListIssues(ctx, f)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return d.issueList(ctx, req, wsIDs, issues, limit)
 	})
@@ -438,11 +438,11 @@ func (d *deps) register(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, issueRef(key))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, key)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(is)
 	})
@@ -479,14 +479,14 @@ func (d *deps) register(s *server.MCPServer) {
 		}
 		wsID, err := d.scopeOne(ctx, req, issueRef(ref2))
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		is, err := d.resolveIssueRef(ctx, wsID, ref2)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		if err := d.svc.DeleteIssue(ctx, wsID, is.ID, auth.ActorAI); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(map[string]string{"status": "deleted", "key": is.Key})
 	})
@@ -498,7 +498,7 @@ func (d *deps) register(s *server.MCPServer) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		items, err := d.reachable(ctx)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		return jsonResult(items)
 	})
@@ -529,10 +529,10 @@ func saveWorkspaceArg(req mcp.CallToolRequest, key string) (*string, error) {
 	}
 	s, ok := raw.(string)
 	if !ok {
-		return nil, fmt.Errorf("%s must be a string", key)
+		return nil, fmt.Errorf("%w: %s must be a string", store.ErrInvalid, key)
 	}
 	if strings.TrimSpace(s) == "" {
-		return nil, fmt.Errorf("%s must not be empty", key)
+		return nil, fmt.Errorf("%w: %s must not be empty", store.ErrInvalid, key)
 	}
 	return &s, nil
 }
@@ -543,23 +543,23 @@ func saveWorkspaceArg(req mcp.CallToolRequest, key string) (*string, error) {
 func (d *deps) handleSaveWorkspace(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	user, err := d.caller(ctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	name, err := saveWorkspaceArg(req, "name")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	slug, err := saveWorkspaceArg(req, "slug")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	prefix, err := saveWorkspaceArg(req, "keyPrefix")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	aiName, err := saveWorkspaceArg(req, "aiName")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 
 	id := req.GetString("id", "")
@@ -606,12 +606,15 @@ func (d *deps) handleSaveWorkspace(ctx context.Context, req mcp.CallToolRequest)
 // messages are written for the caller; anything else is logged and replaced by
 // a plain message so driver detail never reaches a client.
 func toolErr(err error) *mcp.CallToolResult {
+	var ge *store.GateError
 	switch {
 	case errors.Is(err, store.ErrInvalid):
 		return mcp.NewToolResultError(strings.TrimPrefix(err.Error(), "invalid: "))
 	case errors.Is(err, store.ErrConflict):
 		return mcp.NewToolResultError(strings.TrimPrefix(err.Error(), "conflict: "))
-	case errors.Is(err, store.ErrNotMember), errors.Is(err, store.ErrNotFound):
+	case errors.Is(err, store.ErrNotMember), errors.Is(err, store.ErrNotFound),
+		errors.Is(err, auth.ErrNoWorkspace), errors.Is(err, auth.ErrAmbiguousWorkspace),
+		errors.Is(err, errAccessRevoked), errors.As(err, &ge):
 		return mcp.NewToolResultError(err.Error())
 	}
 	log.Printf("mcp: internal error: %v", err)
@@ -625,7 +628,7 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 	// says. Creating bare is the one case with nothing to infer from.
 	wsID, err := d.scopeOne(ctx, req, issueRef(id), projectRef(req.GetString("project", "")))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 
 	if id == "" {
@@ -639,7 +642,7 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 			LabelNames:    labels,
 		}, auth.ActorAI)
 		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+			return toolErr(err), nil
 		}
 		if res := d.saveBlockers(ctx, req, wsID, is.ID); res != nil {
 			return res, nil
@@ -650,7 +653,7 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 	// update
 	existing, err := d.resolveIssueRef(ctx, wsID, id)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	p := store.IssuePatch{}
 	args := req.GetArguments()
@@ -677,7 +680,7 @@ func (d *deps) handleSaveIssue(ctx context.Context, req mcp.CallToolRequest) (*m
 	}
 	is, err := d.svc.UpdateIssue(ctx, wsID, existing.ID, p, auth.ActorAI)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	if res := d.saveBlockers(ctx, req, wsID, is.ID); res != nil {
 		return res, nil
@@ -704,7 +707,7 @@ func (d *deps) issueList(ctx context.Context, req mcp.CallToolRequest, wsIDs []s
 	}
 	states, err := d.store.ListStatesAcross(ctx, wsIDs)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return toolErr(err), nil
 	}
 	names := make(map[string]string, len(states))
 	for _, st := range states {
