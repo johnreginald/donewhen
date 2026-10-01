@@ -119,7 +119,7 @@ func (s *Server) handleSaveDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.LabelIds != nil || req.LabelNames != nil {
 		if err := s.store.SetDocumentLabels(r.Context(), ws(r), saved.ID, req.LabelIds, req.LabelNames); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalErr(w, err)
 			return
 		}
 		saved, _ = s.store.GetDocument(r.Context(), ws(r), saved.ID)

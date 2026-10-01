@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -45,8 +46,15 @@ func handleStoreErr(w http.ResponseWriter, err error) bool {
 		writeErr(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
 		return true
 	}
-	writeErr(w, http.StatusInternalServerError, err.Error())
+	internalErr(w, err)
 	return true
+}
+
+// internalErr answers 500 with a plain message. Driver and SQL detail can leak
+// schema, so it goes to the log, never to the client.
+func internalErr(w http.ResponseWriter, err error) {
+	log.Printf("api: internal error: %v", err)
+	writeErr(w, http.StatusInternalServerError, "internal error")
 }
 
 // ws returns the workspace id this request acts on. Handlers behind wsGuard can

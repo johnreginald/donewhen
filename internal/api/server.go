@@ -2,11 +2,13 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"raenil/internal/auth"
 	"raenil/internal/config"
@@ -25,10 +27,17 @@ type Server struct {
 	sse       *sse.Handler
 	mcp       http.Handler // mounted at /mcp (may be nil)
 	staticDir string
+
+	loginLimiter *rateLimiter
+	// verifyPassword is auth.VerifyPassword; a field so tests can observe it.
+	verifyPassword func(hash, password string) bool
+	stop           context.CancelFunc
 }
 
 func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *events.Bus, mcp http.Handler) *Server {
-	return &Server{
+	sweepCtx, stop := context.WithCancel(context.Background())
+	loginDummyHash() // pay the one-off argon2 cost now, not on the first miss
+	s := &Server{
 		cfg:       cfg,
 		store:     st,
 		svc:       svc,
@@ -37,8 +46,17 @@ func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *ev
 		sse:       sse.NewHandler(bus),
 		mcp:       mcp,
 		staticDir: "web/build",
+
+		loginLimiter:   newRateLimiter(10, time.Minute),
+		verifyPassword: auth.VerifyPassword,
+		stop:           stop,
 	}
+	go s.loginLimiter.run(sweepCtx, sweepInterval)
+	return s
 }
+
+// Close stops the server's background sweeper.
+func (s *Server) Close() { s.stop() }
 
 func safeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
@@ -60,6 +78,18 @@ func (s *Server) guard(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// sessionOnly is guard for account-level actions that a bearer token must never
+// perform, pinned or not: it refuses API/MCP callers outright.
+func (s *Server) sessionOnly(next http.HandlerFunc) http.HandlerFunc {
+	return s.guard(func(w http.ResponseWriter, r *http.Request) {
+		if auth.IsBearer(r.Context()) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		next(w, r)
+	})
 }
 
 // wsGuard is guard plus tenancy: it resolves which workspace the request acts
@@ -121,17 +151,17 @@ func (s *Server) Handler() http.Handler {
 	// Workspaces — the tenancy boundary. Listing memberships must NOT be
 	// workspace-scoped: it is how a client discovers which ones exist.
 	mux.HandleFunc("GET /api/workspaces", s.guard(s.handleListWorkspaces))
-	mux.HandleFunc("POST /api/workspaces", s.guard(s.handleCreateWorkspace))
-	mux.HandleFunc("POST /api/workspaces/{id}/activate", s.guard(s.handleActivateWorkspace))
+	mux.HandleFunc("POST /api/workspaces", s.sessionOnly(s.handleCreateWorkspace))
+	mux.HandleFunc("POST /api/workspaces/{id}/activate", s.sessionOnly(s.handleActivateWorkspace))
 	mux.HandleFunc("PATCH /api/workspaces/{id}", s.adminOnly(s.handleUpdateWorkspace))
 	mux.HandleFunc("GET /api/workspaces/{id}/members", s.wsGuard(s.handleListMembers))
 	mux.HandleFunc("POST /api/workspaces/{id}/members", s.adminOnly(s.handleAddMember))
 	mux.HandleFunc("DELETE /api/workspaces/{id}/members/{userId}", s.adminOnly(s.handleRemoveMember))
 
 	// API tokens.
-	mux.HandleFunc("GET /api/tokens", s.guard(s.handleListTokens))
-	mux.HandleFunc("POST /api/tokens", s.guard(s.handleCreateToken))
-	mux.HandleFunc("DELETE /api/tokens/{id}", s.guard(s.handleDeleteToken))
+	mux.HandleFunc("GET /api/tokens", s.sessionOnly(s.handleListTokens))
+	mux.HandleFunc("POST /api/tokens", s.sessionOnly(s.handleCreateToken))
+	mux.HandleFunc("DELETE /api/tokens/{id}", s.sessionOnly(s.handleDeleteToken))
 
 	// Metadata.
 	mux.HandleFunc("GET /api/states", s.wsGuard(s.handleListStates))

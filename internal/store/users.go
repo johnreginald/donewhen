@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -24,6 +25,38 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (mod
 		`INSERT INTO users (email, password_hash) VALUES ($1,$2) RETURNING id, email, created_at`,
 		email, passwordHash).Scan(&u.ID, &u.Email, &u.CreatedAt)
 	return u, err
+}
+
+// setupLockKey serialises first-run setup. Any int64 works; it only has to be
+// the same for every caller.
+const setupLockKey int64 = 0x72616e65696c // "raenil"
+
+// CreateFirstUser creates the initial account, and only if no user exists yet.
+// The check and the insert are one statement under a transaction-scoped
+// advisory lock: NOT EXISTS alone is not enough, because two concurrent
+// transactions can both see an empty table under READ COMMITTED. A second
+// caller waits for the lock, then finds the first user and gets ErrConflict.
+func (s *Store) CreateFirstUser(ctx context.Context, email, passwordHash string) (models.User, error) {
+	var u models.User
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return u, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, setupLockKey); err != nil {
+		return u, err
+	}
+	err = tx.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash)
+		SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM users)
+		RETURNING id, email, created_at`, email, passwordHash).Scan(&u.ID, &u.Email, &u.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return u, fmt.Errorf("%w: already set up", ErrConflict)
+	}
+	if err != nil {
+		return u, err
+	}
+	return u, tx.Commit(ctx)
 }
 
 func (s *Store) GetUser(ctx context.Context, id string) (models.User, error) {

@@ -179,10 +179,26 @@ func (s *Store) RemoveMember(ctx context.Context, wsID, userID string) error {
 		`DELETE FROM workspace_members WHERE workspace_id=$1 AND user_id=$2`, wsID, userID); err != nil {
 		return err
 	}
+	// A token pinned to this workspace is useless to its owner now and must not
+	// outlive the membership. Unpinned tokens stay: they lose access through the
+	// membership check like everything else.
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM api_tokens WHERE workspace_id=$1 AND user_id=$2`, wsID, userID); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 // ---- create / update ----
+
+// workspaceWriteErr turns a unique-key collision on slug or key prefix into
+// ErrConflict, so callers answer 409 instead of leaking a 500.
+func workspaceWriteErr(err error) error {
+	if isUniqueViolation(err, "") {
+		return fmt.Errorf("%w: a workspace with that slug or key prefix already exists", ErrConflict)
+	}
+	return err
+}
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
 var prefixRe = regexp.MustCompile(`^[A-Z][A-Z0-9]*$`)
@@ -211,8 +227,19 @@ func ValidatePrefix(prefix, reserved string) error {
 // CreateWorkspace makes a workspace and seeds its counters so a fresh workspace
 // can never mint a key or number that an existing issue already holds.
 func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, ownerID string) (models.Workspace, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return models.Workspace{}, invalid("name is required")
+	}
+	slug = Slugify(slug)
 	if slug == "" {
 		slug = Slugify(name)
+	}
+	if slug == "" {
+		return models.Workspace{}, invalid("slug is required")
+	}
+	if err := ValidatePrefix(prefix, s.reservedPrefix); err != nil {
+		return models.Workspace{}, invalid("%s", err)
 	}
 	prefix = strings.ToUpper(strings.TrimSpace(prefix))
 
@@ -237,7 +264,7 @@ func (s *Store) CreateWorkspace(ctx context.Context, name, slug, prefix string, 
 		VALUES ($1,$2,$3,$4, coalesce((SELECT max(position)+1 FROM workspaces), 0))
 		RETURNING `+workspaceCols, slug, name, prefix, seq))
 	if err != nil {
-		return models.Workspace{}, err
+		return models.Workspace{}, workspaceWriteErr(err)
 	}
 
 	if ownerID != "" {
@@ -322,16 +349,27 @@ func (s *Store) UpdateWorkspace(ctx context.Context, id string, name, slug, pref
 	args := []any{id}
 	n := 1
 	if name != nil {
+		nm := strings.TrimSpace(*name)
+		if nm == "" {
+			return models.Workspace{}, invalid("name must not be empty")
+		}
 		n++
 		sets = append(sets, fmt.Sprintf("name=$%d", n))
-		args = append(args, *name)
+		args = append(args, nm)
 	}
 	if slug != nil {
+		sl := Slugify(*slug)
+		if sl == "" {
+			return models.Workspace{}, invalid("slug must not be empty")
+		}
 		n++
 		sets = append(sets, fmt.Sprintf("slug=$%d", n))
-		args = append(args, Slugify(*slug))
+		args = append(args, sl)
 	}
 	if prefix != nil {
+		if err := ValidatePrefix(*prefix, s.reservedPrefix); err != nil {
+			return models.Workspace{}, invalid("%s", err)
+		}
 		p := strings.ToUpper(strings.TrimSpace(*prefix))
 		n++
 		sets = append(sets, fmt.Sprintf("key_prefix=$%d", n))
@@ -352,7 +390,7 @@ func (s *Store) UpdateWorkspace(ctx context.Context, id string, name, slug, pref
 	ct, err := tx.Exec(ctx,
 		fmt.Sprintf(`UPDATE workspaces SET %s WHERE id=$1`, strings.Join(sets, ", ")), args...)
 	if err != nil {
-		return models.Workspace{}, err
+		return models.Workspace{}, workspaceWriteErr(err)
 	}
 	if ct.RowsAffected() == 0 {
 		return models.Workspace{}, ErrNotFound

@@ -125,6 +125,12 @@ func RoleFrom(ctx context.Context) string {
 	return r
 }
 
+// IsBearer reports whether the caller authenticated with an API token rather
+// than a browser session. Account-level actions (minting tokens, creating
+// workspaces) are for sessions only, so a leaked agent token cannot widen
+// itself.
+func IsBearer(ctx context.Context) bool { return ActorFrom(ctx) == ActorAI }
+
 // TokenPinFrom returns the workspace an API token is pinned to, if any.
 func TokenPinFrom(ctx context.Context) (string, bool) {
 	p, ok := ctx.Value(tokenPinKey).(string)
