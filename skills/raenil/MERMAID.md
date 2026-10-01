@@ -10,7 +10,7 @@ Raenil renders diagrams with Mermaid 11. A diagram that fails to parse shows as 
 
 ## Labels
 
-- Put a label in double quotes when it has any of these: `/ \ : ; , ( ) [ ] { } < > # | + * ? ! & ' →`, a dot or a leading digit. Example: `api["GET /api/issues/:id"]`.
+- In a flowchart, put a label in double quotes when it has any of these: `/ \ : ; , ( ) [ ] { } < > # | + * ? ! & ' →`, a dot or a leading digit. Example: `api["GET /api/issues/:id"]`.
 - Quoting is always safe. When in doubt, quote.
 - Inside a quoted label, write `#quot;` for `"`. Never put a raw `"` in a label.
 - Don't use the parallelogram shape `[/text/]` when the text has `/`. Use `["/route: text"]`.
@@ -19,9 +19,10 @@ Raenil renders diagrams with Mermaid 11. A diagram that fails to parse shows as 
 
 ## Sequence diagrams
 
+- **Do not use double quotes in a sequence diagram.** They print literally in participant names, messages and `loop`/`alt` titles. Quotes are for flowchart labels only.
 - Write a message as `A->>B: text`. It needs the colon.
 - Never put `;` in a message or a `Note`. Mermaid reads `;` as the end of a statement. Use `,` instead, as in `BEGIN, SELECT ...`.
-- Give a participant with spaces or symbols an alias: `participant API as "api/booking"`.
+- Give a participant with spaces or symbols an alias, without quotes: `participant API as api/booking`.
 - Close every `alt`, `opt`, `loop`, `par` and `rect` with `end`.
 
 ## Before you save

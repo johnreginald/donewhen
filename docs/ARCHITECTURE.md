@@ -68,24 +68,24 @@ Settings come from `DONEWHEN_*` environment variables, read in `internal/config/
 
 ```mermaid
 sequenceDiagram
-    participant C as "Client (browser or agent)"
-    participant A as "api or mcp"
-    participant S as "service"
-    participant T as "store"
-    participant P as "Postgres"
-    participant B as "event bus"
-    participant E as "SSE streams"
-    participant N as "push notifier"
-    C->>A: "PATCH /api/issues/ACM-42 or save_issue"
-    A->>A: "resolve user, actor and workspace"
-    A->>S: "UpdateIssue(workspace, id, patch, actor)"
-    S->>T: "UpdateIssue"
-    T->>P: "UPDATE issues WHERE id and workspace_id"
-    S->>B: "Publish issue.state_changed"
-    S->>T: "RecordActivity"
-    B-->>E: "send to this workspace only"
-    B-->>N: "send all events"
-    N-->>C: "Web Push to members' devices"
+    participant C as Client (browser or agent)
+    participant A as api or mcp
+    participant S as service
+    participant T as store
+    participant P as Postgres
+    participant B as event bus
+    participant E as SSE streams
+    participant N as push notifier
+    C->>A: PATCH /api/issues/ACM-42 or save_issue
+    A->>A: resolve user, actor and workspace
+    A->>S: UpdateIssue(workspace, id, patch, actor)
+    S->>T: UpdateIssue
+    T->>P: UPDATE issues WHERE id and workspace_id
+    S->>B: Publish issue.state_changed
+    S->>T: RecordActivity
+    B-->>E: send to this workspace only
+    B-->>N: send all events
+    N-->>C: Web Push to members' devices
 ```
 
 Steps in words:

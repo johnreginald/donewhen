@@ -114,28 +114,28 @@ Both are optional. DoneWhen works with any MCP client.
 
 ```mermaid
 sequenceDiagram
-    actor H as "You"
-    participant A as "AI agent"
-    participant D as "DoneWhen (MCP)"
-    H->>A: "Idea: add login"
-    A->>D: "save_issue (create, state Triage)"
-    H->>A: "Let us align on the scope"
-    A->>D: "save_issue (state Aligning, spec in description)"
-    A->>D: "set_criteria (3 to 6 items)"
-    H->>A: "Spec is good"
-    A->>D: "save_issue (state Ready)"
-    A->>D: "save_issue (state In Progress)"
-    loop "Each criterion"
-        A->>A: "Build and test"
-        A->>D: "check_criterion (done true)"
+    actor H as You
+    participant A as AI agent
+    participant D as DoneWhen (MCP)
+    H->>A: Idea: add login
+    A->>D: save_issue (create, state Triage)
+    H->>A: Let us align on the scope
+    A->>D: save_issue (state Aligning, spec in description)
+    A->>D: set_criteria (3 to 6 items)
+    H->>A: Spec is good
+    A->>D: save_issue (state Ready)
+    A->>D: save_issue (state In Progress)
+    loop Each criterion
+        A->>A: Build and test
+        A->>D: check_criterion (done true)
     end
-    A->>D: "get_criteria (all done?)"
-    D-->>A: "every item done"
-    A->>D: "save_issue (state In Review)"
-    A->>D: "link_commit, set_issue_dev"
-    A->>D: "save_document (type change, with diagram)"
-    H->>D: "Review the code, merge"
-    H->>D: "Move to Done"
+    A->>D: get_criteria (all done?)
+    D-->>A: every item done
+    A->>D: save_issue (state In Review)
+    A->>D: link_commit, set_issue_dev
+    A->>D: save_document (type change, with diagram)
+    H->>D: Review the code, merge
+    H->>D: Move to Done
 ```
 
 If the agent gets stuck, it sets `Blocked` and adds a comment. You answer. It then returns to In Progress.
