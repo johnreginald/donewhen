@@ -1,313 +1,646 @@
 <script>
-	import { aiName } from '$lib/store.js';
-	import PageHeader from '$components/PageHeader.svelte';
+	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
+	import { aiName, states, projectById, inboxCount, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
 	import { api } from '$lib/api.js';
-	import { states, projectById, inboxCount } from '$lib/store.js';
-	import { openIssue, showToast } from '$lib/ui.js';
-	import ActivityFeed from '$components/ActivityFeed.svelte';
-	import PriorityIcon from '$components/PriorityIcon.svelte';
-	import { GitCommitHorizontal, FileText, Check, Undo2, Inbox as InboxIcon } from '@lucide/svelte';
+	import { openIssue, onLive, paletteOpen } from '$lib/ui.js';
+	import PageHeader from '$components/PageHeader.svelte';
+	import InboxReviewCard from '$components/InboxReviewCard.svelte';
+	import InboxBlockedCard from '$components/InboxBlockedCard.svelte';
+	import InboxActivityList from '$components/InboxActivityList.svelte';
+	import InboxToast from '$components/InboxToast.svelte';
 
+	// ---- state ----
+	let loading = $state(true); // the full-page skeleton — only for the first load
+	let error = $state(null); // full-page error, set only by a non-background load
 	let needsReview = $state([]);
+	let blockedList = $state([]);
 	let recent = $state([]);
 	let seenAt = $state(null);
-	let loading = $state(true);
-	let busy = $state(''); // issue id currently being acted on
 
-	const newCount = $derived(
+	let criteriaById = $state({}); // issueId -> { loading, items }
+	let expandedIds = $state(new Set());
+	let bounceOpenId = $state(null);
+	let bounceText = $state('');
+	let busyId = $state('');
+	let selectedIndex = $state(0);
+
+	let replyOpenId = $state(null);
+	let replyText = $state('');
+	let replyBusyId = $state('');
+
+	let toast = $state(null);
+
+	// Plain (non-reactive) bookkeeping — not UI state, so not $state.
+	let seenStamped = false; // guards a single inboxSeen() per page visit
+	let refreshTimer;
+	let toastTimer;
+
+	const newActivityCount = $derived(
 		seenAt ? recent.filter((a) => a.createdAt > seenAt).length : recent.length
 	);
+	const isEmpty = $derived(!needsReview.length && !blockedList.length && !recent.length);
 
-	async function load() {
-		loading = true;
+	// ---- data loading ----
+	// background=true is a live refresh: it must never flash the skeleton, wipe
+	// good data on a transient failure, or re-stamp "seen" (that would erase the
+	// new-since-last-visit marks moments after they appear).
+	async function load({ background = false } = {}) {
+		if (!background) {
+			loading = true;
+			error = null;
+		}
 		try {
 			const r = (await api.inbox()) || {};
 			needsReview = r.needsReview || [];
 			recent = r.recent || [];
 			seenAt = r.seenAt || null;
 			inboxCount.set(needsReview.length);
-			// mark reviewed so the "new" highlight resets next visit + badge is a live queue count
-			await api.inboxSeen();
+			clampSelection();
+
+			await Promise.all([loadCriteria(needsReview), loadBlocked()]);
+
+			if (!seenStamped) {
+				seenStamped = true;
+				try {
+					await api.inboxSeen();
+				} catch {
+					seenStamped = false; // let the next successful load retry the stamp
+				}
+			}
+		} catch (e) {
+			if (background) {
+				flashToast("Couldn't refresh the inbox.", 'error');
+			} else {
+				error = e?.message || "Couldn't load the inbox.";
+			}
 		} finally {
-			loading = false;
+			if (!background) loading = false;
 		}
 	}
 
-	async function moveTo(item, stateName, label) {
-		if (busy) return;
-		const st = get_state(stateName);
-		if (!st) {
-			showToast(`No "${stateName}" state`, 'error');
+	async function loadCriteria(items) {
+		await Promise.all(
+			items.map(async (it) => {
+				criteriaById[it.id] = { loading: true, items: criteriaById[it.id]?.items || [] };
+				try {
+					const cs = (await api.criteria(it.id)) || [];
+					criteriaById[it.id] = { loading: false, items: cs };
+				} catch {
+					criteriaById[it.id] = { loading: false, items: criteriaById[it.id]?.items || [] };
+				}
+			})
+		);
+	}
+
+	async function loadBlocked() {
+		const blockedState = get(states).find((s) => s.name === 'Blocked');
+		if (!blockedState) {
+			blockedList = [];
 			return;
 		}
-		busy = item.id;
+		const list = (await api.issues({ state: blockedState.id })) || [];
+		blockedList = await Promise.all(
+			list.map(async (is) => {
+				let reason = '';
+				try {
+					const cs = (await api.comments(is.id)) || [];
+					const last = cs.length ? cs[cs.length - 1] : null;
+					if (last) reason = excerptPlain(last.bodyMd, 220);
+				} catch {
+					/* leave reason blank — the card shows a fallback line */
+				}
+				return { ...is, reason };
+			})
+		);
+	}
+
+	function excerptPlain(md, max = 220) {
+		if (!md) return '';
+		const plain = md
+			.replace(/```[\s\S]*?```/g, ' ')
+			.replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+			.replace(/\[([^\]]*)]\([^)]*\)/g, '$1')
+			.replace(/[*_`>#-]/g, '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		return plain.length > max ? plain.slice(0, max).trim() + '…' : plain;
+	}
+
+	function blockedByKeyFor(issueId) {
+		const ids = openBlockersByIssue(get(blockLinks))[issueId];
+		if (!ids || !ids.length) return '';
+		return get(issues).find((i) => i.id === ids[0])?.key || '';
+	}
+
+	function clampSelection() {
+		if (selectedIndex >= needsReview.length) selectedIndex = Math.max(0, needsReview.length - 1);
+	}
+
+	// ---- toast (own component: needs an Undo slot the shared one doesn't have) ----
+	function flashToast(message, kind = 'info', { mono, onUndo, ms = 4000 } = {}) {
+		toast = { message, kind, mono, onUndo };
+		clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => (toast = null), ms);
+	}
+
+	// ---- approve / undo ----
+	async function approve(item) {
+		if (busyId) return;
+		const c = criteriaById[item.id];
+		const openCount = c ? c.items.filter((x) => !x.done).length : 0;
+		if (c?.loading || openCount > 0) return; // belt-and-braces; the button is disabled too
+		const doneState = get(states).find((s) => s.name === 'Done');
+		if (!doneState) {
+			flashToast('No "Done" state in this workspace.', 'error');
+			return;
+		}
+		const prevStateId = item.stateId;
+		busyId = item.id;
 		try {
-			await api.updateIssue(item.id, { stateId: st.id });
+			await api.updateIssue(item.id, { stateId: doneState.id });
 			needsReview = needsReview.filter((x) => x.id !== item.id);
 			inboxCount.set(needsReview.length);
-			showToast(`${item.key} — ${label}`);
+			clampSelection();
+			flashToast('→ Done · by you', 'info', {
+				mono: item.key,
+				onUndo: () => undoApprove(item, prevStateId)
+			});
 		} catch (e) {
-			showToast(e.message || 'Failed', 'error');
+			flashToast(e?.message || 'Approve failed.', 'error');
 		} finally {
-			busy = '';
+			busyId = '';
 		}
 	}
 
-	function get_state(name) {
-		return get(states).find((s) => s.name === name);
+	async function undoApprove(item, prevStateId) {
+		clearTimeout(toastTimer);
+		toast = null;
+		try {
+			await api.updateIssue(item.id, { stateId: prevStateId });
+			flashToast(`${item.key} restored to In Review.`);
+			load({ background: true });
+		} catch (e) {
+			flashToast(e?.message || 'Undo failed.', 'error');
+		}
 	}
 
-	function rel(ts) {
-		if (!ts) return '';
-		const d = (Date.now() - new Date(ts).getTime()) / 1000;
-		if (d < 60) return 'just now';
-		if (d < 3600) return `${Math.floor(d / 60)}m ago`;
-		if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
-		return `${Math.floor(d / 86400)}d ago`;
+	// ---- bounce ----
+	function openBounce(item) {
+		bounceOpenId = item.id;
+		bounceText = '';
+	}
+	function cancelBounce() {
+		bounceOpenId = null;
+		bounceText = '';
+	}
+	function toggleBounce(item) {
+		if (bounceOpenId === item.id) cancelBounce();
+		else openBounce(item);
 	}
 
-	$effect(() => {
+	async function confirmBounce(item) {
+		if (busyId) return;
+		const progState = get(states).find((s) => s.name === 'In Progress');
+		if (!progState) {
+			flashToast('No "In Progress" state in this workspace.', 'error');
+			return;
+		}
+		const text = bounceText.trim();
+		busyId = item.id;
+		try {
+			await api.updateIssue(item.id, { stateId: progState.id });
+			if (text) await api.addComment(item.id, text);
+			needsReview = needsReview.filter((x) => x.id !== item.id);
+			inboxCount.set(needsReview.length);
+			cancelBounce();
+			clampSelection();
+			flashToast(`${item.key} → In Progress${text ? ' · comment posted' : ''}`);
+		} catch (e) {
+			flashToast(e?.message || 'Bounce failed.', 'error');
+		} finally {
+			busyId = '';
+		}
+	}
+
+	function toggleExpand(item) {
+		const next = new Set(expandedIds);
+		if (next.has(item.id)) next.delete(item.id);
+		else next.add(item.id);
+		expandedIds = next;
+	}
+
+	// ---- blocked → reply ----
+	function toggleReply(item) {
+		if (replyOpenId === item.id) {
+			replyOpenId = null;
+			replyText = '';
+		} else {
+			replyOpenId = item.id;
+			replyText = '';
+		}
+	}
+
+	async function sendReply(item) {
+		const text = replyText.trim();
+		if (!text || replyBusyId) return;
+		replyBusyId = item.id;
+		try {
+			await api.addComment(item.id, text);
+			blockedList = blockedList.map((b) => (b.id === item.id ? { ...b, reason: text } : b));
+			replyOpenId = null;
+			replyText = '';
+			flashToast(`Reply posted on ${item.key}.`);
+		} catch (e) {
+			flashToast(e?.message || 'Reply failed.', 'error');
+		} finally {
+			replyBusyId = '';
+		}
+	}
+
+	// ---- keyboard: j/k navigate, a approve, b bounce ----
+	function isTypingTarget(el) {
+		if (!el) return false;
+		const tag = el.tagName;
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+	}
+
+	function onKeydown(e) {
+		if (e.metaKey || e.ctrlKey || e.altKey) return;
+		if (isTypingTarget(e.target)) return;
+		if (get(paletteOpen)) return;
+		const key = e.key.toLowerCase();
+		if (key === 'j' || key === 'k') {
+			if (!needsReview.length) return;
+			e.preventDefault();
+			selectedIndex =
+				key === 'j' ? Math.min(selectedIndex + 1, needsReview.length - 1) : Math.max(selectedIndex - 1, 0);
+			return;
+		}
+		if (key === 'a') {
+			const it = needsReview[selectedIndex];
+			if (it) {
+				e.preventDefault();
+				approve(it);
+			}
+			return;
+		}
+		if (key === 'b') {
+			const it = needsReview[selectedIndex];
+			if (it) {
+				e.preventDefault();
+				toggleBounce(it);
+			}
+		}
+	}
+
+	// ---- live refresh: any of these means the queues may be stale ----
+	const LIVE_TYPES = new Set([
+		'issue.created',
+		'issue.updated',
+		'issue.state_changed',
+		'issue.deleted',
+		'comment.added',
+		'issue.blockers'
+	]);
+
+	function scheduleRefresh() {
+		clearTimeout(refreshTimer);
+		refreshTimer = setTimeout(() => load({ background: true }), 400);
+	}
+
+	onMount(() => {
 		load();
+		const offLive = onLive((ev) => {
+			if (ev && LIVE_TYPES.has(ev.type)) scheduleRefresh();
+		});
+		window.addEventListener('keydown', onKeydown);
+		return () => {
+			offLive();
+			window.removeEventListener('keydown', onKeydown);
+			clearTimeout(refreshTimer);
+			clearTimeout(toastTimer);
+		};
 	});
 </script>
 
 <div class="pg">
 	<PageHeader crumbs={[{ label: 'Inbox' }]} />
 	<div class="pg-body">
-<div class="inbox">
-	<div class="ib-head">
-		<span class="ib-title"><InboxIcon size={17} strokeWidth={2} /> Inbox</span>
-		<span class="ib-sub faint">What {$aiName} did while you were away</span>
-	</div>
+		<div class="inbox">
+			<div class="content-inner">
+				<div class="pagehead">
+					<span class="eyebrow">Raenil · Inbox</span>
+					<h1>Inbox</h1>
+					<span class="sub faint">What {$aiName} did while you were away</span>
+				</div>
 
-	<div class="ib-body">
-		<!-- Needs review -->
-		<section>
-			<h2 class="sec">
-				Needs review
-				{#if needsReview.length}<span class="count">{needsReview.length}</span>{/if}
-			</h2>
-			{#if needsReview.length}
-				<div class="cards">
-					{#each needsReview as it (it.id)}
-						<div class="card">
-							<button class="card-main" onclick={() => openIssue(it.key)}>
-								<div class="row1">
-									<PriorityIcon priority={it.priority} />
-									<span class="key">{it.key}</span>
-									<span class="ttl">{it.title}</span>
-								</div>
-								<div class="meta faint">
-									{#if it.projectId}<span>{projectById(it.projectId)?.name ?? 'Epic'}</span
-										><span class="dot">·</span>{/if}
-									<span class="mv">moved to review {rel(it.enteredReviewAt)}</span>
-									{#if it.commitCount}<span class="dot">·</span><span class="ic"
-											><GitCommitHorizontal size={13} /> {it.commitCount}</span
-										>{/if}
-									{#if it.docCount}<span class="dot">·</span><span class="ic"
-											><FileText size={13} /> {it.docCount}</span
-										>{/if}
-								</div>
-							</button>
-							<div class="acts">
-								<button
-									class="act approve"
-									disabled={busy === it.id}
-									onclick={() => moveTo(it, 'Done', 'approved → Done')}
-									title="Approve → Done"><Check size={15} strokeWidth={2.4} /> Approve</button
-								>
-								<button
-									class="act bounce"
-									disabled={busy === it.id}
-									onclick={() => moveTo(it, 'In Progress', 'bounced → In Progress')}
-									title="Bounce → In Progress"><Undo2 size={15} strokeWidth={2.2} /> Bounce</button
-								>
+				{#if loading}
+					<div class="skel-body">
+						<div class="skel-bar" style="width:120px;height:10px"></div>
+						{#each [1, 2, 3] as n (n)}
+							<div class="skel-card">
+								<div class="skel-bar" style="width:60%"></div>
+								<div class="skel-bar" style="width:38%;height:7px"></div>
+								<div class="skel-bar" style="width:22%;height:7px"></div>
 							</div>
+						{/each}
+					</div>
+				{:else if error}
+					<div class="error-wrap">
+						<div class="h">Couldn't load the inbox</div>
+						<div class="s faint">The server didn't respond. Your review queue hasn't changed.</div>
+						<button class="btn sd" onclick={() => load()}>Retry</button>
+					</div>
+				{:else if isEmpty}
+					<div class="empty-wrap">
+						<div class="h">Nothing waiting on you.</div>
+						<div class="s faint">
+							{$aiName} hasn't moved anything to review. Come back when something's ready.
 						</div>
-					{/each}
-				</div>
-			{:else}
-				<div class="empty faint">
-					{loading ? 'Loading…' : `Nothing waiting. ${$aiName} hasn’t moved anything to In Review yet.`}
-				</div>
-			{/if}
-		</section>
+					</div>
+				{:else}
+					<div class="sec-head">Needs review<span class="count">{needsReview.length}</span></div>
+					{#if needsReview.length}
+						<div class="nr-list">
+							{#each needsReview as it, i (it.id)}
+								<InboxReviewCard
+									item={it}
+									epicName={projectById(it.projectId)?.name ?? ''}
+									aiName={$aiName}
+									crit={criteriaById[it.id]}
+									expanded={expandedIds.has(it.id)}
+									selected={i === selectedIndex}
+									busy={busyId === it.id}
+									bounceOpen={bounceOpenId === it.id}
+									bounceText={bounceOpenId === it.id ? bounceText : ''}
+									onOpen={(x) => openIssue(x.key)}
+									onToggleExpand={toggleExpand}
+									onApprove={approve}
+									onToggleBounce={toggleBounce}
+									onBounceInput={(v) => (bounceText = v)}
+									onBounceConfirm={confirmBounce}
+									onBounceCancel={cancelBounce}
+								/>
+							{/each}
+						</div>
+					{:else}
+						<div class="empty faint">Nothing waiting. {$aiName} hasn't moved anything to review yet.</div>
+					{/if}
 
-		<!-- Recent AI activity -->
-		<section>
-			<h2 class="sec">
-				Recent {$aiName} activity
-				{#if newCount}<span class="count new">{newCount} new</span>{/if}
-			</h2>
-			{#if recent.length}
-				<ActivityFeed items={recent} showIssue={true} />
-			{:else}
-				<div class="empty faint">{loading ? 'Loading…' : `No ${$aiName} activity yet.`}</div>
-			{/if}
-		</section>
+					<div class="sec-head">Blocked — needs you<span class="count">{blockedList.length}</span></div>
+					{#if blockedList.length}
+						<div class="bl-list">
+							{#each blockedList as b (b.id)}
+								<InboxBlockedCard
+									item={b}
+									epicName={projectById(b.projectId)?.name ?? ''}
+									blockedByKey={blockedByKeyFor(b.id)}
+									aiName={$aiName}
+									replying={replyOpenId === b.id}
+									replyText={replyOpenId === b.id ? replyText : ''}
+									busy={replyBusyId === b.id}
+									onOpen={(x) => openIssue(x.key)}
+									onToggleReply={toggleReply}
+									onReplyInput={(v) => (replyText = v)}
+									onReplySend={sendReply}
+								/>
+							{/each}
+						</div>
+					{:else}
+						<div class="empty faint">Nothing blocked right now.</div>
+					{/if}
+
+					<div class="sec-head">
+						Recent {$aiName} activity
+						{#if newActivityCount}<span class="count new">{newActivityCount} new</span>{/if}
+					</div>
+					<InboxActivityList items={recent} {seenAt} aiName={$aiName} />
+
+					<div class="kbdbar">
+						<span class="grp"><span class="kbd">j</span><span class="kbd">k</span>navigate</span>
+						<span class="grp"><span class="kbd">a</span>approve</span>
+						<span class="grp"><span class="kbd">b</span>bounce</span>
+					</div>
+				{/if}
+			</div>
+		</div>
 	</div>
 </div>
-	</div>
-</div>
+
+<InboxToast {toast} />
 
 <style>
 	.inbox {
 		height: 100%;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
 	}
-	.ib-head {
+	.content-inner {
+		max-width: 740px;
+		margin: 0 auto;
+		padding: 24px clamp(16px, 4vw, 30px) 48px;
 		display: flex;
-		align-items: baseline;
-		gap: 12px;
-		padding: 14px 20px;
-		border-bottom: 1px solid var(--line);
-		flex: none;
+		flex-direction: column;
+		gap: 2px;
+		width: 100%;
+		box-sizing: border-box;
 	}
-	.ib-title {
-		display: inline-flex;
+	.pagehead {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin-bottom: 2px;
+	}
+	.pagehead .eyebrow {
+		font-family: var(--mono);
+		font-size: var(--t-xs);
+		color: var(--ink-3);
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.pagehead h1 {
+		font-family: var(--serif);
+		font-weight: 400;
+		font-size: 24px;
+		margin: 2px 0 0;
+		letter-spacing: -0.01em;
+		color: var(--ink);
+	}
+	.pagehead .sub {
+		font-size: 12px;
+		margin: 2px 0 0;
+	}
+
+	.sec-head {
+		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 15px;
-		font-weight: 600;
-	}
-	.ib-sub {
-		font-size: 12.5px;
-	}
-	.ib-body {
-		flex: 1;
-		overflow-y: auto;
-		padding: 16px clamp(16px, 4vw, 40px) 48px;
-		max-width: 820px;
-		width: 100%;
-		margin: 0 auto;
-	}
-	.sec {
-		font-size: 12px;
+		margin: 14px 0 7px;
+		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--ink-3);
 		font-weight: 600;
-		margin: 18px 0 10px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
 	}
 	.count {
-		background: var(--surface);
+		background: var(--sunken);
 		border: 1px solid var(--line);
 		color: var(--ink-2);
 		border-radius: 20px;
 		padding: 1px 8px;
-		font-size: 11px;
+		font-size: 10.5px;
 		letter-spacing: 0;
+		font-weight: 600;
 	}
 	.count.new {
-		background: color-mix(in srgb, var(--accent) 22%, var(--paper));
+		background: var(--accent-soft);
 		border-color: var(--accent);
 		color: var(--ink);
 	}
-	.cards {
+
+	.nr-list,
+	.bl-list {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-	}
-	.card {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: 10px;
-		padding: 10px 12px;
-	}
-	.card:hover {
-		border-color: var(--line-strong);
-	}
-	.card-main {
-		flex: 1;
-		min-width: 0;
-		background: none;
-		border: none;
-		text-align: left;
-		padding: 0;
-		cursor: pointer;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-	.row1 {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		min-width: 0;
-	}
-	.key {
-		font-size: 12.5px;
-		color: var(--ink-2);
-		font-variant-numeric: tabular-nums;
-		flex: none;
-	}
-	.ttl {
-		font-size: 14px;
-		color: var(--ink);
-		font-weight: 500;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.meta {
-		display: flex;
-		align-items: center;
 		gap: 6px;
-		font-size: 12px;
-		flex-wrap: wrap;
 	}
-	.meta .ic {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
+
+	.empty {
+		padding: 16px 4px 28px;
+		font-size: 13px;
 	}
-	.dot {
-		opacity: 0.5;
-	}
-	.acts {
+
+	.kbdbar {
 		display: flex;
-		gap: 6px;
-		flex: none;
+		align-items: center;
+		gap: 12px;
+		margin-top: 16px;
+		padding-top: 8px;
+		border-top: 1px solid var(--line);
+		font-size: 11px;
+		color: var(--ink-3);
 	}
-	.act {
+	.kbdbar .grp {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
-		font-size: 12.5px;
-		font-weight: 500;
-		padding: 6px 10px;
-		border-radius: 7px;
-		border: 1px solid var(--line);
-		background: var(--paper);
+	}
+	.kbd {
+		font-family: var(--mono);
+		font-size: 10.5px;
+		padding: 1px 5px;
+		border: 1px solid var(--line-strong);
+		border-bottom-width: 2px;
+		border-radius: 4px;
 		color: var(--ink-2);
+		background: var(--surface);
 	}
-	.act:hover {
-		color: var(--ink);
+
+	.btn {
+		height: 30px;
+		padding: 0 12px;
+		border-radius: var(--r);
+		font: 500 var(--t-sm) / 1 var(--font);
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid transparent;
+		cursor: pointer;
+	}
+	.btn.sd {
+		background: var(--surface);
 		border-color: var(--line-strong);
+		color: var(--ink);
 	}
-	.act.approve:hover {
-		border-color: var(--st-done);
-		color: var(--st-done);
+	.btn.sd:hover {
+		background: var(--hover);
 	}
-	.act.bounce:hover {
-		border-color: var(--st-review);
-		color: var(--st-review);
-	}
-	.act:disabled {
-		opacity: 0.5;
-	}
-	.empty {
-		padding: 28px 10px;
+
+	/* loading / error / empty — full-content-area states (Frames 4–6) */
+	.empty-wrap,
+	.error-wrap {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 		text-align: center;
-		font-size: 13px;
+		padding: 60px 30px;
+		gap: 8px;
+	}
+	.empty-wrap .h {
+		font-family: var(--serif);
+		font-size: var(--t-2xl);
+		font-weight: 400;
+		color: var(--ink);
+	}
+	.empty-wrap .s {
+		font-size: 12.5px;
+		max-width: 34ch;
+	}
+	.error-wrap .h {
+		font-size: 14.5px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+	.error-wrap .s {
+		font-size: 12.5px;
+		max-width: 30ch;
+	}
+	.error-wrap .btn {
+		margin-top: 4px;
+	}
+
+	.skel-body {
+		padding: 16px 0;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.skel-card {
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: var(--r);
+		padding: 12px 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.skel-bar {
+		background: var(--sunken);
+		border-radius: 3px;
+		height: 9px;
+		position: relative;
+		overflow: hidden;
+	}
+	.skel-bar::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(90deg, transparent, var(--hover), transparent);
+		animation: sweep 1.6s ease-in-out infinite;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel-bar::after {
+			animation: none;
+		}
+	}
+	@keyframes sweep {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@media (max-width: 720px) {
+		.content-inner {
+			padding: 16px 16px 40px;
+		}
+		.kbdbar {
+			display: none;
+		}
 	}
 </style>
