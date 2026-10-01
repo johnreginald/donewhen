@@ -6,6 +6,7 @@
 	import { activeInitiative, initiatives } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import LogTimeline from '$components/LogTimeline.svelte';
+	import { autohide } from '$lib/autohide.js';
 
 	const TYPE_CHIPS = [
 		{ key: '', label: 'All types' },
@@ -79,7 +80,7 @@
 	<PageHeader crumbs={[{ label: 'Log' }]} />
 	<div class="pg-body">
 <div class="log">
-	<div class="log-head">
+	<div class="log-head" use:autohide>
 		<div class="lh-left">
 			<span class="lh-title">Log</span>
 			<span class="lh-scope">{scope}</span>
@@ -90,7 +91,7 @@
 			<button class="sg" class:on={actor === 'ai'} onclick={() => (actor = 'ai')}>✦ {$aiName}</button>
 		</div>
 	</div>
-	<div class="log-filters">
+	<div class="log-filters" use:autohide>
 		<span class="rh">Filter</span>
 		<div class="tchips">
 			{#each TYPE_CHIPS as c (c.key)}

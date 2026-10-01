@@ -5,6 +5,7 @@
 	// Board-only additions (boardVisibleIssues); the other views keep reading
 	// visibleIssues, untouched.
 	import { page } from '$app/stores';
+	import { autohide } from '$lib/autohide.js';
 	import {
 		issueQuery, projects, initiatives, activeProject, activeInitiative, activeLabel, labels,
 		loadIssues, PRIORITIES, activePriority, activeSavedView, SAVED_VIEWS, clearBoardFilters
@@ -66,7 +67,7 @@
 	}
 </script>
 
-<div class="bar">
+<div class="bar" use:autohide>
 	<label class="search">
 		<Search size={14} strokeWidth={2} />
 		<input bind:value={$issueQuery} placeholder="Search tasks…" />

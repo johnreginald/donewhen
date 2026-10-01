@@ -1,4 +1,5 @@
 <script>
+	import InlineCode from './InlineCode.svelte';
 	// One "Needs review" card — an issue the AI moved to In Review. Approve
 	// (→ Done) is gated on every done-when criterion being ticked; Bounce
 	// (→ In Progress) always works, with an optional reason that becomes a
@@ -90,7 +91,7 @@
 				{#each crit.items as c (c.id)}
 					<div class="ck" class:done={c.done}>
 						<i class="box" class:on={c.done}>{c.done ? '✓' : ''}</i>
-						<span>{c.body}</span>
+						<span><InlineCode text={c.body} /></span>
 					</div>
 				{/each}
 			{:else}
@@ -267,8 +268,7 @@
 		font-size: var(--t-sm);
 	}
 	.ck.done span {
-		color: var(--ink-3);
-		text-decoration: line-through;
+		color: var(--ink-2);
 	}
 	.box {
 		width: 15px;

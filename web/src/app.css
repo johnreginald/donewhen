@@ -816,3 +816,18 @@ select {
 		padding: 24px 20px;
 	}
 }
+
+/* autohide action: a pinned toolbar slides away on scroll down, returns on scroll up */
+[data-autohide] {
+	transition: margin-top 200ms var(--ease), opacity 160ms var(--ease);
+}
+[data-autohide].ah-hidden {
+	margin-top: calc(var(--ah) * -1);
+	opacity: 0;
+	pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-autohide] {
+		transition: none;
+	}
+}

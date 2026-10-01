@@ -9,6 +9,7 @@
 	import { states, projects, archivedProjects, blockLinks, unarchiveProject } from '$lib/store.js';
 	import { onLive, showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
+	import InlineCode from '$components/InlineCode.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityMenu from '$components/PriorityMenu.svelte';
 	import StatusMenu from '$components/StatusMenu.svelte';
@@ -503,7 +504,7 @@
 								<button class="crit-box" class:on={c.done} onclick={() => toggleCrit(c)} aria-label="toggle">
 									{#if c.done}<b>✓</b>{/if}
 								</button>
-								<span class="crit-text" class:done={c.done}>{c.body}</span>
+								<span class="crit-text" class:done={c.done}><InlineCode text={c.body} /></span>
 								<span class="crit-kind" class:adv={c.kind === 'judgment'}>{c.kind}</span>
 								{#if c.evidenceRef}<span class="crit-ev" title={c.evidenceRef}>{c.evidenceRef}</span>{/if}
 								<button class="crit-del" onclick={() => delCrit(c)} title="Remove">✕</button>
@@ -992,8 +993,7 @@
 		line-height: 1.45;
 	}
 	.crit-text.done {
-		color: var(--ink-3);
-		text-decoration: line-through;
+		color: var(--ink-2);
 	}
 	.crit-del {
 		opacity: 0;

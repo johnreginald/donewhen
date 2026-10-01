@@ -15,6 +15,7 @@
 	} from '$lib/store.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import IssuesToolbar from '$components/IssuesToolbar.svelte';
+	import { autohide } from '$lib/autohide.js';
 	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
@@ -168,7 +169,7 @@
 <div class="page">
 	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'List' }]} />
 	<IssuesToolbar />
-	<div class="subbar">
+	<div class="subbar" use:autohide>
 		<span class="spacer"></span>
 		<div class="dd">
 			<button class="gsbtn" onclick={() => (menuOpen = !menuOpen)} aria-haspopup="true" aria-expanded={menuOpen}>
