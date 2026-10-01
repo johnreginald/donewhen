@@ -1,6 +1,6 @@
 # Contributing to DoneWhen
 
-Thanks for helping. DoneWhen is a self-hosted issue tracker: Go backend, SvelteKit frontend, Postgres.
+Thanks for your help. DoneWhen is a self-hosted issue tracker. It has a Go backend, a SvelteKit frontend, and Postgres.
 
 ## Set up
 
@@ -23,11 +23,11 @@ docker run -d --name donewhen-dev-pg -p 55433:5432 \
 cd web && npm ci && cd ..
 ```
 
-Run the app with `make web` (builds the frontend), then `make run`. Use `make web-dev` for the Vite dev server.
+To run the app, use `make web` (it builds the frontend), then `make run`. Use `make web-dev` for the Vite dev server.
 
 ## Run the tests
 
-Run all three before you open a PR.
+Run all three checks before you open a PR.
 
 ```sh
 # Go: starts a throwaway Postgres in Docker, runs `go vet` and `go test ./...`, then removes it
@@ -40,27 +40,29 @@ cd web && npm run build
 node --test 'plugin/scripts/*.test.mjs'
 ```
 
-`make test` needs Docker and uses its own container on a free local port, so it never touches your dev database. It sets `DONEWHEN_TEST_STRICT=1`, so a database test that cannot find Postgres fails instead of skipping. To run one package against your own database, set `DONEWHEN_TEST_DATABASE_URL` and run `go test ./internal/api` (without `DONEWHEN_TEST_STRICT`, those tests skip when it is unset).
+`make test` needs Docker. It uses its own container on a free local port, so it never touches your dev database. It sets `DONEWHEN_TEST_STRICT=1`. A database test that cannot find Postgres then fails and does not skip.
 
-Also run `gofmt -l .` (it must print nothing); `make test` already runs `go vet ./...`. There is no CI: run these checks before you open a PR.
+To run one package against your own database, set `DONEWHEN_TEST_DATABASE_URL` and run `go test ./internal/api`. Without `DONEWHEN_TEST_STRICT`, those tests skip when the variable is not set.
+
+Also run `gofmt -l .` (it must print nothing). `make test` already runs `go vet ./...`. There is no CI, so run these checks before you open a PR.
 
 ## Design system
 
 Use only the tokens defined in `web/src/app.css` (colours, spacing, radii, type). Do not hard-code values.
-`npm run check:ds` enforces this, and `npm run build` runs it.
+`npm run check:ds` enforces this rule, and `npm run build` runs it.
 
 ## Branches and commits
 
-- Branch from `main`. Name it by type: `feat/...`, `fix/...`, `chore/...`.
-- Commit subject: short, imperative, no full stop.
-- Commit body: say why the change is needed, not only what it does.
-- Keep one idea per commit.
+- Branch from `main`. Name the branch by type: `feat/...`, `fix/...`, `chore/...`.
+- Write a short commit subject in the imperative. Do not add a full stop.
+- In the commit body, say why the change is needed. Do not only say what it does.
+- Keep one idea in each commit.
 
 ## Pull requests
 
 1. Push your branch to your fork and open a PR against `main`.
 2. Fill in the PR template.
-3. Keep the PR small and focused. Explain the why.
+3. Keep the PR small and focused. Explain the reason for the change.
 4. Run the checks above first. A maintainer reviews every PR.
 
 ## Security issues
@@ -69,7 +71,7 @@ Do not open a public issue. See [SECURITY.md](SECURITY.md).
 
 ## Licence
 
-DoneWhen is licensed under the [GNU AGPL-3.0](LICENSE). By contributing, you agree that your contributions are licensed under AGPL-3.0.
+DoneWhen is licensed under the [GNU AGPL-3.0](LICENSE). When you contribute, you agree that your contributions are licensed under AGPL-3.0.
 
 ## Code of conduct
 
