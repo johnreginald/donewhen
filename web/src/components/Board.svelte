@@ -1,6 +1,6 @@
 <script>
 	import { dndzone } from 'svelte-dnd-action';
-	import { states, boardVisibleIssues, issueQuery, issues, loadIssues } from '$lib/store.js';
+	import { states, boardVisibleIssues, issueQuery, issues, loadIssues, activeWorkspace } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { showToast } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
@@ -12,20 +12,39 @@
 	let mobileCol = $state(1);
 	let mobileInit = false;
 	let collapsed = $state(new Set());
-	let collapseInit = false;
+	let collapseFor = ''; // workspace id the folds were loaded for
 
 	const loading = $derived($states.length === 0);
 	// The whole-board empty state (brand-new workspace) — distinct from a
 	// single empty column, which every column renders on its own below.
 	const isEmptyWorkspace = $derived(!loading && $issues.length === 0 && !$issueQuery.trim());
 
+	// Every column folds. Done and Canceled start folded; after that the
+	// user's choice is kept per device and per workspace.
+	const collapseKey = (wsId) => `raenil.board.collapsed.${wsId}`;
 	function canCollapse(col) {
+		return true;
+	}
+	function foldedByDefault(col) {
 		return col.category === 'completed' || col.category === 'canceled';
+	}
+	function readCollapsed(wsId) {
+		try {
+			const v = JSON.parse(localStorage.getItem(collapseKey(wsId)));
+			return Array.isArray(v) ? v : null;
+		} catch {
+			return null;
+		}
 	}
 	function toggleCollapse(id) {
 		const n = new Set(collapsed);
 		n.has(id) ? n.delete(id) : n.add(id);
 		collapsed = n;
+		try {
+			localStorage.setItem(collapseKey(collapseFor), JSON.stringify([...n]));
+		} catch {
+			/* private mode: fold still works for this page */
+		}
 	}
 
 	// Click-drag to pan the board horizontally (like Linear). Ignores presses on
@@ -71,11 +90,13 @@
 		}));
 		// Done and Canceled start collapsed (decided product rule) — only the
 		// first time columns load, so a manual expand/collapse sticks.
-		if (!collapseInit && cols.length) {
-			const init = new Set();
-			for (const c of cols) if (canCollapse(c)) init.add(c.id);
-			collapsed = init;
-			collapseInit = true;
+		const wsId = $activeWorkspace?.id || '';
+		if (wsId && collapseFor !== wsId && cols.length) {
+			const stored = readCollapsed(wsId);
+			collapsed = stored
+				? new Set(stored)
+				: new Set(cols.filter(foldedByDefault).map((c) => c.id));
+			collapseFor = wsId;
 		}
 	});
 

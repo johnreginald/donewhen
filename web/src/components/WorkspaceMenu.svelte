@@ -24,7 +24,7 @@
 			<span class="k">{w.keyPrefix}</span>
 			<span class="nm">{w.name}</span>
 			{#if count > 0}<span class="wsbadge">{count}</span>{/if}
-			{#if i < 9}<span class="wskbd">⌘{i + 1}</span>{/if}
+			{#if i < 9}<span class="wskbd" title="Ctrl+{i + 1}">Ctrl {i + 1}</span>{/if}
 			{#if on}<Check size={14} strokeWidth={2.4} class="ck" />{/if}
 		</button>
 	{/each}

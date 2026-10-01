@@ -45,6 +45,7 @@
 			<div>
 				<div class="sk-gtitle">Global</div>
 				<div class="sk-row"><kbd class="kbd">⌘K</kbd><span class="sk-desc">Search &amp; command palette</span></div>
+				<div class="sk-row"><kbd class="kbd">Ctrl</kbd><kbd class="kbd">1–9</kbd><span class="sk-desc">Switch workspace</span></div>
 				<div class="sk-row"><kbd class="kbd">C</kbd><span class="sk-desc">New issue (quick capture)</span></div>
 				<div class="sk-row"><kbd class="kbd">?</kbd><span class="sk-desc">This help</span></div>
 			</div>

@@ -360,6 +360,8 @@
 						</div>
 					</div>
 				{:else}
+				<div class="ib-cols">
+				<div class="ib-main">
 					<div class="sec-head">Needs review<span class="count">{needsReview.length}</span></div>
 					{#if needsReview.length}
 						<div class="nr-list">
@@ -411,17 +413,20 @@
 						<div class="empty faint">Nothing blocked right now.</div>
 					{/if}
 
-					<div class="sec-head">
-						Recent {$aiName} activity
-						{#if newActivityCount}<span class="count new">{newActivityCount} new</span>{/if}
-					</div>
-					<InboxActivityList items={recent} {seenAt} aiName={$aiName} />
-
 					<div class="kbdbar">
 						<span class="grp"><span class="kbd">j</span><span class="kbd">k</span>navigate</span>
 						<span class="grp"><span class="kbd">a</span>approve</span>
 						<span class="grp"><span class="kbd">b</span>bounce</span>
 					</div>
+				</div>
+				<aside class="ib-side" aria-label="Recent {$aiName} activity">
+					<div class="sec-head">
+						Recent {$aiName} activity
+						{#if newActivityCount}<span class="count new">{newActivityCount} new</span>{/if}
+					</div>
+					<InboxActivityList items={recent} {seenAt} aiName={$aiName} />
+				</aside>
+				</div>
 				{/if}
 			</div>
 		</div>
@@ -437,7 +442,7 @@
 		flex-direction: column;
 	}
 	.content-inner {
-		max-width: 740px;
+		max-width: 1240px;
 		margin: 0 auto;
 		padding: 24px clamp(16px, 4vw, 30px) 48px;
 		display: flex;
@@ -635,6 +640,40 @@
 		}
 	}
 
+	/* Two sides: what needs you on the left, what the AI did on the right. */
+	.ib-cols {
+		display: grid;
+		grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+		gap: 0 40px;
+		align-items: start;
+	}
+	.ib-main,
+	.ib-side {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+	.ib-side {
+		position: sticky;
+		top: 0;
+		max-height: calc(100dvh - 120px);
+		overflow-y: auto;
+		padding-left: 24px;
+		border-left: 1px solid var(--line);
+	}
+	@media (max-width: 1000px) {
+		.ib-cols {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.ib-side {
+			position: static;
+			max-height: none;
+			overflow: visible;
+			padding-left: 0;
+			border-left: 0;
+		}
+	}
 	@media (max-width: 720px) {
 		.content-inner {
 			padding: 16px 16px 40px;

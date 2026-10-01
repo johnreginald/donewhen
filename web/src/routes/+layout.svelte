@@ -13,7 +13,7 @@
 	import Composer from '$components/Composer.svelte';
 	import { api } from '$lib/api.js';
 	import { connectSSE } from '$lib/sse.js';
-	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount } from '$lib/store.js';
+	import { loadMeta, loadIssues, loadWorkspaces, applyEvent, me, activeWorkspace, inboxCount, workspaces, switchWorkspace } from '$lib/store.js';
 	import {
 		paletteOpen,
 		quickCapture,
@@ -121,6 +121,16 @@
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			paletteOpen.update((v) => !v);
+			return;
+		}
+		// Ctrl+1…9 switches to the Nth workspace. Ctrl, not ⌘: ⌘1…9 is the
+		// browser's own tab switcher. Works even while typing in a field.
+		if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && /^[1-9]$/.test(e.key)) {
+			const ws = get(workspaces)[Number(e.key) - 1];
+			if (ws) {
+				e.preventDefault();
+				if (ws.id !== get(activeWorkspace)?.id) switchWorkspace(ws.slug);
+			}
 			return;
 		}
 		// "C" (quick capture) and "?" (shortcut help) — never while typing, and
