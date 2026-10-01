@@ -13,6 +13,7 @@ import (
 	"raenil/internal/auth"
 	"raenil/internal/config"
 	"raenil/internal/events"
+	"raenil/internal/push"
 	"raenil/internal/service"
 	"raenil/internal/sse"
 	"raenil/internal/store"
@@ -32,6 +33,8 @@ type Server struct {
 	// verifyPassword is auth.VerifyPassword; a field so tests can observe it.
 	verifyPassword func(hash, password string) bool
 	stop           context.CancelFunc
+	// pushResolve resolves push endpoint hosts; nil means the system resolver.
+	pushResolve push.Resolver
 }
 
 func NewServer(cfg config.Config, st *store.Store, svc *service.Service, bus *events.Bus, mcp http.Handler) *Server {

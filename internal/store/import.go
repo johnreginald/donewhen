@@ -322,6 +322,24 @@ func (s *Store) Import(ctx context.Context, wsID string, data ImportData) (Impor
 		res.Issues++
 	}
 
+	// A parent key is free text (the parent may sit later in the file), but it
+	// must never name an issue that lives in another workspace.
+	for _, is := range data.Issues {
+		if is.ParentID == "" {
+			continue
+		}
+		var foreign bool
+		if err := tx.QueryRow(ctx, `
+			SELECT EXISTS(SELECT 1 FROM issues WHERE upper(key)=upper($1) AND workspace_id <> $2)
+			   AND NOT EXISTS(SELECT 1 FROM issues WHERE upper(key)=upper($1) AND workspace_id = $2)`,
+			is.ParentID, wsID).Scan(&foreign); err != nil {
+			return res, err
+		}
+		if foreign {
+			return res, invalid("invalid_parent: %s names an issue in another workspace", is.ParentID)
+		}
+	}
+
 	// An import can land keys that share this workspace's prefix (e.g. importing
 	// ACM-300 into the ACM workspace). Lift issue_seq past them so the next
 	// natively-created issue does not propose a key that already exists.

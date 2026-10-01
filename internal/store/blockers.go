@@ -2,10 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"raenil/internal/models"
+	"github.com/jackc/pgx/v5"
 )
 
 // Blocker is a ticket another waits on ("blocked by").
@@ -88,32 +89,56 @@ func (s *Store) ListBlockLinks(ctx context.Context, wsID string) ([]BlockLink, e
 // SetBlockers replaces the tickets that block an issue. Each must be in the
 // same workspace, not the issue itself, and must not already depend on it —
 // a cycle would block both forever.
+//
+// Everything runs in one transaction. A workspace-wide advisory lock
+// serialises blocker writes so two concurrent requests (A→B and B→A) cannot
+// each pass the cycle check against the other's uncommitted edge; the issue
+// row is locked as well.
 func (s *Store) SetBlockers(ctx context.Context, wsID, issueID string, refs []string) ([]Blocker, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('issue_blockers:' || $1::text))`, wsID); err != nil {
+		return nil, err
+	}
+	var locked string
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM issues WHERE id::text = $1 AND workspace_id = $2 FOR UPDATE`, issueID, wsID).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	issueID = locked
+
 	ids := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		ref = strings.TrimSpace(ref)
 		if ref == "" {
 			continue
 		}
-		b, err := s.issueByRef(ctx, wsID, ref)
-		if err != nil {
-			return nil, fmt.Errorf("%w: no ticket %q in this workspace", ErrInvalid, ref)
+		var bid, bkey string
+		err := tx.QueryRow(ctx,
+			`SELECT id, key FROM issues WHERE workspace_id = $1 AND (id::text = $2 OR upper(key) = upper($2))`,
+			wsID, ref).Scan(&bid, &bkey)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, invalid("invalid_blocker: no ticket %q in this workspace", ref)
 		}
-		if b.ID == issueID {
+		if err != nil {
+			return nil, err
+		}
+		if bid == issueID {
 			return nil, invalid("a ticket cannot block itself")
 		}
-		if cyc, err := s.dependsOn(ctx, b.ID, issueID); err != nil {
+		if cyc, err := dependsOn(ctx, tx, bid, issueID); err != nil {
 			return nil, err
 		} else if cyc {
-			return nil, invalid("%s already waits on this ticket; making it a blocker would block both forever", b.Key)
+			return nil, invalid("%s already waits on this ticket; making it a blocker would block both forever", bkey)
 		}
-		ids = append(ids, b.ID)
+		ids = append(ids, bid)
 	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx, `DELETE FROM issue_blockers WHERE issue_id = $1`, issueID); err != nil {
 		return nil, err
 	}
@@ -130,9 +155,9 @@ func (s *Store) SetBlockers(ctx context.Context, wsID, issueID string, refs []st
 }
 
 // dependsOn reports whether from waits on to, directly or through others.
-func (s *Store) dependsOn(ctx context.Context, from, to string) (bool, error) {
+func dependsOn(ctx context.Context, tx pgx.Tx, from, to string) (bool, error) {
 	var found bool
-	err := s.pool.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		WITH RECURSIVE up(id) AS (
 			SELECT blocker_id FROM issue_blockers WHERE issue_id = $1
 			UNION
@@ -140,10 +165,4 @@ func (s *Store) dependsOn(ctx context.Context, from, to string) (bool, error) {
 		)
 		SELECT EXISTS (SELECT 1 FROM up WHERE id = $2)`, from, to).Scan(&found)
 	return found, err
-}
-func (s *Store) issueByRef(ctx context.Context, wsID, ref string) (models.Issue, error) {
-	if len(ref) == 36 && ref[8] == '-' && ref[13] == '-' && ref[18] == '-' && ref[23] == '-' {
-		return s.GetIssue(ctx, wsID, ref)
-	}
-	return s.GetIssueByKey(ctx, wsID, ref)
 }
