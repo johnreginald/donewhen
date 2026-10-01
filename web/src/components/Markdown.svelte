@@ -15,43 +15,63 @@
 <div class="markdown" bind:this={el}></div>
 
 <style>
+	/* The record reads as prose: issue descriptions (and comments, via the same
+	   component) are serif body text. Headings and tabular data stay sans —
+	   they read as structure, not prose. */
+	.markdown {
+		font-family: var(--serif);
+		font-size: var(--t-md);
+		line-height: 1.68;
+		color: var(--ink);
+	}
 	.markdown :global(h1),
 	.markdown :global(h2),
 	.markdown :global(h3) {
-		margin: 0.8em 0 0.4em;
+		font-family: var(--font);
+		font-weight: 600;
+		margin: 1.1em 0 0.5em;
 		line-height: 1.3;
+		letter-spacing: 0.01em;
 	}
 	.markdown :global(h1) {
-		font-size: 1.4em;
+		font-size: 1.3em;
 	}
 	.markdown :global(h2) {
-		font-size: 1.2em;
+		font-size: 1.15em;
+	}
+	.markdown :global(h3) {
+		font-size: 1.05em;
 	}
 	.markdown :global(p) {
-		margin: 0.5em 0;
-		line-height: 1.6;
+		margin: 0 0 0.85em;
 	}
 	.markdown :global(ul),
 	.markdown :global(ol) {
 		padding-left: 1.4em;
 		line-height: 1.6;
+		margin: 0 0 0.85em;
 	}
 	.markdown :global(code) {
-		background: var(--surface);
-		padding: 1px 5px;
+		background: var(--sunken);
+		padding: 1.5px 5px;
 		border-radius: 4px;
 		font-family: var(--mono);
-		font-size: 0.9em;
+		font-size: 0.86em;
+		color: var(--ink);
 	}
 	.markdown :global(pre) {
-		background: var(--surface);
-		padding: 12px;
+		background: var(--sunken);
+		border: 1px solid var(--line);
+		padding: 12px 14px;
 		border-radius: var(--r);
 		overflow-x: auto;
+		margin: 0.9em 0;
 	}
 	.markdown :global(pre code) {
 		background: none;
 		padding: 0;
+		font-size: 0.82em;
+		line-height: 1.6;
 	}
 	.markdown :global(a) {
 		color: var(--accent);
@@ -92,12 +112,27 @@
 		font-size: 12px;
 	}
 	.markdown :global(table) {
+		font-family: var(--font);
+		font-size: 13px;
 		border-collapse: collapse;
-		margin: 0.6em 0;
+		margin: 0.6em 0 1em;
 	}
 	.markdown :global(th),
 	.markdown :global(td) {
 		border: 1px solid var(--line);
-		padding: 5px 10px;
+		padding: 6px 11px;
+		text-align: left;
+	}
+	.markdown :global(th) {
+		background: var(--sunken);
+		font-weight: 600;
+		color: var(--ink-2);
+	}
+	.markdown :global(td) {
+		color: var(--ink-2);
+	}
+	.markdown :global(td code),
+	.markdown :global(th code) {
+		font-size: 12px;
 	}
 </style>

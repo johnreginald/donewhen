@@ -59,7 +59,7 @@
 				<div class="body"><Markdown source={c.bodyMd} /></div>
 			</div>
 		{:else}
-			<div class="empty">No comments yet.</div>
+			<div class="empty">No comments yet.<br />Be the first to leave one.</div>
 		{/each}
 	</div>
 	<div class="add">
@@ -127,13 +127,16 @@
 		color: var(--ink-3);
 	}
 	.body {
-		font-size: 13.5px;
+		font-family: var(--serif);
+		font-size: 14px;
 		line-height: 1.55;
 		overflow-wrap: anywhere;
 	}
 	.empty {
-		font-size: 13px;
+		font-size: 13.5px;
 		color: var(--ink-3);
+		text-align: center;
+		padding: 12px 0;
 	}
 	.add {
 		border-top: 1px solid var(--line);

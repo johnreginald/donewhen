@@ -1,12 +1,12 @@
 <script>
+	import { onMount } from 'svelte';
 	import { aiName } from '$lib/store.js';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api.js';
-	import { states, projects, labels as allLabels, PRIORITIES, blockLinks } from '$lib/store.js';
-	import { showToast } from '$lib/ui.js';
+	import { states, projects, blockLinks } from '$lib/store.js';
+	import { onLive, showToast } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
-	import LabelPill from '$components/LabelPill.svelte';
 	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityMenu from '$components/PriorityMenu.svelte';
 	import StatusMenu from '$components/StatusMenu.svelte';
@@ -19,6 +19,8 @@
 	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
 
 	let issue = $state(null);
+	let notFound = $state(false);
+	let loading = $state(false);
 	let pane = $state('task'); // which half a narrow window shows
 	const blocksCount = $derived(issue ? $blockLinks.filter((l) => l.blockerId === issue.id).length : 0);
 	let docs = $state([]);
@@ -29,17 +31,51 @@
 	let commits = $state([]);
 	let newCrit = $state('');
 	const doneCrit = $derived(criteria.filter((c) => c.done).length);
-	let loading = $state(false);
+	// judgment criteria are advisory — shown, but never the reason a move is blocked.
+	const blockingOpen = $derived(criteria.filter((c) => !c.done && c.kind !== 'judgment').length);
+	let titleDraft = $state('');
+	let confirmDel = $state(false);
+	let delBtnEl = $state(null);
+	let propsSheetOpen = $state(false);
+
+	// Description: explicit Edit/Save/Cancel, never click-to-edit.
 	let editingDesc = $state(false);
 	let descDraft = $state('');
-	let titleDraft = $state('');
-	let labelPickerOpen = $state(false);
-	let confirmDel = $state(false);
+	// The issue's updatedAt when the edit started. If the server's updatedAt has
+	// since moved on, something changed this issue while we were editing — the
+	// one stale-edit signal we can detect without PP-185's server-side check.
+	let descEditBase = $state(null);
+	let descSaveState = $state('idle'); // idle | failed
+	let savingDesc = $state(false);
+	let justSavedDesc = $state(false);
+	let descSavedTimer;
 
 	const stOf = (c) => $states.find((s) => s.id === c.stateId);
 	const epic = $derived(issue ? $projects.find((p) => p.id === issue.projectId) : null);
 	const doneChildren = $derived(children.filter((c) => stOf(c)?.category === 'completed').length);
 	const DOC_ICON = { change: '⟳', feature: '◈', decision: '◆', overview: '◇', reference: '▤' };
+	const descConflict = $derived(
+		Boolean(editingDesc && descEditBase && issue?.updatedAt && issue.updatedAt !== descEditBase)
+	);
+
+	// Only http(s) links are ever followed from a PR/commit href — anything
+	// else (javascript:, data:, a bare string that isn't a URL at all) renders
+	// as plain text instead of a clickable link.
+	function safeHref(url) {
+		if (!url) return null;
+		try {
+			const u = new URL(url, window.location.href);
+			return u.protocol === 'http:' || u.protocol === 'https:' ? url : null;
+		} catch {
+			return null;
+		}
+	}
+
+	// Guards against the loads-race: navigating A → B must never let A's
+	// slower response land after B's and overwrite it. Every load() captures
+	// the sequence number current at its start and checks it's still current
+	// before applying anything it fetched.
+	let loadSeq = 0;
 
 	// Reload whenever the :key param changes (also handles navigating between a
 	// parent and its sub-issues).
@@ -49,30 +85,100 @@
 	});
 
 	async function load(key) {
+		const seq = ++loadSeq;
 		loading = true;
+		notFound = false;
+		issue = null;
 		confirmDel = false;
+		editingDesc = false;
+		descSaveState = 'idle';
+		propsSheetOpen = false;
+
+		let fresh;
 		try {
-			issue = await api.issue(key);
+			fresh = await api.issue(key);
+		} catch (e) {
+			if (seq !== loadSeq) return; // a newer navigation has since started
+			loading = false;
+			if (e.status === 404) {
+				notFound = true;
+			} else {
+				showToast('Load failed: ' + e.message, 'error');
+				goto('/board');
+			}
+			return;
+		}
+		if (seq !== loadSeq) return; // stale: a newer key was requested meanwhile
+
+		issue = fresh;
+		titleDraft = issue.title;
+		descDraft = issue.descriptionMd || '';
+		descEditBase = issue.updatedAt;
+		loading = false;
+
+		// Secondary reads — commits, activity, docs, criteria, parent/children.
+		// None of these may redirect on failure: only a failed primary fetch does.
+		const results = await Promise.allSettled([
+			api.documents({ issue: issue.id }),
+			issue.childCount > 0 ? api.issues({ parent: issue.key }) : Promise.resolve([]),
+			issue.parentKey ? api.issue(issue.parentKey) : Promise.resolve(null),
+			api.issueActivity(issue.id),
+			api.criteria(issue.id),
+			api.commits(issue.id)
+		]);
+		if (seq !== loadSeq) return; // stale: this issue is no longer the one on screen
+		const [d, c, p, a, cr, co] = results;
+		docs = d.status === 'fulfilled' ? d.value || [] : [];
+		children = c.status === 'fulfilled' ? c.value || [] : [];
+		parent = p.status === 'fulfilled' ? p.value : null;
+		activity = a.status === 'fulfilled' ? a.value || [] : [];
+		criteria = cr.status === 'fulfilled' ? cr.value || [] : [];
+		commits = co.status === 'fulfilled' ? co.value || [] : [];
+	}
+
+	// Keep the page live: a save from another tab, the MCP server, or the AI
+	// updates this same record elsewhere. Refetch rather than trust the event
+	// payload, and never clobber an in-progress description draft.
+	async function refreshIssue() {
+		if (!issue) return;
+		const key = issue.key;
+		let fresh;
+		try {
+			fresh = await api.issue(key);
+		} catch {
+			return; // a transient failure here shouldn't disturb what's on screen
+		}
+		if (!issue || issue.key !== key) return; // navigated away meanwhile
+		issue = fresh;
+		if (!editingDesc) {
 			titleDraft = issue.title;
 			descDraft = issue.descriptionMd || '';
-			docs = (await api.documents({ issue: issue.id })) || [];
-			children = issue.childCount > 0 ? (await api.issues({ parent: issue.key })) || [] : [];
-			parent = issue.parentKey ? await api.issue(issue.parentKey).catch(() => null) : null;
-			activity = (await api.issueActivity(issue.id)) || [];
-			criteria = (await api.criteria(issue.id)) || [];
-			commits = (await api.commits(issue.id)) || [];
-		} catch (e) {
-			showToast('Load failed: ' + e.message, 'error');
-			goto('/board');
-		} finally {
-			loading = false;
+			descEditBase = issue.updatedAt;
 		}
+		// else: leave descDraft/descEditBase alone. The gap between descEditBase
+		// and the fresh issue.updatedAt is exactly the stale-edit conflict.
 	}
+
+	onMount(() =>
+		onLive((ev) => {
+			const id = ev.issue?.id || ev.issueId;
+			if (!issue || id !== issue.id) return;
+			if (ev.type === 'issue.deleted') {
+				showToast(`${issue.key} was deleted`, 'error');
+				goto('/board');
+				return;
+			}
+			if (ev.type === 'issue.updated' || ev.type === 'issue.state_changed') refreshIssue();
+		})
+	);
 
 	async function patch(body) {
 		try {
 			issue = await api.updateIssue(issue.id, body);
-			activity = (await api.issueActivity(issue.id)) || [];
+			// This is our own change, not a conflict — advance the edit's base
+			// so an in-progress description edit doesn't get falsely flagged.
+			if (editingDesc) descEditBase = issue.updatedAt;
+			activity = (await api.issueActivity(issue.id).catch(() => activity)) || activity;
 		} catch (e) {
 			showToast('Update failed: ' + e.message, 'error');
 		}
@@ -80,21 +186,52 @@
 	async function saveTitle() {
 		if (titleDraft.trim() && titleDraft !== issue.title) await patch({ title: titleDraft.trim() });
 	}
-	async function saveDesc() {
+
+	function startEditDesc() {
+		descDraft = issue.descriptionMd || '';
+		descEditBase = issue.updatedAt;
+		descSaveState = 'idle';
+		editingDesc = true;
+	}
+	function cancelEditDesc() {
 		editingDesc = false;
-		if (descDraft !== issue.descriptionMd) await patch({ descriptionMd: descDraft });
+		descSaveState = 'idle';
 	}
-	const setState = (e) => patch({ stateId: e.target.value });
-	const setPriority = (e) => patch({ priority: Number(e.target.value) });
-	const setProject = (e) => patch({ projectId: e.target.value });
-	function toggleLabel(id) {
-		const has = issue.labels.some((l) => l.id === id);
-		patch({
-			labelIds: has
-				? issue.labels.filter((l) => l.id !== id).map((l) => l.id)
-				: [...issue.labels.map((l) => l.id), id]
-		});
+	async function saveDesc() {
+		savingDesc = true;
+		try {
+			issue = await api.updateIssue(issue.id, { descriptionMd: descDraft });
+			descEditBase = issue.updatedAt;
+			editingDesc = false;
+			descSaveState = 'idle';
+			justSavedDesc = true;
+			clearTimeout(descSavedTimer);
+			descSavedTimer = setTimeout(() => (justSavedDesc = false), 2500);
+			activity = (await api.issueActivity(issue.id).catch(() => activity)) || activity;
+		} catch (e) {
+			// A failed save restores the draft: stay in edit mode with exactly
+			// what was typed, rather than reverting to the last-saved text.
+			descSaveState = 'failed';
+		} finally {
+			savingDesc = false;
+		}
 	}
+	function descKeydown(e) {
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			cancelEditDesc();
+		} else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+			e.preventDefault();
+			saveDesc();
+		}
+	}
+	function reviewConflict() {
+		descDraft = issue.descriptionMd || '';
+		descEditBase = issue.updatedAt;
+		editingDesc = false;
+		descSaveState = 'idle';
+	}
+
 	async function del() {
 		if (!confirmDel) {
 			confirmDel = true;
@@ -106,8 +243,19 @@
 			goto('/board');
 		} catch (e) {
 			showToast('Delete failed: ' + e.message, 'error');
+			confirmDel = false;
 		}
 	}
+	// Two-step delete cancels itself the moment you click anywhere else.
+	$effect(() => {
+		if (!confirmDel) return;
+		function onDocClick(e) {
+			if (delBtnEl && !delBtnEl.contains(e.target)) confirmDel = false;
+		}
+		document.addEventListener('click', onDocClick, true);
+		return () => document.removeEventListener('click', onDocClick, true);
+	});
+
 	function autofocus(node) {
 		node.focus();
 	}
@@ -138,10 +286,86 @@
 		}
 	}
 	const shortSha = (s) => (s || '').slice(0, 7);
-
 </script>
 
-{#if issue}
+{#snippet propsRows()}
+	<div class="prow">
+		<span class="plabel">Status</span>
+		<span class="pval">
+			<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
+			{#if blockingOpen > 0}
+				<span class="gate-badge" title="{blockingOpen} done-when item{blockingOpen === 1 ? '' : 's'} still open — judgment criteria don't count">
+					{blockingOpen} open
+				</span>
+			{/if}
+		</span>
+	</div>
+	<div class="prow">
+		<span class="plabel">Priority</span>
+		<span class="pval"><PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} /></span>
+	</div>
+	<div class="prow">
+		<span class="plabel">Epic</span>
+		<span class="pval">
+			<EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} />
+		</span>
+	</div>
+	<div class="prow wide">
+		<span class="plabel">Labels</span>
+		<span class="pval"><LabelPicker selected={issue.labels.map((l) => l.id)} onchange={(ids) => patch({ labelIds: ids })} /></span>
+	</div>
+	{#if children.length}
+		<div class="prow top">
+			<span class="plabel">Sub-issues</span>
+			<span class="pval">
+				<div class="subwrap">
+					<div class="subhead"><b>{doneChildren}/{children.length} done</b></div>
+					<div class="sub-bar"><span style="width:{(doneChildren / children.length) * 100}%"></span></div>
+					{#each children as c (c.id)}
+						<button class="sub-link" onclick={() => goto('/issue/' + c.key)}>
+							<StateIcon category={stOf(c)?.category} color={stOf(c)?.color} />
+							<span class="sub-key">{c.key}</span>
+							<span class="sub-title" class:done={stOf(c)?.category === 'completed'}>{c.title}</span>
+						</button>
+					{/each}
+				</div>
+			</span>
+		</div>
+	{/if}
+	<div class="prow top">
+		<span class="plabel">Blocked by</span>
+		<span class="pval">{#key issue.id}<Blockers {issue} />{/key}</span>
+	</div>
+	{#if blocksCount}
+		<div class="prow">
+			<span class="plabel">Blocks</span>
+			<span class="pval">{#key issue.id}<Blockers {issue} which="blocking" />{/key}</span>
+		</div>
+	{/if}
+{/snippet}
+
+{#if notFound}
+	<div class="notfound-wrap">
+		<div class="nf-card">
+			<div class="nf-code">404 · {$page.params.key}</div>
+			<div class="nf-title">Issue not found</div>
+			<div class="nf-body">It doesn't exist, or you don't have access to it in this workspace.</div>
+			<button class="btn sd" onclick={() => goto('/board')}>Back to board</button>
+		</div>
+	</div>
+{:else if !issue}
+	<div class="detail">
+		<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: $page.params.key, upper: false }]} />
+		<div class="skel-main" aria-hidden="true">
+			<span class="sk" style="width:30%;height:12px"></span>
+			<span class="sk" style="width:65%;height:30px;margin-top:10px"></span>
+			<span class="sk" style="width:100%;height:120px;margin-top:20px"></span>
+			<span class="sk" style="width:90%;height:16px;margin-top:26px"></span>
+			<span class="sk" style="width:60%;height:16px;margin-top:10px"></span>
+			<span class="sk" style="width:100%;height:90px;margin-top:20px"></span>
+		</div>
+	</div>
+{:else}
 	<div class="detail">
 		<PageHeader
 			crumbs={[
@@ -150,7 +374,7 @@
 				{ label: issue.key, upper: false }
 			]}
 		>
-			<button class="btn danger sm" onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
+			<button class="btn danger sm" bind:this={delBtnEl} onclick={del}>{confirmDel ? 'Confirm delete' : 'Delete'}</button>
 		</PageHeader>
 
 		<div class="panes" role="tablist">
@@ -163,144 +387,146 @@
 		<div class="dbody" data-pane={pane}>
 			<main class="dmain">
 				<div class="dmain-inner">
-				{#if parent}
-					<button class="parent-crumb" onclick={() => goto('/issue/' + parent.key)}>
-						<span class="pc-ic">⤴</span><span class="pc-key">{parent.key}</span>
-						<span class="pc-title">{parent.title}</span>
-					</button>
-				{/if}
-
-				<textarea
-					class="title-input"
-					bind:value={titleDraft}
-					rows="1"
-					onblur={saveTitle}
-					onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.target.blur())}
-				></textarea>
-
-				<dl class="props">
-					<dt>Status</dt>
-					<dd><StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} /></dd>
-					<dt>Priority</dt>
-					<dd><PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} /></dd>
-					<dt>Epic</dt>
-					<dd><EpicMenu value={issue.projectId || ''} options={$projects} none="No epic" onchange={(v) => patch({ projectId: v })} /></dd>
-					<dt>Labels</dt>
-					<dd class="wide"><LabelPicker selected={issue.labels.map((l) => l.id)} onchange={(ids) => patch({ labelIds: ids })} /></dd>
-					<dt>Blocked by</dt>
-					<dd class="wide">{#key issue.id}<Blockers {issue} />{/key}</dd>
-					{#if blocksCount}
-						<dt>Blocks</dt>
-						<dd class="wide">{#key issue.id}<Blockers {issue} which="blocking" />{/key}</dd>
+					{#if parent}
+						<button class="parent-crumb" onclick={() => goto('/issue/' + parent.key)}>
+							<span class="pc-ic">⤴</span><span class="pc-key">{parent.key}</span>
+							<span class="pc-title">{parent.title}</span>
+						</button>
 					{/if}
-				</dl>
 
-				<div class="desc">
-					{#if editingDesc}
-						<textarea class="desc-area" bind:value={descDraft} onblur={saveDesc} use:autofocus></textarea>
-					{:else}
-						<div
-							class="desc-view"
-							role="button"
-							tabindex="0"
-							onclick={() => (editingDesc = true)}
-							onkeydown={(e) => e.key === 'Enter' && (editingDesc = true)}
-						>
-							{#if issue.descriptionMd}
-								<Markdown source={issue.descriptionMd} />
-							{:else}
-								<span class="faint">Add description…</span>
-							{/if}
-						</div>
-					{/if}
-				</div>
+					<textarea
+						class="title-input"
+						bind:value={titleDraft}
+						rows="1"
+						onblur={saveTitle}
+						onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.target.blur())}
+					></textarea>
 
-				<section class="block">
-					<div class="rh">
-						Done-when{#if criteria.length}<span class="prog">{doneCrit}/{criteria.length}</span>{/if}
+					<div class="mobile-chiprow">
+						<StatusMenu value={issue.stateId} onchange={(v) => patch({ stateId: v })} />
+						{#if blockingOpen > 0}<span class="gate-badge">{blockingOpen} open</span>{/if}
+						<PriorityMenu value={issue.priority} onchange={(v) => patch({ priority: v })} />
 					</div>
-					{#if criteria.length}
-						<div class="sub-bar"><span style="width:{(doneCrit / criteria.length) * 100}%"></span></div>
-					{/if}
-					{#each criteria as c (c.id)}
-						<div class="crit">
-							<button class="crit-box" class:on={c.done} onclick={() => toggleCrit(c)} aria-label="toggle">
-								{#if c.done}✓{/if}
-							</button>
-							<span class="crit-text" class:done={c.done}>{c.body}</span>
-							{#if c.checkSpec?.advisory || c.kind === 'judgment'}
-								<span class="crit-adv" title="Checked by a model and shown to you; it does not fail a run">advisory</span>
-							{/if}
-							<button class="crit-del" onclick={() => delCrit(c)} title="Remove">✕</button>
-						</div>
-					{/each}
-					<input
-						class="crit-add"
-						bind:value={newCrit}
-						placeholder="Add acceptance criterion…"
-						onkeydown={(e) => e.key === 'Enter' && addCrit()}
-					/>
-				</section>
+					<button class="propsbtn" onclick={() => (propsSheetOpen = true)}>
+						Epic, labels, blockers…<span class="chev">▾</span>
+					</button>
 
-				{#if children.length}
-					<section class="block">
-						<div class="rh">Sub-issues <span class="prog">{doneChildren}/{children.length}</span></div>
-						<div class="sub-bar"><span style="width:{(doneChildren / children.length) * 100}%"></span></div>
-						{#each children as c (c.id)}
-							<button class="sub-link" onclick={() => goto('/issue/' + c.key)}>
-								<StateIcon category={stOf(c)?.category} color={stOf(c)?.color} />
-								<span class="sub-key">{c.key}</span>
-								<span class="sub-title">{c.title}</span>
-							</button>
-						{/each}
-					</section>
-				{/if}
+					<div class="panel desktop-panel">
+						{@render propsRows()}
+					</div>
 
-				{#if issue.gitBranch || issue.prUrl || commits.length}
-					<section class="block">
-						<div class="rh">Development</div>
-						{#if issue.gitBranch}
-							<div class="dev-row"><GitBranch size={14} strokeWidth={2} /><span class="mono">{issue.gitBranch}</span></div>
-						{/if}
-						{#if issue.prUrl}
-							<a class="dev-row link" href={issue.prUrl} target="_blank" rel="noreferrer">
-								<GitPullRequestArrow size={14} strokeWidth={2} />Pull request
-							</a>
-						{/if}
-						{#each commits as c (c.id)}
-							{#if c.url}
-								<a class="dev-row link" href={c.url} target="_blank" rel="noreferrer">
-									<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
-								</a>
+					<div class="desc block">
+						<div class="bh">
+							<h2>Description</h2>
+							<span class="sp"></span>
+							{#if editingDesc}
+								{#if justSavedDesc}<span class="saved">✓ Saved just now</span>{/if}
+								{#if descSaveState === 'failed'}
+									<span class="failed">⚠ Failed to save</span>
+									<button class="retry-link" onclick={saveDesc}>Retry</button>
+								{/if}
+								<button class="btn ghost sm" onclick={cancelEditDesc}>Cancel</button>
+								<button class="btn primary sm" onclick={saveDesc} disabled={savingDesc}>Save</button>
 							{:else}
-								<div class="dev-row">
-									<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
-								</div>
+								{#if justSavedDesc}<span class="saved">✓ Saved just now</span>{/if}
+								<button class="btn sd sm" onclick={startEditDesc}>Edit</button>
 							{/if}
-						{/each}
-					</section>
-				{/if}
+						</div>
 
-				{#if docs.length}
+						{#if descConflict}
+							<div class="conflict-banner">
+								<span class="bic">✦</span>
+								<span class="btext"><b>{$aiName} updated this issue</b> while you were editing the description.</span>
+								<span class="sp"></span>
+								<button class="btn sd sm" onclick={reviewConflict}>Review changes</button>
+								<button class="btn danger sm" onclick={saveDesc}>Overwrite</button>
+							</div>
+						{/if}
+
+						{#if editingDesc}
+							<textarea class="desc-area editing" bind:value={descDraft} onkeydown={descKeydown} use:autofocus></textarea>
+							<div class="edithint"><span class="kbd">Esc</span> to cancel · <span class="kbd">⌘</span><span class="kbd">↵</span> to save</div>
+						{:else if issue.descriptionMd}
+							<div class="prose"><Markdown source={issue.descriptionMd} /></div>
+						{:else}
+							<span class="faint">No description.</span>
+						{/if}
+					</div>
+
 					<section class="block">
-						<div class="rh">Artifacts</div>
-						{#each docs as d (d.id)}
-							<button class="doc-link" onclick={() => goto(`/artifacts?doc=${d.id}`)}>
-								<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
-								<span class="dl-t">{d.title}</span>
-								{#if d.author === 'ai'}<span class="dl-ai">✦ {$aiName}</span>{/if}
-							</button>
+						<div class="rh">
+							Done-when{#if criteria.length}<span class="prog">{doneCrit}/{criteria.length}</span>{/if}
+						</div>
+						{#if criteria.length}
+							<div class="sub-bar"><span style="width:{(doneCrit / criteria.length) * 100}%"></span></div>
+						{/if}
+						{#each criteria as c (c.id)}
+							<div class="crit">
+								<button class="crit-box" class:on={c.done} onclick={() => toggleCrit(c)} aria-label="toggle">
+									{#if c.done}<b>✓</b>{/if}
+								</button>
+								<span class="crit-text" class:done={c.done}>{c.body}</span>
+								<span class="crit-kind" class:adv={c.kind === 'judgment'}>{c.kind}</span>
+								{#if c.evidenceRef}<span class="crit-ev" title={c.evidenceRef}>{c.evidenceRef}</span>{/if}
+								<button class="crit-del" onclick={() => delCrit(c)} title="Remove">✕</button>
+							</div>
 						{/each}
+						<input
+							class="crit-add"
+							bind:value={newCrit}
+							placeholder="Add acceptance criterion…"
+							onkeydown={(e) => e.key === 'Enter' && addCrit()}
+						/>
 					</section>
-				{/if}
 
+					{#if issue.gitBranch || issue.prUrl || commits.length}
+						<section class="block">
+							<div class="rh">Development</div>
+							{#if issue.gitBranch}
+								<div class="dev-row"><GitBranch size={14} strokeWidth={2} /><span class="mono">{issue.gitBranch}</span></div>
+							{/if}
+							{#if issue.prUrl}
+								{#if safeHref(issue.prUrl)}
+									<a class="dev-row link" href={issue.prUrl} target="_blank" rel="noreferrer">
+										<GitPullRequestArrow size={14} strokeWidth={2} />Pull request
+									</a>
+								{:else}
+									<div class="dev-row"><GitPullRequestArrow size={14} strokeWidth={2} /><span class="cmsg">{issue.prUrl}</span></div>
+								{/if}
+							{/if}
+							{#each commits as c (c.id)}
+								{#if safeHref(c.url)}
+									<a class="dev-row link" href={c.url} target="_blank" rel="noreferrer">
+										<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
+									</a>
+								{:else}
+									<div class="dev-row">
+										<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
+									</div>
+								{/if}
+							{/each}
+						</section>
+					{/if}
 
-				{#if activity.length}
-					<section class="block">
-						<div class="rh">Activity</div>
-						<ActivityFeed items={activity} />
-					</section>
-				{/if}
+					{#if docs.length}
+						<section class="block">
+							<div class="rh">Documents</div>
+							{#each docs as d (d.id)}
+								<button class="doc-link" onclick={() => goto(`/artifacts?doc=${d.id}`)}>
+									<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
+									<span class="dl-t">{d.title}</span>
+									{#if d.author === 'ai'}<span class="dl-ai">✦ {$aiName}</span>{/if}
+								</button>
+							{/each}
+						</section>
+					{/if}
+
+					{#if activity.length}
+						<section class="block">
+							<div class="rh">Activity</div>
+							<ActivityFeed items={activity} />
+						</section>
+					{/if}
 				</div>
 			</main>
 
@@ -309,8 +535,17 @@
 			</aside>
 		</div>
 	</div>
-{:else}
-	<div class="loading">{loading ? 'Loading…' : ''}</div>
+
+	{#if propsSheetOpen}
+		<div class="backdrop" role="presentation" onclick={() => (propsSheetOpen = false)}></div>
+		<div class="sheet">
+			<div class="handle"></div>
+			<div class="sheethead"><b>Properties</b><span class="sp"></span><button onclick={() => (propsSheetOpen = false)}>Done</button></div>
+			<div class="sheetrows panel in-sheet">
+				{@render propsRows()}
+			</div>
+		</div>
+	{/if}
 {/if}
 
 <style>
@@ -348,46 +583,172 @@
 		flex-direction: column;
 		background: var(--paper);
 	}
-	.props {
-		display: grid;
-		grid-template-columns: 64px minmax(0, 1fr) 64px minmax(0, 1fr);
+
+	/* Properties: one vertical panel — every field a row, dashed dividers. */
+	.panel {
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: var(--r-lg);
+		padding: 2px 16px;
+		display: flex;
+		flex-direction: column;
+	}
+	.prow {
+		display: flex;
 		align-items: center;
-		gap: 2px 12px;
-		margin: -6px 0 0;
-		padding-bottom: 14px;
-		border-bottom: 1px solid var(--line);
+		gap: 14px;
+		min-height: 38px;
+		padding: 7px 0;
+		border-bottom: 1px dashed var(--line);
 	}
-	.props dt {
-		font-size: 12px;
+	.prow:last-child {
+		border-bottom: none;
+	}
+	.prow.top {
+		align-items: flex-start;
+	}
+	.plabel {
+		width: 92px;
+		flex: none;
+		font-size: 11px;
 		color: var(--ink-3);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		padding-top: 2px;
 	}
-	.props dd {
-		margin: 0;
+	.pval {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	/* The menus read as values, not form fields, until pointed at. Their .dd
+	   wrapper has no intrinsic width, so it shrinks to its content unless told
+	   to fill the row — give it the row's space before the button's own
+	   width:100% (app.css) can use it. */
+	.pval :global(.dd) {
+		flex: 1;
 		min-width: 0;
 	}
-	.props dd.wide {
-		grid-column: 2 / -1;
-		padding: 4px 0;
-	}
-	/* The menus read as values, not form fields, until pointed at. */
-	.props :global(.dd-btn) {
+	.panel :global(.dd-btn) {
 		border-color: transparent;
 		background: none;
 		padding: 5px 7px;
 		margin-left: -7px;
 		font-size: 13px;
 	}
-	.props :global(.dd-btn:hover) {
+	.panel :global(.dd-btn:hover) {
 		background: var(--hover);
 	}
-	@media (max-width: 560px) {
-		.props {
-			grid-template-columns: 64px minmax(0, 1fr);
+	.gate-badge {
+		display: inline-flex;
+		align-items: center;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--danger);
+		background: var(--danger-soft);
+		border-radius: 999px;
+		padding: 2px 9px;
+		white-space: nowrap;
+	}
+	.subwrap {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		width: 100%;
+		padding: 4px 0;
+	}
+	.subhead {
+		font-size: 12.5px;
+		color: var(--ink);
+	}
+
+	/* Mobile-only quick status/priority row + the properties-sheet trigger.
+	   Hidden on desktop; the desktop .panel is hidden on mobile instead. */
+	.mobile-chiprow,
+	.propsbtn {
+		display: none;
+	}
+	@media (max-width: 640px) {
+		.desktop-panel {
+			display: none;
 		}
-		.props dd.wide {
-			grid-column: 2;
+		.mobile-chiprow {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.propsbtn {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			width: 100%;
+			height: 38px;
+			padding: 0 13px;
+			border-radius: var(--r);
+			border: 1px dashed var(--line-strong);
+			background: var(--surface);
+			color: var(--ink-2);
+			font-size: 13.5px;
+		}
+		.propsbtn .chev {
+			color: var(--ink-3);
 		}
 	}
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		background: oklch(0.1 0 0 / 0.42);
+		z-index: 50;
+	}
+	.sheet {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: var(--surface);
+		border-top-left-radius: var(--r-lg);
+		border-top-right-radius: var(--r-lg);
+		box-shadow: var(--shadow-2);
+		padding: 10px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+		z-index: 51;
+		display: flex;
+		flex-direction: column;
+		max-height: 74%;
+		box-sizing: border-box;
+	}
+	.handle {
+		width: 36px;
+		height: 4px;
+		border-radius: 2px;
+		background: var(--line-strong);
+		margin: 2px auto 12px;
+	}
+	.sheethead {
+		display: flex;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+	.sheethead b {
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.sheethead button {
+		background: none;
+		border: none;
+		color: var(--accent);
+		font-size: 13px;
+		font-weight: 500;
+	}
+	.sheetrows {
+		overflow-y: auto;
+		border: none;
+		padding: 0;
+	}
+
 	.parent-crumb {
 		display: flex;
 		align-items: center;
@@ -416,12 +777,12 @@
 		border: none;
 		outline: none;
 		color: var(--ink);
-		font-family: var(--font);
-		font-size: 26px;
-		font-weight: 600;
-		line-height: 1.25;
+		font-family: var(--serif);
+		font-weight: 500;
+		font-size: var(--t-xl);
+		line-height: 1.3;
 		resize: none;
-		letter-spacing: -0.01em;
+		letter-spacing: -0.005em;
 		padding: 0;
 		field-sizing: content;
 	}
@@ -437,43 +798,96 @@
 		color: var(--ink-3);
 		margin-left: 4px;
 	}
+	.bh {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.bh h2 {
+		font-size: var(--t-lg);
+		font-weight: 600;
+		margin: 0;
+		color: var(--ink);
+	}
+	.bh .sp {
+		flex: 1;
+	}
+	.saved {
+		font-size: 12px;
+		color: var(--st-done);
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.failed {
+		font-size: 12px;
+		color: var(--danger);
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.retry-link {
+		color: var(--accent);
+		font-size: 12px;
+		font-weight: 500;
+		background: none;
+		border: none;
+	}
+	.conflict-banner {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 16px;
+		background: var(--accent-soft);
+		border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--line));
+		border-radius: var(--r);
+		font-size: 13.5px;
+	}
+	.bic {
+		color: var(--accent);
+		font-size: 15px;
+		flex: none;
+	}
+	.btext {
+		color: var(--ink);
+	}
 	.desc {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-	}
-	.desc-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
+		gap: 10px;
 	}
 	.desc-area {
 		width: 100%;
-		min-height: 120px;
-		background: transparent;
-		border: none;
+		min-height: 160px;
+		background: var(--sunken);
+		border: 1px solid var(--line-strong);
+		border-radius: var(--r);
 		color: var(--ink);
-		padding: 6px 8px;
-		margin: -6px -8px;
-		font-size: 14.5px;
-		font-family: inherit;
-		line-height: 1.65;
+		padding: 11px 13px;
+		font-size: 14px;
+		font-family: var(--serif);
+		line-height: 1.6;
 		outline: none;
-		resize: none;
-		field-sizing: content;
+		resize: vertical;
+		box-sizing: border-box;
 	}
-	.desc-view {
+	.edithint {
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.edithint .kbd {
+		font-family: var(--mono);
+		font-size: 10px;
+		padding: 1px 4px;
+		border: 1px solid var(--line-strong);
+		border-bottom-width: 2px;
+		border-radius: 3px;
+		margin: 0 2px;
+	}
+	.prose {
 		font-size: 14.5px;
 		line-height: 1.65;
 		color: var(--ink);
-		min-height: 32px;
-		cursor: text;
-		padding: 6px 8px;
-		margin: -6px -8px;
-		border-radius: 6px;
-	}
-	.desc-view:hover {
-		background: color-mix(in srgb, var(--surface) 45%, transparent);
 	}
 	.block {
 		display: flex;
@@ -491,7 +905,7 @@
 	.sub-bar span {
 		display: block;
 		height: 100%;
-		background: var(--accent);
+		background: var(--st-done);
 		transition: width 0.3s ease;
 	}
 	.crit {
@@ -514,17 +928,33 @@
 		margin-top: 1px;
 	}
 	.crit-box.on {
-		background: var(--st-done);
-		border-color: var(--st-done);
+		background: var(--accent);
+		border-color: var(--accent);
 	}
-	.crit-adv {
+	.crit-kind {
 		flex: none;
-		font-size: 10.5px;
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
 		color: var(--ink-3);
 		border: 1px solid var(--line);
 		border-radius: 999px;
-		padding: 0 7px;
-		margin-left: 6px;
+		padding: 1.5px 7px;
+		font-family: var(--mono);
+	}
+	.crit-kind.adv {
+		color: var(--accent);
+		border-color: color-mix(in oklch, var(--accent) 35%, var(--line));
+	}
+	.crit-ev {
+		flex: none;
+		max-width: 160px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
 	}
 	.crit-text {
 		flex: 1;
@@ -601,7 +1031,6 @@
 	.sub-link:hover,
 	.doc-link:hover {
 		border-color: var(--line-strong);
-		background: var(--surface);
 	}
 	.sub-key {
 		font-family: var(--mono);
@@ -616,6 +1045,10 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	.sub-title.done {
+		color: var(--ink-3);
+		text-decoration: line-through;
+	}
 	.dl-ic {
 		color: var(--accent);
 	}
@@ -623,74 +1056,22 @@
 		font-size: 11px;
 		color: var(--accent);
 	}
-	.rail-labels {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		align-items: center;
-	}
-	.pill-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		background: none;
-		border: none;
-		padding: 0;
-	}
-	.pill-btn .x {
-		font-size: 9px;
-		color: var(--ink-3);
-	}
-	.pill-btn:hover .x {
-		color: var(--danger);
-	}
-	.label-picker {
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		border-radius: 8px;
-		padding: 5px;
-		max-height: 240px;
-		overflow-y: auto;
-	}
-	.picker-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		background: none;
-		border: none;
-		color: var(--ink-2);
-		padding: 6px 8px;
-		border-radius: 6px;
-		font-size: 13px;
-		text-align: left;
-	}
-	.picker-item:hover {
-		background: var(--hover);
-	}
-	.picker-item.on {
-		color: var(--ink);
-	}
-	.picker-item .dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex: none;
-	}
 	.btn.sm {
 		padding: 5px 10px;
 		font-size: 12.5px;
 	}
+	/* Local "secondary" button (surface + line-strong border) — the design's
+	   "sd" variant. Scoped here rather than added to the shared app.css. */
+	.btn.sd {
+		background: var(--surface);
+		border-color: var(--line-strong);
+		color: var(--ink);
+	}
+	.btn.sd:hover {
+		background: var(--hover);
+	}
 	.faint {
 		color: var(--ink-3);
-	}
-	.loading {
-		display: grid;
-		place-items: center;
-		height: 100%;
-		color: var(--ink-2);
 	}
 	.panes {
 		display: none;
@@ -723,6 +1104,70 @@
 		.dbody[data-pane='task'] .chat,
 		.dbody[data-pane='chat'] .dmain {
 			display: none;
+		}
+	}
+
+	/* Not found */
+	.notfound-wrap {
+		height: 100%;
+		display: grid;
+		place-items: center;
+		padding: 24px;
+	}
+	.nf-card {
+		max-width: 360px;
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+	}
+	.nf-code {
+		font-family: var(--mono);
+		font-size: 13px;
+		color: var(--ink-3);
+		letter-spacing: 0.05em;
+	}
+	.nf-title {
+		font-family: var(--serif);
+		font-size: 22px;
+		color: var(--ink);
+		margin: 2px 0 2px;
+	}
+	.nf-body {
+		font-size: 13.5px;
+		color: var(--ink-2);
+		margin-bottom: 10px;
+	}
+
+	/* Loading skeleton */
+	.skel-main {
+		flex: 1;
+		padding: 28px clamp(20px, 3vw, 40px);
+		max-width: 820px;
+		margin: 0 auto;
+		width: 100%;
+		box-sizing: border-box;
+	}
+	.sk {
+		display: block;
+		border-radius: 6px;
+		background: linear-gradient(90deg, var(--hover) 25%, var(--sunken) 50%, var(--hover) 75%);
+		background-size: 200% 100%;
+		animation: sk-sweep 1.6s ease-in-out infinite;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.sk {
+			animation: none;
+			background: var(--hover);
+		}
+	}
+	@keyframes sk-sweep {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
 		}
 	}
 </style>
