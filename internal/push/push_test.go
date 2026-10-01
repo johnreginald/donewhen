@@ -22,3 +22,16 @@ func TestBuildNamesTheAIActor(t *testing.T) {
 		t.Fatalf("human move: body=%q", p.Body)
 	}
 }
+
+func TestBuildSkipsIssuesAPersonCreated(t *testing.T) {
+	n := &Notifier{}
+	is := &models.Issue{ID: "i1", Key: "PP-1", Title: "Do it"}
+
+	if _, ok := n.build(events.Event{Type: events.IssueCreated, Actor: "human", Issue: is}, "Claude"); ok {
+		t.Fatal("a human-created issue must not push")
+	}
+	p, ok := n.build(events.Event{Type: events.IssueCreated, Actor: "ai", Issue: is}, "Claude")
+	if !ok || !strings.Contains(p.Body, "created by Claude") {
+		t.Fatalf("ai create: ok=%v body=%q", ok, p.Body)
+	}
+}

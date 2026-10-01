@@ -121,7 +121,9 @@ func (n *Notifier) build(e events.Event, aiName string) (payload, bool) {
 			Tag:   e.Issue.ID,
 		}, true
 	case events.IssueCreated:
-		if e.Issue == nil {
+		// A person's own quick-capture is not news to them (or their workspace);
+		// only issues an agent files are worth a notification.
+		if e.Issue == nil || e.Actor != "ai" {
 			return payload{}, false
 		}
 		return payload{
