@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/johnreginald/donewhen/internal/auth"
 	"github.com/johnreginald/donewhen/internal/models"
 )
 
@@ -35,14 +36,10 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
-		c, err := d.store.AddCommit(ctx, wsID, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")))
+		c, err := d.store.AddCommitAs(ctx, wsID, is.ID, req.GetString("sha", ""), req.GetString("message", ""), strp(req.GetString("url", "")), auth.ActorAI)
 		if err != nil {
 			return toolErr(err), nil
 		}
-		_ = d.store.RecordActivity(ctx, wsID, models.Activity{
-			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: "ai",
-			Kind: "committed", Detail: shortSHA(c.SHA) + " " + c.Message,
-		})
 		return jsonResult(c)
 	})
 
@@ -164,7 +161,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
-		out, err := d.store.ReplaceCriteria(ctx, wsID, is.ID, items)
+		out, err := d.store.ReplaceCriteria(ctx, wsID, is.ID, items, auth.ActorAI)
 		if err != nil {
 			return toolErr(err), nil
 		}
@@ -216,7 +213,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if e := strings.TrimSpace(req.GetString("evidence", "")); e != "" {
 			evidence = &e
 		}
-		c, err := d.store.UpdateCriterion(ctx, wsID, target.ID, nil, &done, nil, nil, evidence)
+		c, err := d.store.UpdateCriterionAs(ctx, wsID, target.ID, nil, &done, nil, nil, evidence, auth.ActorAI)
 		if err != nil {
 			return toolErr(err), nil
 		}
@@ -243,12 +240,4 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		}
 		return jsonResult(acts)
 	})
-}
-
-// shortSHA duplicated small helper (mcp package has no access to api's).
-func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
 }

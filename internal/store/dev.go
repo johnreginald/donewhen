@@ -71,7 +71,14 @@ func commitURL(repo, sha string) string {
 
 // ---- commits ----
 
+// AddCommit links a commit as a human; see AddCommitAs.
 func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message string, url *string) (models.IssueCommit, error) {
+	return s.AddCommitAs(ctx, wsID, issueID, sha, message, url, "")
+}
+
+// AddCommitAs links a commit to an issue and records commit_linked on its
+// timeline in the same transaction.
+func (s *Store) AddCommitAs(ctx context.Context, wsID, issueID, sha, message string, url *string, actor string) (models.IssueCommit, error) {
 	url, err := normURL("url", url)
 	if err != nil {
 		return models.IssueCommit{}, err
@@ -82,8 +89,13 @@ func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message strin
 			url = &built
 		}
 	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.IssueCommit{}, err
+	}
+	defer tx.Rollback(ctx)
 	var c models.IssueCommit
-	err = s.pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`INSERT INTO issue_commits (issue_id, sha, message, url)
 		 SELECT $1,$2,$3,$4 FROM issues WHERE id=$1 AND workspace_id=$5
 		 RETURNING id, issue_id, sha, message, url, created_at`,
@@ -91,7 +103,20 @@ func (s *Store) AddCommit(ctx context.Context, wsID, issueID, sha, message strin
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
-	return c, err
+	if err != nil {
+		return c, err
+	}
+	is, err := s.getIssueTx(ctx, tx, wsID, issueID, false)
+	if err != nil {
+		return c, err
+	}
+	if err := insertActivity(ctx, tx, wsID, models.Activity{
+		IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title, Actor: actor,
+		Kind: "commit_linked", Field: "commit", ToVal: sha, Detail: message,
+	}); err != nil {
+		return c, err
+	}
+	return c, tx.Commit(ctx)
 }
 
 func (s *Store) ListCommits(ctx context.Context, wsID, issueID string) ([]models.IssueCommit, error) {
@@ -176,17 +201,41 @@ func (s *Store) AddCriterion(ctx context.Context, wsID, issueID, body, kind stri
 	return c, err
 }
 
-// UpdateCriterion patches a criterion. Every pointer/slice argument is optional;
-// nil leaves that column untouched.
+// UpdateCriterion patches a criterion as a human; see UpdateCriterionAs.
 func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *string, done *bool, kind *string, checkSpec json.RawMessage, evidenceRef *string) (models.Criterion, error) {
+	return s.UpdateCriterionAs(ctx, wsID, id, body, done, kind, checkSpec, evidenceRef, "")
+}
+
+// UpdateCriterionAs patches a criterion. Every pointer/slice argument is
+// optional; nil leaves that column untouched. When done flips, a
+// criterion_checked row (criterion text, done true/false) goes on the issue's
+// timeline in the same transaction.
+func (s *Store) UpdateCriterionAs(ctx context.Context, wsID, id string, body *string, done *bool, kind *string, checkSpec json.RawMessage, evidenceRef *string, actor string) (models.Criterion, error) {
 	var spec []byte
 	if len(checkSpec) > 0 {
 		spec = checkSpec
 	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Criterion{}, err
+	}
+	defer tx.Rollback(ctx)
+	var wasDone bool
+	var issueID, issueKey, issueTitle string
+	err = tx.QueryRow(ctx, `
+		SELECT c.done, c.issue_id, i.key, i.title
+		FROM issue_criteria c JOIN issues i ON i.id = c.issue_id
+		WHERE c.id=$1 AND i.workspace_id=$2 FOR UPDATE OF c`, id, wsID).Scan(&wasDone, &issueID, &issueKey, &issueTitle)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return models.Criterion{}, ErrNotFound
+	}
+	if err != nil {
+		return models.Criterion{}, err
+	}
 	// Evidence belongs to the tick. Un-ticking a criterion clears it, because a
 	// criterion that reads "not met" while still citing a previous run's evidence
 	// is a record that lies.
-	c, err := scanCriterion(s.pool.QueryRow(ctx, `
+	c, err := scanCriterion(tx.QueryRow(ctx, `
 		UPDATE issue_criteria c SET body=coalesce($2,c.body), done=coalesce($3,c.done),
 			kind=coalesce($5,c.kind), check_spec=coalesce($6,c.check_spec),
 			evidence_ref = CASE
@@ -199,7 +248,23 @@ func (s *Store) UpdateCriterion(ctx context.Context, wsID, id string, body *stri
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
-	return c, err
+	if err != nil {
+		return c, err
+	}
+	if c.Done != wasDone {
+		if err := insertActivity(ctx, tx, wsID, criterionRow(issueID, issueKey, issueTitle, actor, c.Body, c.Done)); err != nil {
+			return c, err
+		}
+	}
+	return c, tx.Commit(ctx)
+}
+
+// criterionRow is the timeline row for a criterion being ticked or unticked.
+func criterionRow(issueID, key, title, actor, text string, done bool) models.Activity {
+	return models.Activity{
+		IssueID: &issueID, IssueKey: key, IssueTitle: title, Actor: actor,
+		Kind: "criterion_checked", Field: "done", FromVal: text, ToVal: fmt.Sprint(done),
+	}
 }
 
 // ValidateCriterionSpec enforces the same rule as the DB constraint: anything
@@ -235,17 +300,18 @@ type CriterionInput struct {
 // untouched and a concurrent AddCriterion cannot race the positions. Existing
 // rows are reconciled in place (slot i is updated, extra slots appended, the
 // tail deleted), so ticking one item off re-sends the same list without churning
-// ids or created_at.
-func (s *Store) ReplaceCriteria(ctx context.Context, wsID, issueID string, items []CriterionInput) ([]models.Criterion, error) {
+// ids or created_at. Each criterion whose done flag changed (a new item that
+// arrives ticked counts) gets a criterion_checked row in the same transaction.
+func (s *Store) ReplaceCriteria(ctx context.Context, wsID, issueID string, items []CriterionInput, actor string) ([]models.Criterion, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	var locked string
+	var issueKey, issueTitle string
 	if err := tx.QueryRow(ctx,
-		`SELECT id FROM issues WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, issueID, wsID).Scan(&locked); err != nil {
+		`SELECT key, title FROM issues WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, issueID, wsID).Scan(&issueKey, &issueTitle); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -297,6 +363,12 @@ func (s *Store) ReplaceCriteria(ctx context.Context, wsID, issueID string, items
 		}
 		if err != nil {
 			return nil, err
+		}
+		wasDone := i < len(existing) && existing[i].Done
+		if c.Done != wasDone {
+			if err := insertActivity(ctx, tx, wsID, criterionRow(issueID, issueKey, issueTitle, actor, c.Body, c.Done)); err != nil {
+				return nil, err
+			}
 		}
 		out = append(out, c)
 	}

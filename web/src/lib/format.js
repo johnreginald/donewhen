@@ -48,6 +48,16 @@ export function activityVerb(a) {
 			return `epic ${a.from} → ${a.to}`;
 		case 'title_changed':
 			return 'renamed the issue';
+		case 'labels_changed':
+			return `labels ${a.from || 'none'} → ${a.to || 'none'}`;
+		case 'assignee_changed':
+			return `assignee ${a.from || 'none'} → ${a.to || 'none'}`;
+		case 'description_changed':
+			return 'edited the description';
+		case 'commit_linked':
+			return `linked commit ${(a.to || '').slice(0, 7)}${a.detail ? ' ' + a.detail : ''}`;
+		case 'criterion_checked':
+			return `${a.to === 'true' ? 'ticked' : 'unticked'} “${a.from}”`;
 		case 'artifact_written':
 			return `wrote artifact “${a.detail}”`;
 		case 'epic_archived':

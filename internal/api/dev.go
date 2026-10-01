@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/johnreginald/donewhen/internal/auth"
-	"github.com/johnreginald/donewhen/internal/models"
 	"github.com/johnreginald/donewhen/internal/store"
 )
 
@@ -49,25 +48,11 @@ func (s *Server) handleAddCommit(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
-	c, err := s.store.AddCommit(r.Context(), ws(r), id, body.Sha, body.Message, strPtr(body.URL))
+	c, err := s.store.AddCommitAs(r.Context(), ws(r), id, body.Sha, body.Message, strPtr(body.URL), auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}
-	if is, e := s.store.GetIssue(r.Context(), ws(r), id); e == nil {
-		_ = s.store.RecordActivity(r.Context(), ws(r), models.Activity{
-			IssueID: &is.ID, IssueKey: is.Key, IssueTitle: is.Title,
-			Actor: auth.ActorFrom(r.Context()), Kind: "committed",
-			Detail: shortSHA(body.Sha) + " " + body.Message,
-		})
-	}
 	writeJSON(w, http.StatusCreated, c)
-}
-
-func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
 }
 
 // ---- dev links (branch / PR) ----
@@ -154,7 +139,7 @@ func (s *Server) handleUpdateCriterion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	c, err := s.store.UpdateCriterion(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done, body.Kind, body.CheckSpec, body.EvidenceRef)
+	c, err := s.store.UpdateCriterionAs(r.Context(), ws(r), r.PathValue("id"), body.Body, body.Done, body.Kind, body.CheckSpec, body.EvidenceRef, auth.ActorFrom(r.Context()))
 	if handleStoreErr(w, err) {
 		return
 	}

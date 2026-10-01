@@ -382,6 +382,7 @@ type IssueInput struct {
 	LabelNames    []string     // optional: resolve/attach labels by name (exclusive-group aware)
 	ForceGate     bool         // owner/admin session only: skip the done-when gate
 	GateOut       *GateOutcome // filled when ForceGate overrode the gate
+	Actor         string       // who is creating it, for the timeline; empty means human
 }
 
 // maxKeyAttempts bounds the retry loop that steps past a key already taken by a
@@ -458,9 +459,30 @@ func (s *Store) CreateIssue(ctx context.Context, wsID string, in IssueInput) (mo
 	if err := s.setLabelsTx(ctx, tx, id, labelIDs); err != nil {
 		return models.Issue{}, err
 	}
+	created, err := s.getIssueTx(ctx, tx, wsID, id, false)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	stateName, err := scalarTx(ctx, tx, `SELECT name FROM workflow_states WHERE id=$1`, created.StateID)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	rows := []models.Activity{{
+		IssueID: &created.ID, IssueKey: created.Key, IssueTitle: created.Title, Actor: in.Actor,
+		Kind: "created", ToVal: stateName,
+	}}
+	if g, ok := gateOverrideRow(created, stateName, in.Actor, in.GateOut); ok {
+		rows = append(rows, g)
+	}
+	for _, r := range rows {
+		if err := insertActivity(ctx, tx, wsID, r); err != nil {
+			return models.Issue{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return models.Issue{}, err
 	}
+	// Re-read for last_actor, which the rows just written moved.
 	return s.GetIssue(ctx, wsID, id)
 }
 
@@ -527,6 +549,8 @@ type IssuePatch struct {
 	// ExpectedUpdatedAt, when set, makes the update fail with a *StaleError unless
 	// the issue's updated_at still equals it: the caller's copy is not stale.
 	ExpectedUpdatedAt *time.Time
+	// Actor is who is making the change, for the timeline; empty means human.
+	Actor string
 	// BeforeOut, when set, receives the issue as it was inside the update
 	// transaction, under the row lock. Callers use it for events and the record
 	// instead of a racy read taken before the update.
@@ -586,10 +610,12 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 		sets = append(sets, fmt.Sprintf("%s=$%d", col, n))
 		args = append(args, v)
 	}
-	if p.Title != nil {
+	// A value that is already stored is not written: a no-op save changes nothing,
+	// not even updated_at, and leaves no timeline row.
+	if p.Title != nil && *p.Title != before.Title {
 		set("title", *p.Title)
 	}
-	if p.DescriptionMD != nil {
+	if p.DescriptionMD != nil && *p.DescriptionMD != before.DescriptionMD {
 		set("description_md", *p.DescriptionMD)
 	}
 	if p.StateID != nil || p.StateName != nil {
@@ -610,21 +636,23 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 				return models.Issue{}, err
 			}
 		}
-		set("state_id", resolved)
+		if before.StateID != resolved {
+			set("state_id", resolved)
+		}
 	}
-	if p.SetProject {
+	if p.SetProject && ptrStr(p.ProjectID) != ptrStr(before.ProjectID) {
 		set("project_id", p.ProjectID)
 	}
-	if p.SetParent {
+	if p.SetParent && ptrStr(p.ParentKey) != ptrStr(before.ParentKey) {
 		set("parent_key", p.ParentKey)
 	}
-	if p.SetAssignee {
+	if p.SetAssignee && ptrStr(p.AssigneeID) != ptrStr(before.AssigneeID) {
 		set("assignee_id", p.AssigneeID)
 	}
-	if p.Priority != nil {
+	if p.Priority != nil && *p.Priority != before.Priority {
 		set("priority", *p.Priority)
 	}
-	if p.Position != nil {
+	if p.Position != nil && *p.Position != before.Position {
 		set("position", *p.Position)
 	}
 
@@ -662,9 +690,35 @@ func (s *Store) UpdateIssue(ctx context.Context, wsID, id string, p IssuePatch) 
 			}
 		}
 	}
+
+	// The timeline rows for what changed, written in this transaction: they commit
+	// with the change or the change rolls back.
+	after, err := s.getIssueTx(ctx, tx, wsID, id, false)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	rows, err := s.issueChanges(ctx, tx, before, after, p.Actor)
+	if err != nil {
+		return models.Issue{}, err
+	}
+	if p.GateOut != nil && p.GateOut.Overridden {
+		stateName, err := scalarTx(ctx, tx, `SELECT name FROM workflow_states WHERE id=$1`, after.StateID)
+		if err != nil {
+			return models.Issue{}, err
+		}
+		if g, ok := gateOverrideRow(after, stateName, p.Actor, p.GateOut); ok {
+			rows = append(rows, g)
+		}
+	}
+	for _, r := range rows {
+		if err := insertActivity(ctx, tx, wsID, r); err != nil {
+			return models.Issue{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return models.Issue{}, err
 	}
+	// Re-read for last_actor, which the rows just written may have moved.
 	return s.GetIssue(ctx, wsID, id)
 }
 

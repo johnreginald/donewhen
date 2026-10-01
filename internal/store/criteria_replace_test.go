@@ -19,7 +19,7 @@ func TestReplaceCriteriaAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ReplaceCriteria(ctx, ws, issue.ID, []CriterionInput{{Body: "a"}, {Body: "b"}, {Body: "c"}}); err != nil {
+	if _, err := s.ReplaceCriteria(ctx, ws, issue.ID, []CriterionInput{{Body: "a"}, {Body: "b"}, {Body: "c"}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := func() string {
@@ -35,7 +35,7 @@ func TestReplaceCriteriaAtomic(t *testing.T) {
 	// Item 2 violates the DB check constraint (typed, no spec): rolled back.
 	_, err = s.ReplaceCriteria(ctx, ws, issue.ID, []CriterionInput{
 		{Body: "x", Done: true}, {Body: "y", Kind: models.CriterionDeterministic},
-	})
+	}, "")
 	if err == nil {
 		t.Fatal("expected the second item to fail")
 	}
@@ -46,7 +46,7 @@ func TestReplaceCriteriaAtomic(t *testing.T) {
 	// A failed read must not look like an empty list.
 	dead, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err := s.ReplaceCriteria(dead, ws, issue.ID, []CriterionInput{{Body: "z"}}); err == nil {
+	if _, err := s.ReplaceCriteria(dead, ws, issue.ID, []CriterionInput{{Body: "z"}}, ""); err == nil {
 		t.Fatal("expected an error on a dead context")
 	}
 	if got := snapshot(); got != orig {
@@ -55,7 +55,7 @@ func TestReplaceCriteriaAtomic(t *testing.T) {
 
 	// Another workspace cannot replace it.
 	other := newWorkspace(t, s)
-	if _, err := s.ReplaceCriteria(ctx, other, issue.ID, []CriterionInput{{Body: "z"}}); err != ErrNotFound {
+	if _, err := s.ReplaceCriteria(ctx, other, issue.ID, []CriterionInput{{Body: "z"}}, ""); err != ErrNotFound {
 		t.Fatalf("cross-workspace: %v", err)
 	}
 }
