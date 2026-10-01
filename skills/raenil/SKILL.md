@@ -32,7 +32,7 @@ The hard rules (confirm before creating, the checklist gates In Review and Done,
 
 ## Writing a ticket
 
-Read [TICKETS.md](TICKETS.md) before writing or rewriting any ticket, and follow it strictly. Reference ticket: MYINF-255.
+Read [TICKETS.md](TICKETS.md) before writing or rewriting any ticket, and follow it strictly. Any ```mermaid``` block in a ticket, comment or document follows [MERMAID.md](MERMAID.md). Reference ticket: MYINF-255.
 
 ## From a spec to tickets
 
@@ -58,7 +58,7 @@ Read [TICKETS.md](TICKETS.md) before writing or rewriting any ticket, and follow
 2. Move it with `save_issue` (`state: "In Review"`, or `"Done"` after the user's merge).
 3. `link_commit` for the commit(s) that did it.
 4. `set_issue_dev` with the branch and PR.
-5. `save_document`: the engineering record — what changed and how, with a mermaid diagram for backend flows. Plain, short English.
+5. `save_document`: the engineering record — what changed and how, with a mermaid diagram for backend flows. Plain, short English. Follow [MERMAID.md](MERMAID.md) for every diagram.
 
 ## Moving tickets as work happens
 
