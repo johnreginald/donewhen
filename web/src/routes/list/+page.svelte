@@ -1,110 +1,325 @@
 <script>
-	import { visibleIssues, states, projects, initiatives, activeInitiative } from '$lib/store.js';
+	// List — every issue, grouped by workflow state (default), epic or
+	// priority. Dense 36px rows, sticky group headers, j/k keyboard nav,
+	// checkbox multi-select with a bulk bar that reuses the plain issue
+	// PATCH (state / labels / priority) — no new endpoints.
+	import {
+		visibleIssues,
+		states,
+		projects,
+		labels as labelStore,
+		blockLinks,
+		openBlockersByIssue,
+		loadIssues,
+		PRIORITIES
+	} from '$lib/store.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import IssuesToolbar from '$components/IssuesToolbar.svelte';
-	import { openIssue } from '$lib/ui.js';
+	import StateIcon from '$components/StateIcon.svelte';
 	import PriorityIcon from '$components/PriorityIcon.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
-	import StateIcon from '$components/StateIcon.svelte';
+	import { openIssue, showToast } from '$lib/ui.js';
+	import { rel } from '$lib/format.js';
+	import { api } from '$lib/api.js';
 
 	const stOf = (id) => $states.find((s) => s.id === id);
+	const epicOf = (id) => $projects.find((p) => p.id === id);
+	const openBlockers = $derived(openBlockersByIssue($blockLinks));
 
-	function loadCollapsed() {
+	const LS_KEY = 'raenil.list.collapsedStates';
+	// First visit: only the "live" categories start open, same as the design.
+	const DEFAULT_OPEN = new Set(['Ready', 'In Progress', 'In Review']);
+	let collapsed = $state(null); // null = not computed yet (waiting on $states)
+	$effect(() => {
+		if (collapsed !== null || !$states.length) return;
 		try {
-			return new Set(JSON.parse(localStorage.getItem('raenil.list.collapsed') || '[]'));
+			const raw = localStorage.getItem(LS_KEY);
+			if (raw !== null) {
+				collapsed = new Set(JSON.parse(raw));
+				return;
+			}
 		} catch {
-			return new Set();
+			/* fall through to default */
 		}
-	}
-	let collapsed = $state(loadCollapsed());
-	function toggle(id) {
+		collapsed = new Set($states.filter((s) => !DEFAULT_OPEN.has(s.name)).map((s) => s.id));
+	});
+	function toggleGroup(id) {
 		const n = new Set(collapsed);
 		n.has(id) ? n.delete(id) : n.add(id);
 		collapsed = n;
 		try {
-			localStorage.setItem('raenil.list.collapsed', JSON.stringify([...n]));
+			localStorage.setItem(LS_KEY, JSON.stringify([...n]));
 		} catch {
-			/* ignore */
+			/* storage blocked: not remembered */
 		}
 	}
 
-	// Group issues by Epic (project), then Epics by Project (initiative).
-	const groups = $derived(build($visibleIssues, $projects, $initiatives, $states, $activeInitiative));
-	function build(iss, projs, inis, sts, activeIni) {
-		const projById = new Map(projs.map((p) => [p.id, p]));
-		const iniById = new Map(inis.map((i) => [i.id, i]));
-		const stPos = (i) => sts.find((s) => s.id === i.stateId)?.position ?? 99;
-		const sortIss = (a, b) => stPos(a) - stPos(b) || a.position - b.position;
-		const last = (name, tag) => (name === tag ? 1 : 0);
+	// ── group / sort ──────────────────────────────────────────────────
+	let groupBy = $state('state'); // state | epic | priority
+	let sortBy = $state('updated'); // updated | priority | created
+	let menuOpen = $state(false);
 
-		// Seed every epic (scoped to the active Project) so newly-created / empty
-		// epics still show as headers, then drop issues into them.
-		const shownEpics = activeIni ? projs.filter((p) => p.initiativeId === activeIni) : projs;
-		const byEpic = new Map();
-		for (const p of shownEpics) byEpic.set(p.id, []);
-		for (const i of iss) {
-			const k = i.projectId || '__none__';
-			if (!byEpic.has(k)) byEpic.set(k, []);
-			byEpic.get(k).push(i);
-		}
-		const byProj = new Map();
-		for (const [epicId, list] of byEpic) {
-			const epic = epicId === '__none__' ? null : projById.get(epicId);
-			const iniId = epic?.initiativeId || '__none__';
-			if (!byProj.has(iniId)) byProj.set(iniId, []);
-			byProj.get(iniId).push({ id: epicId, name: epic?.name || 'No epic', issues: [...list].sort(sortIss) });
-		}
-		const res = [];
-		for (const [iniId, epics] of byProj) {
-			const ini = iniId === '__none__' ? null : iniById.get(iniId);
-			res.push({
-				id: iniId,
-				name: ini?.name || 'No project',
-				count: epics.reduce((n, e) => n + e.issues.length, 0),
-				epics: epics.sort((a, b) => last(a.name, 'No epic') - last(b.name, 'No epic') || a.name.localeCompare(b.name))
-			});
-		}
-		return res.sort((a, b) => last(a.name, 'No project') - last(b.name, 'No project') || a.name.localeCompare(b.name));
+	function sortRows(list) {
+		const copy = [...list];
+		if (sortBy === 'priority') copy.sort((a, b) => (a.priority || 99) - (b.priority || 99) || a.number - b.number);
+		else if (sortBy === 'created') copy.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+		else copy.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+		return copy;
 	}
+
+	const groups = $derived(build($visibleIssues, $states, $projects, groupBy, sortBy));
+	function build(list, sts, projs, gb, sb) {
+		if (gb === 'epic') {
+			const byEpic = new Map();
+			for (const i of list) {
+				const k = i.projectId || '__none__';
+				if (!byEpic.has(k)) byEpic.set(k, []);
+				byEpic.get(k).push(i);
+			}
+			const out = [...byEpic.entries()].map(([id, rows]) => ({
+				id,
+				name: id === '__none__' ? 'No epic' : projs.find((p) => p.id === id)?.name || 'No epic',
+				rows: sortRows(rows)
+			}));
+			out.sort((a, b) => (a.name === 'No epic' ? 1 : 0) - (b.name === 'No epic' ? 1 : 0) || a.name.localeCompare(b.name));
+			return out;
+		}
+		if (gb === 'priority') {
+			const order = [1, 2, 3, 4, 0];
+			const byPri = new Map(order.map((p) => [p, []]));
+			for (const i of list) byPri.get(i.priority ?? 0).push(i);
+			return order.map((p) => ({
+				id: 'p' + p,
+				name: PRIORITIES.find((x) => x.value === p)?.label ?? 'No priority',
+				pvalue: p,
+				rows: sortRows(byPri.get(p))
+			}));
+		}
+		// default: state, in workflow order
+		const byState = new Map(sts.map((s) => [s.id, []]));
+		for (const i of list) {
+			if (!byState.has(i.stateId)) byState.set(i.stateId, []);
+			byState.get(i.stateId).push(i);
+		}
+		return sts
+			.slice()
+			.sort((a, b) => a.position - b.position)
+			.map((s) => ({ id: s.id, name: s.name, category: s.category, color: s.color, rows: sortRows(byState.get(s.id) || []) }));
+	}
+	const totalRows = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
+
+	// ── keyboard nav (j/k over expanded rows, Enter opens) ─────────────
+	const flat = $derived(collapsed === null ? [] : groups.flatMap((g) => (collapsed.has(g.id) ? [] : g.rows)));
+	let kb = $state(-1);
+	$effect(() => {
+		if (kb >= flat.length) kb = flat.length - 1;
+	});
+	function onKeydown(e) {
+		const tag = document.activeElement?.tagName;
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return;
+		if (e.key === 'j') {
+			e.preventDefault();
+			kb = Math.min(flat.length - 1, kb + 1);
+		} else if (e.key === 'k') {
+			e.preventDefault();
+			kb = Math.max(0, kb - 1);
+		} else if (e.key === 'Enter' && flat[kb]) {
+			openIssue(flat[kb].key);
+		}
+	}
+
+	// ── selection + bulk bar (existing PATCH /api/issues/:id only) ─────
+	let selected = $state(new Set());
+	function toggleSel(id) {
+		const n = new Set(selected);
+		n.has(id) ? n.delete(id) : n.add(id);
+		selected = n;
+	}
+	function clearSel() {
+		selected = new Set();
+	}
+	let bulkMenu = $state('');
+	async function runBulk(label, fn) {
+		bulkMenu = '';
+		const n = selected.size;
+		try {
+			await Promise.all([...selected].map(fn));
+			showToast(`${label} on ${n} issue${n === 1 ? '' : 's'}`, 'info');
+			clearSel();
+			await loadIssues();
+		} catch (e) {
+			showToast(e.message, 'error');
+		}
+	}
+	const bulkSetState = (stateId) => runBulk('Moved', (id) => api.updateIssue(id, { stateId }));
+	const bulkSetPriority = (priority) => runBulk('Priority set', (id) => api.updateIssue(id, { priority }));
+	const bulkAddLabel = (label) =>
+		runBulk('Label added', (id) => {
+			const issue = $visibleIssues.find((i) => i.id === id);
+			if (!issue || issue.labels.some((l) => l.id === label.id)) return Promise.resolve();
+			return api.updateIssue(id, { labelIds: [...issue.labels.map((l) => l.id), label.id] });
+		});
+
+	const loading = $derived($states.length === 0);
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <div class="page">
-<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'By epic' }]} />
-<IssuesToolbar />
-<div class="list">
-	{#each groups as g (g.id)}
-		<div class="proj-group">
-			<div class="proj-head">
-				<span class="pn">{g.name}</span>
-				<span class="c">{g.count}</span>
-			</div>
-			{#each g.epics as e (e.id)}
-				<div class="epic-group">
-					<button class="epic-head" onclick={() => toggle(g.id + e.id)}>
-						<span class="chev" class:open={!collapsed.has(g.id + e.id)}>▸</span>
-						<span class="en">{e.name}</span>
-						<span class="c">{e.issues.length}</span>
-					</button>
-					{#if !collapsed.has(g.id + e.id)}
-						{#each e.issues as i (i.id)}
-							<button class="row" onclick={() => openIssue(i.key)}>
-								<StateIcon category={stOf(i.stateId)?.category} color={stOf(i.stateId)?.color} />
-								<span class="rkey">{i.key}</span>
-								{#if i.childCount > 0}<span class="epic-badge">↳{i.childCount}</span>{/if}
-								<span class="rtitle">{i.title}</span>
-								<span class="rlabels">{#each i.labels as l (l.id)}<LabelPill label={l} />{/each}</span>
-								<PriorityIcon priority={i.priority} />
-							</button>
-						{/each}
-					{/if}
+	<PageHeader crumbs={[{ label: 'Tasks', href: '/board' }, { label: 'List' }]} />
+	<IssuesToolbar />
+	<div class="subbar">
+		<span class="spacer"></span>
+		<div class="dd">
+			<button class="gsbtn" onclick={() => (menuOpen = !menuOpen)} aria-haspopup="true" aria-expanded={menuOpen}>
+				⇅ Sort &amp; group <span class="chev">▾</span>
+			</button>
+			{#if menuOpen}
+				<div class="dd-bd" role="presentation" onclick={() => (menuOpen = false)}></div>
+				<div class="gsmenu" role="menu">
+					<div class="gsh">Group by</div>
+					{#each [['state', 'State'], ['epic', 'Epic'], ['priority', 'Priority']] as [v, l] (v)}
+						<button class="gsi" class:sel={groupBy === v} onclick={() => ((groupBy = v), (menuOpen = false))}>
+							{l}<span class="sp"></span>{#if groupBy === v}✓{/if}
+						</button>
+					{/each}
+					<div class="gsh">Sort by</div>
+					{#each [['priority', 'Priority'], ['updated', 'Updated'], ['created', 'Created']] as [v, l] (v)}
+						<button class="gsi" class:sel={sortBy === v} onclick={() => ((sortBy = v), (menuOpen = false))}>
+							{l}<span class="sp"></span>{#if sortBy === v}✓{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	{#if loading}
+		<div class="colhd" aria-hidden="true">
+			<span></span><span>Pri</span><span>Key</span><span></span><span>Title</span><span>Labels</span><span>Epic</span><span>Blocked</span><span>Updated</span>
+		</div>
+		<div class="lbody">
+			{#each Array(10) as _, i (i)}
+				<div class="skrow">
+					<span class="skel" style="width:14px;height:14px;border-radius:4px"></span>
+					<span class="skel" style="width:16px;height:11px"></span>
+					<span class="skel" style="width:44px;height:11px"></span>
+					<span class="skel" style="width:13px;height:13px;border-radius:50%"></span>
+					<span class="skel" style="width:{40 + ((i * 17) % 45)}%;height:12px"></span>
+					<span class="skel" style="width:60px;height:16px;border-radius:999px"></span>
 				</div>
 			{/each}
 		</div>
-	{/each}
-	{#if !groups.length}
-		<div class="empty faint">No issues yet. Press ⌘K to create one.</div>
+	{:else if !totalRows}
+		<div class="empty">
+			<div class="ic">—</div>
+			<p class="etitle">No issues match</p>
+			<p class="esub">Try clearing filters, or press ⌘K to create one.</p>
+		</div>
+	{:else}
+		<div class="colhd" aria-hidden="true">
+			<span></span><span>Pri</span><span>Key</span><span></span><span>Title</span><span>Labels</span><span>Epic</span><span>Blocked</span><span>Updated</span>
+		</div>
+		<div class="lbody">
+			{#each groups as g (g.id)}
+				<button class="lgrp" onclick={() => toggleGroup(g.id)} aria-expanded={!collapsed?.has(g.id)}>
+					<span class="chv" class:open={!collapsed?.has(g.id)}>›</span>
+					{#if groupBy === 'state'}
+						<StateIcon category={g.category} color={g.color} size={13} />
+					{:else if groupBy === 'priority'}
+						<PriorityIcon priority={g.pvalue} />
+					{/if}
+					<span class="gname">{g.name}</span>
+					<span class="n">{g.rows.length}</span>
+				</button>
+				{#if !collapsed?.has(g.id)}
+					{#each g.rows as r (r.id)}
+						{@const st = stOf(r.stateId)}
+						{@const ep = epicOf(r.projectId)}
+						{@const waits = (openBlockers[r.id] || []).length}
+						<button
+							class="lrow"
+							class:kb={flat[kb]?.id === r.id}
+							class:selr={selected.has(r.id)}
+							onclick={() => openIssue(r.key)}
+						>
+							<span
+								class="cbx"
+								class:on={selected.has(r.id)}
+								role="checkbox"
+								aria-checked={selected.has(r.id)}
+								aria-label="Select {r.key}"
+								tabindex="0"
+								onclick={(e) => {
+									e.stopPropagation();
+									toggleSel(r.id);
+								}}
+								onkeydown={(e) => {
+									if (e.key === ' ' || e.key === 'Enter') {
+										e.preventDefault();
+										e.stopPropagation();
+										toggleSel(r.id);
+									}
+								}}
+							></span>
+							<PriorityIcon priority={r.priority} />
+							<span class="k">{r.key}</span>
+							<StateIcon category={st?.category} color={st?.color} size={13} />
+							<span class="t">{r.title}</span>
+							<span class="lbls">{#each r.labels as l (l.id)}<LabelPill label={l} />{/each}</span>
+							<span class="ep">{ep?.name || ''}</span>
+							<span class="blkwrap">{#if waits}<span class="blk" title="{waits} blocker{waits === 1 ? '' : 's'} still open">⛌ {waits}</span>{/if}</span>
+							<span class="d">{rel(r.updatedAt)}</span>
+						</button>
+					{/each}
+				{/if}
+			{/each}
+		</div>
 	{/if}
-</div>
+
+	{#if selected.size}
+		<div class="bulkbar">
+			<b>{selected.size} selected</b>
+			<span class="bd"></span>
+			<div class="dd">
+				<button class="bbtn" onclick={() => (bulkMenu = bulkMenu === 'state' ? '' : 'state')}>Move state</button>
+				{#if bulkMenu === 'state'}
+					<div class="dd-bd" role="presentation" onclick={() => (bulkMenu = '')}></div>
+					<div class="bmenu" role="menu">
+						{#each $states as s (s.id)}
+							<button onclick={() => bulkSetState(s.id)}><StateIcon category={s.category} color={s.color} size={12} />{s.name}</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			<div class="dd">
+				<button class="bbtn" onclick={() => (bulkMenu = bulkMenu === 'label' ? '' : 'label')}>Add label</button>
+				{#if bulkMenu === 'label'}
+					<div class="dd-bd" role="presentation" onclick={() => (bulkMenu = '')}></div>
+					<div class="bmenu" role="menu">
+						{#each $labelStore as l (l.id)}
+							<button onclick={() => bulkAddLabel(l)}><span class="ldot" style:background={l.color}></span>{l.name}</button>
+						{:else}
+							<div class="bnone">No labels yet.</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			<div class="dd">
+				<button class="bbtn" onclick={() => (bulkMenu = bulkMenu === 'priority' ? '' : 'priority')}>Set priority</button>
+				{#if bulkMenu === 'priority'}
+					<div class="dd-bd" role="presentation" onclick={() => (bulkMenu = '')}></div>
+					<div class="bmenu" role="menu">
+						{#each PRIORITIES as p (p.value)}
+							<button onclick={() => bulkSetPriority(p.value)}>{p.label}</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			<span class="bd"></span>
+			<button class="x" onclick={clearSel} aria-label="Clear selection">✕</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -112,123 +327,426 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
-	}
-	.list {
-		flex: 1;
 		min-height: 0;
-		overflow-y: auto;
-		padding: 0 0 40px;
 	}
-	.proj-group {
-		margin-bottom: 6px;
-	}
-	.proj-head {
+	.subbar {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		height: 38px;
-		padding: 0 20px;
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--ink);
-		position: sticky;
-		top: 0;
-		background: var(--paper);
-		border-bottom: 1px solid var(--line);
-		z-index: 4;
+		padding: 0 20px 9px;
+		flex: none;
+		position: relative;
 	}
-	.epic-head {
+	.spacer {
+		flex: 1;
+	}
+	.gsbtn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 27px;
+		padding: 0 10px;
+		border-radius: var(--r-sm);
+		background: var(--surface);
+		border: 1px solid var(--line);
+		color: var(--ink);
+		font-size: 12.5px;
+	}
+	.gsbtn:hover {
+		border-color: var(--line-strong);
+	}
+	.chev {
+		color: var(--ink-3);
+		font-size: 10px;
+	}
+	.gsmenu {
+		position: absolute;
+		top: calc(100% + 2px);
+		right: 20px;
+		z-index: 32;
+		width: 200px;
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
+		border-radius: var(--r-lg);
+		box-shadow: var(--shadow-2);
+		padding: 6px;
+	}
+	.gsh {
+		font: 600 10px var(--mono);
+		color: var(--ink-3);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 7px 8px 4px;
+	}
+	.gsi {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		height: 27px;
+		padding: 0 8px;
+		border-radius: 6px;
+		font-size: 12.5px;
+		color: var(--ink);
+		background: none;
+		border: none;
+		text-align: left;
+	}
+	.gsi:hover {
+		background: var(--hover);
+	}
+	.gsi.sel {
+		background: var(--accent-soft);
+		color: var(--accent);
+		font-weight: 500;
+	}
+	.gsi .sp {
+		flex: 1;
+	}
+
+	/* column header + rows */
+	.colhd {
+		display: grid;
+		grid-template-columns: 20px 26px 58px 15px minmax(0, 1fr) 148px 126px 76px 60px;
+		gap: 10px;
+		align-items: center;
+		height: 25px;
+		padding: 0 20px;
+		font: 600 10px var(--mono);
+		color: var(--ink-3);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		border-bottom: 1px solid var(--line);
+		border-top: 1px solid var(--line);
+		flex: none;
+	}
+	.lbody {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		position: relative;
+	}
+	.lgrp {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		width: 100%;
 		height: 32px;
-		background: var(--paper);
-		border: none;
-		text-align: left;
 		padding: 0 20px;
-		color: var(--ink-2);
+		background: var(--sunken);
+		border: none;
+		border-bottom: 1px solid var(--line);
 		font-size: 12.5px;
-		position: sticky;
-		top: 38px;
-		z-index: 3;
-	}
-	.epic-head:hover {
+		font-weight: 500;
 		color: var(--ink);
+		text-align: left;
+		position: sticky;
+		top: 0;
+		z-index: 2;
 	}
-	.chev {
+	.chv {
+		display: inline-block;
 		font-size: 9px;
 		color: var(--ink-3);
-		transition: transform 0.15s ease;
+		transition: transform var(--dur) var(--ease);
 	}
-	.chev.open {
+	.chv.open {
 		transform: rotate(90deg);
 	}
-	.en {
+	.gname {
 		font-weight: 500;
 	}
-	.c {
+	.n {
 		color: var(--ink-3);
-		font-size: 11.5px;
+		font-weight: 400;
 		font-family: var(--mono);
+		font-size: 11px;
 	}
-	.row {
-		display: flex;
-		align-items: center;
+	.lrow {
+		display: grid;
+		grid-template-columns: 20px 26px 58px 15px minmax(0, 1fr) 148px 126px 76px 60px;
 		gap: 10px;
+		align-items: center;
 		width: 100%;
-		background: none;
+		height: 36px;
+		padding: 0 20px;
 		border: none;
-		border-top: 1px solid var(--line);
-		text-align: left;
-		padding: 8px 20px 8px 40px;
+		border-bottom: 1px solid var(--line);
+		background: none;
 		color: var(--ink);
-		font-size: 13.5px;
+		font-size: 12.5px;
+		text-align: left;
 	}
-	.row:hover {
-		background: var(--surface);
+	.lrow:hover {
+		background: var(--hover);
 	}
-	.rkey {
+	.lrow.kb {
+		background: var(--accent-soft);
+		box-shadow: inset 2px 0 0 var(--accent);
+	}
+	.lrow.selr {
+		background: var(--accent-soft);
+	}
+	.lrow:focus-visible {
+		outline: none;
+		box-shadow: inset 0 0 0 2px var(--accent);
+	}
+	.k {
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: 11.5px;
 		color: var(--ink-3);
-		flex: none;
-		width: 62px;
 	}
-	.epic-badge {
-		font-size: 10.5px;
-		font-family: var(--mono);
-		color: var(--accent);
-		background: color-mix(in srgb, var(--accent) 15%, transparent);
-		padding: 1px 6px;
-		border-radius: 10px;
-		flex: none;
-	}
-	.rtitle {
-		flex: 1;
-		min-width: 0;
+	.t {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		min-width: 0;
 	}
-	.rlabels {
+	.ep {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 11.5px;
+		color: var(--ink-2);
+	}
+	.d {
+		font-size: 11px;
+		color: var(--ink-3);
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.lbls {
 		display: flex;
 		gap: 4px;
-		flex: none;
-		max-width: 40%;
 		overflow: hidden;
 	}
+	.blkwrap {
+		display: flex;
+		align-items: center;
+	}
+	.blk {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		height: 19px;
+		padding: 0 6px;
+		border-radius: var(--r-sm);
+		background: var(--danger-soft);
+		color: var(--danger);
+		font: 500 10.5px var(--mono);
+	}
+	.cbx {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		border: 1.5px solid var(--line-strong);
+		background: var(--surface);
+		display: inline-block;
+	}
+	.cbx:hover {
+		border-color: var(--ink-3);
+	}
+	.cbx.on {
+		background: var(--accent);
+		border-color: var(--accent);
+	}
+
+	/* loading skeleton */
+	.skel {
+		background: linear-gradient(90deg, var(--sunken) 25%, var(--hover) 37%, var(--sunken) 63%);
+		background-size: 400% 100%;
+		animation: skshim 1.6s ease infinite;
+		border-radius: 4px;
+		display: inline-block;
+	}
+	@keyframes skshim {
+		0% {
+			background-position: 100% 0;
+		}
+		100% {
+			background-position: 0 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel {
+			animation: none;
+		}
+	}
+	.skrow {
+		display: grid;
+		grid-template-columns: 22px 56px 16px minmax(0, 1fr) 84px 46px;
+		gap: 10px;
+		align-items: center;
+		height: 36px;
+		padding: 0 20px;
+		border-bottom: 1px solid var(--line);
+	}
+
+	/* empty */
 	.empty {
-		padding: 40px;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 9px;
+		padding: 24px;
 		text-align: center;
 	}
-	/* mobile: title wins — drop the label pills, tighten the key */
-	@media (max-width: 600px) {
-		.rlabels {
+	.ic {
+		width: 38px;
+		height: 38px;
+		border-radius: 50%;
+		border: 1.5px dashed var(--line-strong);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--ink-3);
+		font-size: 14px;
+	}
+	.etitle {
+		margin: 0;
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+	.esub {
+		margin: 0;
+		font-size: 12px;
+		color: var(--ink-3);
+		max-width: 260px;
+		line-height: 1.45;
+	}
+
+	/* bulk bar */
+	.bulkbar {
+		position: sticky;
+		bottom: 16px;
+		left: 50%;
+		transform: translateX(0);
+		margin: 0 auto 0;
+		width: fit-content;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: var(--ink);
+		color: var(--paper);
+		border-radius: var(--r-lg);
+		padding: 7px 8px 7px 14px;
+		box-shadow: var(--shadow-2);
+		font-size: 12.5px;
+		z-index: 6;
+	}
+	.bulkbar b {
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.bulkbar .bd {
+		width: 1px;
+		height: 16px;
+		background: oklch(1 0 0 / 0.18);
+		flex: none;
+	}
+	.bulkbar .dd {
+		position: relative;
+	}
+	.bulkbar .bbtn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 26px;
+		padding: 0 10px;
+		border-radius: 7px;
+		background: oklch(1 0 0 / 0.08);
+		color: var(--paper);
+		font-size: 12px;
+		border: none;
+		white-space: nowrap;
+	}
+	.bulkbar .bbtn:hover {
+		background: oklch(1 0 0 / 0.16);
+	}
+	.bulkbar .x {
+		background: none;
+		border: none;
+		color: var(--paper);
+		padding: 4px 6px;
+		border-radius: 6px;
+	}
+	.bulkbar .x:hover {
+		background: oklch(1 0 0 / 0.16);
+	}
+	.bmenu {
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 0;
+		z-index: 31;
+		min-width: 170px;
+		max-height: 260px;
+		overflow-y: auto;
+		background: var(--surface);
+		border: 1px solid var(--line-strong);
+		border-radius: 8px;
+		box-shadow: var(--shadow-2);
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+	}
+	.bmenu button {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: none;
+		border: none;
+		text-align: left;
+		padding: 7px 9px;
+		border-radius: 6px;
+		font-size: 12.5px;
+		color: var(--ink);
+	}
+	.bmenu button:hover {
+		background: var(--hover);
+	}
+	.bnone {
+		padding: 7px 9px;
+		font-size: 12px;
+		color: var(--ink-3);
+	}
+	.ldot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		flex: none;
+	}
+
+	/* mobile: title wins — drop the secondary columns, keep key + glyph + updated */
+	@media (max-width: 720px) {
+		.colhd,
+		.lrow {
+			grid-template-columns: 16px 56px 14px minmax(0, 1fr) 54px;
+			gap: 8px;
+		}
+		.k {
+			white-space: nowrap;
+		}
+		.colhd span:nth-child(2),
+		.colhd span:nth-child(6),
+		.colhd span:nth-child(7),
+		.colhd span:nth-child(8),
+		.lrow > :global(.prio),
+		.lbls,
+		.ep,
+		.blkwrap {
 			display: none;
 		}
-		.rkey {
-			width: 52px;
+		.lrow {
+			padding: 0 14px;
+		}
+		.colhd {
+			padding: 0 14px;
+		}
+		.subbar {
+			padding: 0 14px 9px;
 		}
 	}
 </style>

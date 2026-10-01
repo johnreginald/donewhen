@@ -13,13 +13,12 @@
 	import LabelFilter from './LabelFilter.svelte';
 	import { Search, List, Layers, Columns3, GitFork, ListChecks, Star, ChevronDown, X } from '@lucide/svelte';
 
-	// Board · List · By epic · Tasks · Links (PP-209). The state-grouped List
-	// view is PP-213's job; until it exists, "List" points at the same route as
-	// "By epic" — the only "list" URL there is today — per the PP-209 spec.
+	// Board · List · By epic · Tasks · Links. List is state-grouped rows,
+	// By epic is the Project → Epic → Issue tree, Tasks is grouped by day.
 	const views = [
 		{ href: '/board', label: 'Board', icon: Columns3 },
 		{ href: '/list', label: 'List', icon: List },
-		{ href: '/list', label: 'By epic', icon: Layers },
+		{ href: '/by-epic', label: 'By epic', icon: Layers },
 		{ href: '/tasks', label: 'Tasks', icon: ListChecks },
 		{ href: '/links', label: 'Links', icon: GitFork }
 	];

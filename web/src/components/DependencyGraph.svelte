@@ -209,8 +209,9 @@
 
 	{#if !graph.nodes.length}
 		<div class="empty">
-			<GitFork size={22} strokeWidth={1.6} />
-			<p>No ticket in this view is linked to another. Add a blocker on a task's page, or pick an epic whose tickets depend on each other.</p>
+			<div class="ic"><GitFork size={16} strokeWidth={1.8} /></div>
+			<p class="etitle">No links to show</p>
+			<p class="esub">These tickets don't block each other yet. Add a blocked-by link from a ticket's page, or pick an epic whose tickets depend on each other.</p>
 		</div>
 	{:else}
 		<!-- The map is a pan/zoom surface: drag and wheel move it, the keys zoom. -->
@@ -691,15 +692,36 @@
 		align-self: flex-start;
 	}
 	.empty {
-		margin: 60px auto;
-		max-width: 420px;
+		margin: auto;
+		max-width: 300px;
 		text-align: center;
-		color: var(--ink-3);
-		font-size: 13px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 8px;
+		gap: 9px;
+		padding: 24px;
+	}
+	.empty .ic {
+		width: 38px;
+		height: 38px;
+		border-radius: 50%;
+		border: 1.5px dashed var(--line-strong);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--ink-3);
+	}
+	.empty .etitle {
+		margin: 0;
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+	.empty .esub {
+		margin: 0;
+		font-size: 12px;
+		color: var(--ink-3);
+		line-height: 1.45;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.doing :global(svg) {

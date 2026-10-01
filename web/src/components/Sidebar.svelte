@@ -17,15 +17,14 @@
 	import WorkspaceMenu from './WorkspaceMenu.svelte';
 	import {
 		FileText, Box, Plus, Search, Pencil, History, Inbox, Columns3, List, Layers, GitFork,
-		ChevronsUpDown, Settings, LogOut, ChevronRight, ChevronLeft
+		ChevronsUpDown, Settings, LogOut, ChevronRight, ChevronLeft, OctagonX
 	} from '@lucide/svelte';
 
-	// The broad app sections (design's sidebar nav). "Blocked" is left out: the
-	// design shows it as a filtered view, but no such view/route exists yet
-	// anywhere in the app, and inventing one is a different ticket's job.
+	// The broad app sections (design's sidebar nav).
 	const WORKSPACE_NAV = [
 		{ href: '/list', label: 'List', icon: List },
-		{ href: '/list', label: 'By epic', icon: Layers },
+		{ href: '/by-epic', label: 'By epic', icon: Layers },
+		{ href: '/blocked', label: 'Blocked', icon: OctagonX },
 		{ href: '/links', label: 'Links', icon: GitFork },
 		{ href: '/artifacts', label: 'Artifacts', icon: FileText },
 		{ href: '/log', label: 'Log', icon: History },
@@ -126,7 +125,7 @@
 		}
 	}
 
-	const ISSUE_VIEWS = ['/tasks', '/list', '/board', '/links'];
+	const ISSUE_VIEWS = ['/tasks', '/list', '/by-epic', '/board', '/links'];
 	const onIssues = $derived(ISSUE_VIEWS.includes($page.url.pathname));
 
 	let userOpen = $state(false);
