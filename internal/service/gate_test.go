@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/testdb"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -27,10 +27,7 @@ type gateEnv struct {
 
 func newGateEnv(t *testing.T) *gateEnv {
 	t.Helper()
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run service tests")
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)
 	if err != nil {

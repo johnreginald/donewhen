@@ -42,8 +42,27 @@ token: build ## create an API token: make token NAME=claude
 genvapid: build ## print a fresh VAPID keypair
 	$(BIN) genvapid
 
-test: ## run Go tests
-	go test ./...
+# Throwaway Postgres for `make test`: its own container on a free localhost
+# port, removed afterwards. It never touches a dev database or compose.yaml.
+TEST_PG_IMAGE ?= postgres:17
+
+test: ## vet + Go tests against a throwaway Postgres (needs docker); a skipped DB test fails
+	@set -e; \
+	cid=$$(docker run -d --rm -p 127.0.0.1::5432 \
+		-e POSTGRES_USER=donewhen -e POSTGRES_PASSWORD=donewhen -e POSTGRES_DB=donewhen $(TEST_PG_IMAGE)); \
+	trap 'docker rm -f $$cid >/dev/null 2>&1 || true' EXIT INT TERM; \
+	port=$$(docker port $$cid 5432/tcp | head -n1 | sed 's/.*://'); \
+	echo "waiting for postgres on port $$port"; \
+	ready=; for i in $$(seq 1 60); do \
+		if docker exec $$cid pg_isready -U donewhen -d donewhen >/dev/null 2>&1 \
+			&& docker exec $$cid psql -h 127.0.0.1 -U donewhen -d donewhen -c 'select 1' >/dev/null 2>&1; then ready=1; break; fi; \
+		sleep 1; \
+	done; \
+	[ -n "$$ready" ] || { echo "postgres did not start" >&2; exit 1; }; \
+	export DONEWHEN_TEST_DATABASE_URL="postgres://donewhen:donewhen@127.0.0.1:$$port/donewhen?sslmode=disable"; \
+	export DONEWHEN_TEST_STRICT=1; \
+	go vet ./...; \
+	go test -count=1 ./...
 
 tidy: ## tidy modules
 	go mod tidy

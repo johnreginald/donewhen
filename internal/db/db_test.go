@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/johnreginald/donewhen/internal/config"
+	"github.com/johnreginald/donewhen/internal/testdb"
 	"net/url"
 	"strings"
 	"sync"
@@ -19,10 +19,7 @@ import (
 // otherwise the test is skipped. It never touches the shared database itself.
 func scratchPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	base := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if base == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run db tests")
-	}
+	base := testdb.DSN(t)
 	ctx := context.Background()
 	admin, err := Connect(ctx, base)
 	if err != nil {

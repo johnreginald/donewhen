@@ -16,6 +16,7 @@ import (
 	"github.com/johnreginald/donewhen/internal/config"
 	"github.com/johnreginald/donewhen/internal/db"
 	"github.com/johnreginald/donewhen/internal/store"
+	"github.com/johnreginald/donewhen/internal/testdb"
 )
 
 // callTool runs one tools/call through the real bearer + auth middleware and
@@ -62,10 +63,7 @@ func callTool(t *testing.T, h http.Handler, token, name string, args map[string]
 }
 
 func TestMCPLinkURLsAreHTTPOnly(t *testing.T) {
-	dsn := config.Getenv("DONEWHEN_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set DONEWHEN_TEST_DATABASE_URL to run MCP tests")
-	}
+	dsn := testdb.DSN(t)
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, dsn)
 	if err != nil {
