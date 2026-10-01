@@ -197,7 +197,7 @@
 		}
 		if (key === 'g') {
 			chord.arm(e.timeStamp);
-		} else if (key === 'c') {
+		} else if (key === 'n') {
 			e.preventDefault();
 			quickCapture.set(true);
 		} else if (key === '?') {

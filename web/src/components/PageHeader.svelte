@@ -105,7 +105,7 @@
 			{@render children?.()}
 			<button class="btn primary new-issue" onclick={() => quickCapture.set(true)} aria-label="New issue">
 				<Plus size={14} strokeWidth={2.4} class="plus-ic" />
-				<span class="ni-label">New issue</span><kbd class="kbd">C</kbd>
+				<span class="ni-label">New issue</span><kbd class="kbd">N</kbd>
 			</button>
 		</div>
 	</div>

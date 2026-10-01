@@ -1,5 +1,5 @@
 <script>
-	// "C" — a one-line quick-add that lands in Triage. The title is the point;
+	// "N" — a one-line quick-add that lands in Triage. The title is the point;
 	// description, epic, labels and priority are optional extras, not a full
 	// issue form (that's the issue detail page's job).
 	import { api } from '$lib/api.js';

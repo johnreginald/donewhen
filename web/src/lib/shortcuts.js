@@ -8,7 +8,7 @@
 export const SHORTCUTS = [
 	{ group: 'Global', keys: ['⌘', 'K'], label: 'Search & command palette' },
 	{ group: 'Global', keys: ['Ctrl', '1–9'], label: 'Switch workspace' },
-	{ group: 'Global', id: 'capture', keys: ['C'], label: 'New issue (quick capture)' },
+	{ group: 'Global', id: 'capture', keys: ['N'], label: 'New issue (quick capture)' },
 	{ group: 'Global', id: 'help', keys: ['?'], label: 'This help' },
 	{ group: 'Go to', id: 'go-board', keys: ['G', 'B'], label: 'Board', to: '/board' },
 	{ group: 'Go to', id: 'go-inbox', keys: ['G', 'I'], label: 'Inbox', to: '/inbox' },
