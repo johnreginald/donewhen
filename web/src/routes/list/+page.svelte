@@ -707,34 +707,55 @@
 		flex: none;
 	}
 
-	/* mobile: title wins — drop the secondary columns, keep key + glyph + updated */
+	/* mobile: two-line row — glyph + title + priority, then key, epic, updated */
 	@media (max-width: 720px) {
-		.colhd,
+		.colhd {
+			display: none;
+		}
+		.lgrp {
+			height: 30px;
+			padding: 0 16px;
+		}
 		.lrow {
-			grid-template-columns: 16px 56px 14px minmax(0, 1fr) 54px;
-			gap: 8px;
+			grid-template-columns: 16px 14px auto minmax(0, 1fr) auto;
+			grid-template-areas:
+				'cbx st t t pri'
+				'cbx . k ep d';
+			column-gap: 9px;
+			row-gap: 3px;
+			height: auto;
+			min-height: 52px;
+			padding: 9px 16px;
+		}
+		.lrow > :global(.cbx) {
+			grid-area: cbx;
+		}
+		.lrow > :global(.sicon) {
+			grid-area: st;
+		}
+		.lrow > :global(.pri3),
+		.lrow > :global(.urg) {
+			grid-area: pri;
+		}
+		.t {
+			grid-area: t;
 		}
 		.k {
+			grid-area: k;
 			white-space: nowrap;
 		}
-		.colhd span:nth-child(2),
-		.colhd span:nth-child(6),
-		.colhd span:nth-child(7),
-		.colhd span:nth-child(8),
-		.lrow > :global(.prio),
+		.ep {
+			grid-area: ep;
+		}
+		.d {
+			grid-area: d;
+		}
 		.lbls,
-		.ep,
 		.blkwrap {
 			display: none;
 		}
-		.lrow {
-			padding: 0 14px;
-		}
-		.colhd {
-			padding: 0 14px;
-		}
 		.subbar {
-			padding: 0 14px 9px;
+			padding: 0 16px 9px;
 		}
 	}
 </style>
