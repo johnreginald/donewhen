@@ -399,8 +399,7 @@
 			right: 0;
 			bottom: 0;
 			z-index: 46;
-			background: color-mix(in srgb, var(--paper) 92%, transparent);
-			backdrop-filter: saturate(1.4) blur(10px);
+			background: var(--paper);
 			border-top: 1px solid var(--line);
 			padding-bottom: env(safe-area-inset-bottom, 0px);
 		}

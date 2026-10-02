@@ -489,10 +489,12 @@
 		white-space: nowrap;
 		background: var(--surface);
 		border: 1px solid var(--line);
-		border-radius: var(--r-lg);
-		padding: 6px 12px;
+		border-radius: 20px; /* ds-ok: Board Mobile specimen tab pill */
+		padding: 0 13px;
+		height: 40px;
+		box-sizing: border-box;
 		color: var(--ink-2);
-		font-size: var(--t-sm);
+		font-size: 13.5px; /* ds-ok: Board Mobile specimen tab text */
 		font-weight: 500;
 	}
 	.mtab.on {
