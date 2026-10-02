@@ -250,14 +250,26 @@
 		gap: 10px;
 		height: 100%;
 		overflow-x: auto;
-		padding: 12px;
+		padding: 12px 20px;
+	}
+	/* 64px fade to paper at the right edge; sticky so it stays put while panning */
+	.board.desktop::after {
+		content: '';
+		flex: none;
+		position: sticky;
+		right: 0;
+		width: 64px;
+		margin: -12px 0 -12px -64px;
+		align-self: stretch;
+		background: linear-gradient(to right, transparent, var(--paper));
+		pointer-events: none;
 	}
 	.board.desktop.grabbing {
 		cursor: grabbing;
 		user-select: none;
 	}
 	.column {
-		flex: 0 0 252px;
+		flex: 0 0 234px;
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
@@ -298,13 +310,13 @@
 		display: flex;
 		align-items: center;
 		gap: 7px;
-		padding: 2px 4px 8px;
+		padding: 2px 4px 4px;
 		font-size: var(--t-sm);
 		font-weight: 500;
 	}
 	.col-name {
 		color: var(--ink);
-		font-size: var(--t-base);
+		font-size: var(--t-sm);
 		font-weight: 500;
 	}
 	.count {
@@ -420,21 +432,21 @@
 	}
 	.skel {
 		display: block;
-		background: var(--hover);
+		background: linear-gradient(90deg, var(--sunken), var(--hover), var(--sunken));
+		background-size: 200% 100%;
 		border-radius: var(--r-sm);
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.skel {
-			animation: shimmer 1.7s ease-in-out infinite;
+			animation: sweep 1.6s linear infinite;
 		}
 	}
-	@keyframes shimmer {
-		0%,
-		100% {
-			opacity: 1;
+	@keyframes sweep {
+		from {
+			background-position: 0 0;
 		}
-		50% {
-			opacity: 0.55;
+		to {
+			background-position: -200% 0;
 		}
 	}
 

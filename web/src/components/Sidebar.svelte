@@ -201,7 +201,7 @@
 
 	<div class="ws">
 		<button class="ws-btn" bind:this={wsBtn} onclick={toggleWs} title="Switch workspace">
-			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 1)}<span
+			<span class="logo">{($activeWorkspace?.keyPrefix || 'R').slice(0, 2).toUpperCase()}<span
 					class="live {$streamStatus}"
 					title={LIVE_LABEL[$streamStatus] || ''}
 				></span></span>
@@ -469,7 +469,7 @@
 		position: relative;
 		width: 24px;
 		height: 24px;
-		border-radius: var(--r);
+		border-radius: 7px; /* ds-ok: workspace mark radius from the Shell specimen */
 		background: var(--ink);
 		color: var(--paper);
 		font: 600 var(--t-xs)/24px var(--mono);
@@ -540,7 +540,6 @@
 		white-space: nowrap;
 	}
 	.epic-sub {
-		font-size: var(--t-sm);
 		color: var(--ink-2);
 	}
 	.epic-sub .epic-ic {
