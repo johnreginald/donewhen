@@ -3,13 +3,12 @@
 	import { get } from 'svelte/store';
 	import { aiName, states, projectById, inboxCount, inboxTotal, refreshInbox, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
 	import { api } from '$lib/api.js';
-	import { openIssue, onLive, paletteOpen } from '$lib/ui.js';
+	import { openIssue, onLive, paletteOpen, showToast, dismissToast } from '$lib/ui.js';
 	import { isTypingTarget } from '$lib/shortcuts.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import InboxReviewCard from '$components/InboxReviewCard.svelte';
 	import InboxBlockedCard from '$components/InboxBlockedCard.svelte';
 	import InboxActivityList from '$components/InboxActivityList.svelte';
-	import InboxToast from '$components/InboxToast.svelte';
 
 	// ---- state ----
 	let loading = $state(true); // the full-page skeleton — only for the first load
@@ -31,12 +30,10 @@
 	let replyText = $state('');
 	let replyBusyId = $state('');
 
-	let toast = $state(null);
-
 	// Plain (non-reactive) bookkeeping — not UI state, so not $state.
 	let seenStamped = false; // guards a single inboxSeen() per page visit
 	let refreshTimer;
-	let toastTimer;
+	let toastId = 0;
 
 	const newActivityCount = $derived(
 		seenAt ? recent.filter((a) => a.createdAt > seenAt).length : recent.length
@@ -143,11 +140,10 @@
 		if (selectedIndex >= needsReview.length) selectedIndex = Math.max(0, needsReview.length - 1);
 	}
 
-	// ---- toast (own component: needs an Undo slot the shared one doesn't have) ----
-	function flashToast(message, kind = 'info', { mono, onUndo, ms = 4000 } = {}) {
-		toast = { message, kind, mono, onUndo };
-		clearTimeout(toastTimer);
-		toastTimer = setTimeout(() => (toast = null), ms);
+	// ---- toast (the shared stack; one at a time here, so a new one replaces the last) ----
+	function flashToast(message, kind = 'info', { mono, onUndo } = {}) {
+		dismissToast(toastId);
+		toastId = showToast(message, kind, { mono, actionLabel: onUndo ? 'Undo' : undefined, onAction: onUndo });
 	}
 
 	// ---- approve / undo ----
@@ -180,8 +176,7 @@
 	}
 
 	async function undoApprove(item, prevStateId) {
-		clearTimeout(toastTimer);
-		toast = null;
+		dismissToast(toastId);
 		try {
 			await api.updateIssue(item.id, { stateId: prevStateId });
 			flashToast(`${item.key} restored to In Review.`);
@@ -319,7 +314,6 @@
 			offLive();
 			window.removeEventListener('keydown', onKeydown);
 			clearTimeout(refreshTimer);
-			clearTimeout(toastTimer);
 		};
 	});
 </script>
@@ -433,7 +427,6 @@
 	</div>
 </div>
 
-<InboxToast {toast} />
 
 <style>
 	.inbox {

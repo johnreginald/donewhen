@@ -241,7 +241,7 @@
 		padding: 0;
 		color: var(--ink);
 		font-family: inherit;
-		font-size: 16px;
+		font-size: 16px; /* ds-ok: palette input size from the spec, between --t-md and --t-lg */
 	}
 	.pal-input::placeholder {
 		color: var(--ink-3);
