@@ -58,17 +58,21 @@
 {#if $archiveTarget}
 	<div class="backdrop" role="presentation" onclick={close}></div>
 	<div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="arch-title" tabindex="-1" onkeydown={onKey}>
-		<h2 id="arch-title">Archive "{$archiveTarget.name}"?</h2>
-		{#if openCount === null}
-			<p>Counting open issues…</p>
-		{:else if openCount > 0}
-			<p class="warn">
-				{openCount} open {openCount === 1 ? 'issue' : 'issues'} will be hidden. Archive anyway?
-			</p>
-		{:else}
-			<p>The epic and its issues will be hidden from the everyday views. You can unarchive it later.</p>
-		{/if}
-		<div class="foot">
+		<div class="br-head">
+			<span id="arch-title" class="br-title">Archive "{$archiveTarget.name}"?</span>
+		</div>
+		<div class="br-body">
+			{#if openCount === null}
+				<p>Counting open issues…</p>
+			{:else if openCount > 0}
+				<p class="warn">
+					{openCount} open {openCount === 1 ? 'issue' : 'issues'} will be hidden. Archive anyway?
+				</p>
+			{:else}
+				<p>The epic and its issues will be hidden from the everyday views. You can unarchive it later.</p>
+			{/if}
+		</div>
+		<div class="br-foot">
 			<button class="btn ghost" onclick={close}>Cancel</button>
 			<button class="btn primary" onclick={confirm} disabled={busy || openCount === null}>
 				{busy ? 'Archiving…' : openCount ? 'Archive anyway' : 'Archive'}
@@ -90,30 +94,40 @@
 		left: 50%;
 		transform: translateX(-50%);
 		width: min(420px, 92vw);
-		padding: var(--s5);
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
 		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		z-index: 81;
+		display: flex;
+		flex-direction: column;
 	}
-	h2 {
-		margin: 0 0 var(--s2);
-		font-size: var(--t-md);
+	.br-head {
+		padding: 16px 20px;
+		border-bottom: 1px solid var(--line);
+	}
+	.br-title {
+		font-weight: 600;
+		font-size: var(--t-base);
 		color: var(--ink);
 	}
+	.br-body {
+		padding: 16px 20px;
+	}
 	p {
-		margin: 0 0 var(--s4);
-		font-size: var(--t-base);
+		margin: 0;
+		font-size: var(--t-sm);
 		color: var(--ink-2);
 		line-height: 1.45;
 	}
 	p.warn {
 		color: var(--ink);
 	}
-	.foot {
+	.br-foot {
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--s2);
+		padding: 12px 20px;
+		border-top: 1px solid var(--line);
 	}
 </style>
