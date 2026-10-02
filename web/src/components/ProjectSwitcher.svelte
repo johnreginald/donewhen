@@ -124,7 +124,7 @@
 		border-top: 1px solid var(--line-strong);
 		border-radius: var(--r-lg) var(--r-lg) 0 0;
 		padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
-		box-shadow: 0 -8px 30px oklch(0 0 0 / 0.35);
+		box-shadow: var(--shadow-2);
 		animation: slideup 0.18s ease;
 	}
 	@keyframes slideup {
