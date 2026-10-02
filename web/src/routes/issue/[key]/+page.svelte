@@ -18,7 +18,7 @@
 	import IssueTimeline from '$components/IssueTimeline.svelte';
 	import Blockers from '$components/Blockers.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
-	import { GitBranch, GitPullRequestArrow, GitCommitHorizontal } from '@lucide/svelte';
+	import { rel } from '$lib/format.js';
 
 	let issue = $state(null);
 	let notFound = $state(false);
@@ -404,6 +404,11 @@
 		}
 	}
 	const shortSha = (s) => (s || '').slice(0, 7);
+	// Only the PR url is stored, so the label is "#number" read from it.
+	const prLabel = (u) => {
+		const m = /\/pull\/(\d+)/.exec(u || '');
+		return m ? '#' + m[1] : 'Pull request';
+	};
 </script>
 
 {#snippet propsRows()}
@@ -496,33 +501,29 @@
 		</PageHeader>
 
 		{#if archivedEpic}
-			<div class="archived-banner" role="status">
-				<span>This epic is archived</span>
-				<button class="btn sm" onclick={unarchiveEpic}>Unarchive</button>
+			<div class="banner warn" role="status">
+				<span class="bic">▤</span>
+				<span class="btext"><b>This epic is archived.</b> Its issues stay readable.</span>
+				<span class="sp"></span>
+				<button class="btn sd sm" onclick={unarchiveEpic}>Unarchive</button>
 			</div>
 		{/if}
 
 		{#if gateBlock}
 			<div class="gate-block" role="alert">
-				<div class="gate-block-body">
-					<strong>
-						{gateBlock.code === 'criteria_missing'
-							? `Can't move to ${gateBlock.state}: no done-when criteria yet.`
-							: `Can't move to ${gateBlock.state}: ${gateBlock.open.length} done-when item${gateBlock.open.length === 1 ? '' : 's'} not ticked.`}
-					</strong>
-					{#if gateBlock.open.length}
-						<ul>
-							{#each gateBlock.open as o (o.index)}
-								<li><span class="mono">{o.index}.</span> {o.text}</li>
-							{/each}
-						</ul>
-					{/if}
+				<div class="gate-head">
+					{gateBlock.code === 'criteria_missing'
+						? `Can't move to ${gateBlock.state}: no done-when criteria yet.`
+						: `Can't move to ${gateBlock.state}: ${gateBlock.open.length} done-when item${gateBlock.open.length === 1 ? '' : 's'} not ticked.`}
 				</div>
+				{#each gateBlock.open as o (o.index)}
+					<div class="gate-item"><span class="gate-box"></span><span><span class="mono">{o.index}.</span> {o.text}</span></div>
+				{/each}
 				<div class="gate-block-actions">
+					<button class="btn sm gho" onclick={() => (gateBlock = null)}>Got it</button>
 					{#if canForce}
 						<button class="btn sm danger" onclick={() => patch({ ...gateBlock.body, force: true })}>Move anyway</button>
 					{/if}
-					<button class="btn sm" onclick={() => (gateBlock = null)}>Dismiss</button>
 				</div>
 			</div>
 		{/if}
@@ -555,7 +556,7 @@
 		{/if}
 
 		{#if loadError}
-			<div class="load-error" role="status">{loadError}</div>
+			<div class="banner danger" role="status"><span class="bic">⚠</span><span class="btext"><b>Couldn't load everything.</b> {loadError}</span></div>
 		{/if}
 
 		<div class="panes" role="tablist">
@@ -636,8 +637,8 @@
 					</div>
 
 					<section class="block">
-						<div class="rh">
-							Done-when{#if criteria.length}<span class="prog">{doneCrit}/{criteria.length}</span>{/if}
+						<div class="bh">
+							<h2>Done when</h2>{#if criteria.length}<span class="n">{doneCrit}/{criteria.length}</span>{/if}
 						</div>
 						{#if criteria.length}
 							<div class="sub-bar"><span style="width:{(doneCrit / criteria.length) * 100}%"></span></div>
@@ -663,27 +664,27 @@
 
 					{#if issue.gitBranch || issue.prUrl || commits.length}
 						<section class="block">
-							<div class="rh">Development</div>
+							<div class="bh"><h2>Development</h2></div>
 							{#if issue.gitBranch}
-								<div class="dev-row"><GitBranch size={14} strokeWidth={2} /><span class="mono">{issue.gitBranch}</span></div>
+								<div class="dev-row"><span class="dev-lbl">branch</span><span class="mono">{issue.gitBranch}</span></div>
 							{/if}
 							{#if issue.prUrl}
 								{#if safeHref(issue.prUrl)}
 									<a class="dev-row link" href={safeHref(issue.prUrl)} target="_blank" rel="noopener noreferrer">
-										<GitPullRequestArrow size={14} strokeWidth={2} />Pull request
+										<span class="dev-lbl">PR</span><span class="pr">{prLabel(issue.prUrl)}</span>
 									</a>
 								{:else}
-									<div class="dev-row"><GitPullRequestArrow size={14} strokeWidth={2} /><span class="cmsg">{issue.prUrl}</span></div>
+									<div class="dev-row"><span class="dev-lbl">PR</span><span class="cmsg">{issue.prUrl}</span></div>
 								{/if}
 							{/if}
-							{#each commits as c (c.id)}
+							{#each commits as c, i (c.id)}
 								{#if safeHref(c.url)}
 									<a class="dev-row link" href={safeHref(c.url)} target="_blank" rel="noopener noreferrer">
-										<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
+										<span class="dev-lbl">{i === 0 ? 'commit' : ''}</span><span class="mono sha">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span><span class="ctime">{rel(c.createdAt)}</span>
 									</a>
 								{:else}
 									<div class="dev-row">
-										<GitCommitHorizontal size={14} strokeWidth={2} /><span class="mono">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span>
+										<span class="dev-lbl">{i === 0 ? 'commit' : ''}</span><span class="mono sha">{shortSha(c.sha)}</span><span class="cmsg">{c.message}</span><span class="ctime">{rel(c.createdAt)}</span>
 									</div>
 								{/if}
 							{/each}
@@ -692,7 +693,7 @@
 
 					{#if docs.length}
 						<section class="block">
-							<div class="rh">Documents</div>
+							<div class="bh"><h2>Documents</h2><span class="n">{docs.length}</span></div>
 							{#each docs as d (d.id)}
 								<button class="doc-link" onclick={() => goto(`/artifacts?doc=${d.id}`)}>
 									<span class="dl-ic">{DOC_ICON[d.type] || '▤'}</span>
@@ -745,14 +746,19 @@
 	.dmain-inner {
 		max-width: 820px;
 		margin: 0 auto;
-		padding: 24px clamp(20px, 3vw, 40px) 48px;
+		padding: 28px 36px 64px;
 		display: flex;
 		flex-direction: column;
-		gap: 20px;
+		gap: 22px;
+	}
+	@media (max-width: 640px) {
+		.dmain-inner {
+			padding: 20px 20px 48px;
+		}
 	}
 	/* Comments, side by side with the task. */
 	.chat {
-		flex: 0 0 min(460px, 42%);
+		flex: 0 0 min(400px, 42%);
 		min-width: 0;
 		border-left: 1px solid var(--line);
 		display: flex;
@@ -765,7 +771,7 @@
 		background: var(--surface);
 		border: 1px solid var(--line);
 		border-radius: var(--r-lg);
-		padding: 2px 16px;
+		padding: 6px 16px;
 		display: flex;
 		flex-direction: column;
 	}
@@ -784,7 +790,7 @@
 		align-items: flex-start;
 	}
 	.plabel {
-		width: 92px;
+		width: 96px;
 		flex: none;
 		font-size: var(--t-xs);
 		color: var(--ink-3);
@@ -799,6 +805,8 @@
 		align-items: center;
 		gap: 8px;
 		flex-wrap: wrap;
+		font-size: var(--t-base);
+		font-weight: 500;
 	}
 	/* The menus read as values, not form fields, until pointed at. Their .dd
 	   wrapper has no intrinsic width, so it shrinks to its content unless told
@@ -813,7 +821,8 @@
 		background: none;
 		padding: 5px 7px;
 		margin-left: -7px;
-		font-size: var(--t-sm);
+		font-size: var(--t-base);
+		font-weight: 500;
 	}
 	.panel :global(.dd-btn:hover) {
 		background: var(--hover);
@@ -969,18 +978,6 @@
 		border-color: var(--accent);
 		background: var(--surface);
 	}
-	.rh {
-		font-size: var(--t-sm);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--ink-3);
-		font-weight: 500;
-	}
-	.prog {
-		font-family: var(--mono);
-		color: var(--ink-3);
-		margin-left: 4px;
-	}
 	.bh {
 		display: flex;
 		align-items: center;
@@ -1016,7 +1013,11 @@
 		background: none;
 		border: none;
 	}
-	.conflict-banner {
+	/* README banner: icon, bold lead-in, body at --t-sm. Info is accent-soft
+	   (.conflict-banner), warn is the soft amber of --st-progress, danger is
+	   danger-soft. */
+	.conflict-banner,
+	.banner {
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -1024,18 +1025,30 @@
 		background: var(--accent-soft);
 		border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--line));
 		border-radius: var(--r);
-		font-size: var(--t-base);
+		font-size: var(--t-sm);
+	}
+	.banner {
+		margin: 12px 24px 0;
+	}
+	.banner.warn {
+		background: color-mix(in oklch, var(--st-progress) 14%, var(--surface));
+		border-color: color-mix(in oklch, var(--st-progress) 40%, var(--line));
+	}
+	.banner.warn .bic {
+		color: var(--st-progress);
+	}
+	.banner.danger {
+		background: var(--danger-soft);
+		border-color: color-mix(in oklch, var(--danger) 35%, var(--line));
+	}
+	.banner.danger .bic {
+		color: var(--danger);
+	}
+	.btext b {
+		font-weight: 600;
 	}
 	.top-conflict {
 		margin: 12px 24px;
-	}
-	.load-error {
-		margin: 0 0 12px;
-		padding: 8px 12px;
-		color: var(--danger, var(--ink));
-		border: 1px solid var(--line);
-		border-radius: var(--r);
-		font-size: var(--t-sm);
 	}
 	.bic {
 		color: var(--accent);
@@ -1044,6 +1057,10 @@
 	}
 	.btext {
 		color: var(--ink);
+	}
+	.banner .sp,
+	.conflict-banner .sp {
+		flex: 1;
 	}
 	.desc {
 		display: flex;
@@ -1077,9 +1094,12 @@
 	.block {
 		display: flex;
 		flex-direction: column;
-		gap: 9px;
-		border-top: 1px solid var(--line);
-		padding-top: 18px;
+		gap: 12px;
+	}
+	.bh .n {
+		font-family: var(--mono);
+		color: var(--ink-3);
+		font-size: var(--t-xs);
 	}
 	.sub-bar {
 		height: 4px;
@@ -1169,40 +1189,70 @@
 	}
 	.dev-row {
 		display: flex;
-		align-items: center;
-		gap: 8px;
+		align-items: baseline;
+		gap: 10px;
 		font-size: var(--t-base);
 		color: var(--ink-2);
-		padding: 3px 0;
+		padding: 2px 0;
 	}
 	.dev-row.link:hover {
 		color: var(--ink);
 	}
+	.dev-lbl {
+		width: 44px;
+		flex: none;
+		font-family: var(--mono);
+		font-size: var(--t-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--ink-3);
+	}
 	.dev-row .mono {
 		font-family: var(--mono);
+	}
+	.dev-row .sha {
 		font-size: var(--t-sm);
 		color: var(--ink-3);
 	}
+	.dev-row .pr {
+		color: var(--accent);
+	}
 	.cmsg {
 		color: var(--ink);
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.ctime {
+		color: var(--ink-3);
+		font-size: var(--t-sm);
+		flex: none;
 	}
 	.sub-link,
 	.doc-link {
 		display: flex;
 		align-items: center;
 		gap: 9px;
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: var(--r);
-		padding: 9px 12px;
 		color: var(--ink);
 		font-size: var(--t-base);
 		text-align: left;
 	}
-	.sub-link:hover,
+	.sub-link {
+		background: none;
+		border: none;
+		padding: 2px 0;
+	}
+	.sub-link:hover .sub-title {
+		color: var(--ink);
+	}
+	.doc-link {
+		background: var(--sunken);
+		border: 1px solid var(--line);
+		border-radius: var(--r);
+		padding: 9px 13px;
+	}
 	.doc-link:hover {
 		border-color: var(--line-strong);
 	}
@@ -1218,6 +1268,9 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.sub-title {
+		color: var(--ink-2);
 	}
 	.sub-title.done {
 		color: var(--ink-3);
@@ -1247,36 +1300,51 @@
 	.faint {
 		color: var(--ink-3);
 	}
-	.archived-banner {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--s3);
-		padding: var(--s2) var(--s4);
-		background: var(--sunken);
-		border-bottom: 1px solid var(--line);
-		color: var(--ink-2);
-		font-size: var(--t-sm);
-	}
+	/* Gate refusal: danger-soft card with the open items as empty checkboxes. */
 	.gate-block {
 		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: var(--s3);
-		padding: var(--s3) var(--s4);
+		flex-direction: column;
+		gap: 9px;
+		margin: 12px 24px 0;
+		padding: 13px 15px;
 		background: var(--danger-soft);
-		border-bottom: 1px solid var(--line);
-		color: var(--ink);
-		font-size: var(--t-sm);
+		border: 1px solid color-mix(in oklch, var(--danger) 35%, var(--line));
+		border-radius: var(--r);
 	}
-	.gate-block ul {
-		margin: var(--s2) 0 0;
-		padding-left: var(--s4);
+	.gate-head {
+		font-size: var(--t-base);
+		font-weight: 600;
+		color: var(--danger);
+	}
+	.gate-item {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		font-size: var(--t-sm);
+		color: var(--ink-2);
+	}
+	.gate-box {
+		width: 15px;
+		height: 15px;
+		border-radius: var(--r-sm);
+		border: 1.5px solid var(--line-strong);
+		flex: none;
+		margin-top: 1px;
+		box-sizing: border-box;
 	}
 	.gate-block-actions {
 		display: flex;
 		gap: var(--s2);
-		flex-shrink: 0;
+		align-items: center;
+	}
+	.btn.gho {
+		background: transparent;
+		color: var(--ink-2);
+		border-color: var(--line);
+	}
+	.btn.gho:hover {
+		background: var(--hover);
+		color: var(--ink);
 	}
 	.panes {
 		display: none;
