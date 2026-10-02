@@ -671,7 +671,7 @@
 	.chip:hover { background: var(--hover); color: var(--ink); }
 	.typewrap, .attachwrap, .railwrap { position: relative; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 	.bd { position: fixed; inset: 0; z-index: 30; background: none; border: none; }
-	.pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; min-width: 170px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-2); padding: 5px; }
+	.pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 31; min-width: 170px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-2); padding: 5px; }
 	.pop.wide { width: 250px; max-height: 320px; overflow-y: auto; }
 	.ps { font: 600 var(--t-xs)/1 var(--font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 8px 9px 3px; }
 	.pi { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; color: var(--ink); padding: 7px 9px; border-radius: var(--r-sm); font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

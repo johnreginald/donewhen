@@ -187,8 +187,8 @@
 		z-index: 40;
 		width: 320px;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
+		border: 1px solid var(--line);
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;
