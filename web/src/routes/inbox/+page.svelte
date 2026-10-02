@@ -3,7 +3,7 @@
 	import { get } from 'svelte/store';
 	import { aiName, states, projectById, inboxCount, inboxTotal, refreshInbox, blockLinks, issues, openBlockersByIssue } from '$lib/store.js';
 	import { api } from '$lib/api.js';
-	import { openIssue, onLive, paletteOpen, showToast, dismissToast } from '$lib/ui.js';
+	import { openIssue, onLive, paletteOpen, quickCapture, showToast, dismissToast } from '$lib/ui.js';
 	import { isTypingTarget } from '$lib/shortcuts.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import InboxReviewCard from '$components/InboxReviewCard.svelte';
@@ -325,7 +325,7 @@
 			<div class="content-inner">
 				<div class="pagehead">
 					<span class="eyebrow">DoneWhen · Inbox</span>
-					<h1>Inbox</h1>
+					<h1 class="page-title">Inbox</h1>
 					<span class="sub faint">What {$aiName} did while you were away</span>
 				</div>
 
@@ -342,16 +342,14 @@
 					</div>
 				{:else if error}
 					<div class="error-wrap">
-						<div class="h">Couldn't load the inbox</div>
+						<div class="h">Couldn't load the inbox.</div>
 						<div class="s faint">The server didn't respond. Your review queue hasn't changed.</div>
-						<button class="btn sd" onclick={() => load()}>Retry</button>
+						<button class="btn primary" onclick={() => load()}>Retry</button>
 					</div>
 				{:else if isEmpty}
 					<div class="empty-wrap">
 						<div class="h">Nothing waiting on you.</div>
-						<div class="s faint">
-							{$aiName} hasn't moved anything to review. Come back when something's ready.
-						</div>
+						<button class="btn primary" onclick={() => quickCapture.set(true)}>New issue</button>
 					</div>
 				{:else}
 				<div class="ib-cols">
@@ -458,12 +456,7 @@
 		text-transform: uppercase;
 	}
 	.pagehead h1 {
-		font-family: var(--serif);
-		font-weight: 400;
-		font-size: var(--t-xl);
 		margin: 2px 0 0;
-		letter-spacing: -0.01em;
-		color: var(--ink);
 	}
 	.pagehead .sub {
 		font-size: var(--t-sm);
@@ -535,26 +528,6 @@
 		background: var(--surface);
 	}
 
-	.btn {
-		height: 30px;
-		padding: 0 12px;
-		border-radius: var(--r);
-		font: 500 var(--t-sm) / 1 var(--font);
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid transparent;
-		cursor: pointer;
-	}
-	.btn.sd {
-		background: var(--surface);
-		border-color: var(--line-strong);
-		color: var(--ink);
-	}
-	.btn.sd:hover {
-		background: var(--hover);
-	}
-
 	/* loading / error / empty — full-content-area states (Frames 4–6) */
 	.empty-wrap,
 	.error-wrap {
@@ -567,20 +540,15 @@
 		padding: 60px 30px;
 		gap: 8px;
 	}
-	.empty-wrap .h {
+	.empty-wrap .h,
+	.error-wrap .h {
 		font-family: var(--serif);
-		font-size: var(--t-2xl);
+		font-size: var(--t-xl);
 		font-weight: 400;
 		color: var(--ink);
 	}
-	.empty-wrap .s {
-		font-size: var(--t-sm);
-		max-width: 34ch;
-	}
-	.error-wrap .h {
-		font-size: var(--t-base);
-		font-weight: 600;
-		color: var(--ink);
+	.empty-wrap {
+		gap: 14px;
 	}
 	.error-wrap .s {
 		font-size: var(--t-sm);

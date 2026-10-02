@@ -37,6 +37,7 @@
 				{/each}
 			</nav>
 			<div class="settings-main">
+				{#if !isIndex}<div class="settings-eyebrow">Settings</div>{/if}
 				{@render children?.()}
 			</div>
 		</div>

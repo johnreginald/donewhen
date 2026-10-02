@@ -3,7 +3,7 @@
 	import { states, visibleIssues, issueQuery, issues, moveIssueTo, activeWorkspace } from '$lib/store.js';
 	import { api } from '$lib/api.js';
 	import { gateFailure, gateSummary } from '$lib/gate.js';
-	import { showToast, blockedReasonFor } from '$lib/ui.js';
+	import { showToast, blockedReasonFor, quickCapture } from '$lib/ui.js';
 	import IssueCard from './IssueCard.svelte';
 	import StateIcon from './StateIcon.svelte';
 	import { ChevronDown, ChevronRight, Lock } from '@lucide/svelte';
@@ -158,9 +158,8 @@
 	</div>
 {:else if isEmptyWorkspace}
 	<div class="empty-board">
-		<div class="eglyph"><span></span><span></span><span></span></div>
-		<div class="eh">Nothing on the board yet</div>
-		<div class="ep">New workspace, empty record. Create the first issue and it lands in Triage.</div>
+		<div class="eh">Nothing on the board yet.</div>
+		<button class="btn primary" onclick={() => quickCapture.set(true)}>New issue</button>
 	</div>
 {:else}
 	<!-- Desktop: horizontal drag-and-drop columns. The pointer handlers are a
@@ -457,32 +456,15 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 12px;
-		color: var(--ink-2);
+		gap: 14px;
 		text-align: center;
 		padding: 40px;
-	}
-	.eglyph {
-		display: flex;
-		gap: 8px;
-		margin-bottom: 4px;
-	}
-	.eglyph span {
-		width: 20px;
-		height: 20px;
-		border-radius: 50%;
-		border: 1.8px solid var(--line-strong);
 	}
 	.eh {
 		font-family: var(--serif);
 		font-weight: 400;
-		font-size: var(--t-2xl);
+		font-size: var(--t-xl);
 		color: var(--ink);
-	}
-	.ep {
-		max-width: 38ch;
-		color: var(--ink-2);
-		font-size: var(--t-base);
 	}
 
 	/* mobile board */

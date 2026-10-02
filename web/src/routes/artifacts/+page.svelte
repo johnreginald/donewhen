@@ -7,7 +7,7 @@
 	import { api } from '$lib/api.js';
 	import IssuePeek from '$components/IssuePeek.svelte';
 	import { projects, initiatives, issues, labels as allLabels } from '$lib/store.js';
-	import { showToast, onLive } from '$lib/ui.js';
+	import { showToast, onLive, quickCapture } from '$lib/ui.js';
 	import Markdown from '$components/Markdown.svelte';
 	import LabelPill from '$components/LabelPill.svelte';
 	import { rel } from '$lib/format.js';
@@ -415,7 +415,7 @@
 		</div>
 	{:else}
 		<div class="main">
-			<div class="mtop"><span class="ptitle">Artifacts</span><span class="msub">{docs.length} document{docs.length === 1 ? '' : 's'}</span></div>
+			<div class="mtop"><h1 class="page-title">Artifacts</h1><span class="msub">{docs.length} document{docs.length === 1 ? '' : 's'}</span></div>
 
 			{#if docsError}
 				<div class="err">
@@ -494,9 +494,8 @@
 				</div>
 			{:else if docs.length === 0 && !docsError}
 				<div class="hero">
-					<span class="ic">✦</span>
-					<span class="t">{$aiName}'s engineering journal</span>
-					<span class="d faint">{$aiName} writes a document when it implements or changes something — what it is, how it works, a mermaid diagram, key files. Nothing recorded yet.</span>
+					<span class="t">Nothing recorded yet.</span>
+					<button class="btn primary" onclick={() => quickCapture.set(true)}>New issue</button>
 				</div>
 			{:else}
 				<div class="dlist">
@@ -539,8 +538,7 @@
 	/* ---- index ---- */
 	.main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 18px clamp(16px, 4vw, 28px) 24px; overflow-y: auto; }
 	.mtop { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex: none; }
-	.ptitle { font-family: var(--serif); font-weight: 400; font-size: var(--t-xl); letter-spacing: -0.01em; color: var(--ink); }
-	.msub { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+		.msub { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
 
 	.err { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 10px 14px; margin-bottom: 14px; background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--r); color: var(--danger); font-size: var(--t-sm); flex: none; }
 
@@ -596,10 +594,8 @@
 	.d-msub .sep { color: var(--ink-3); }
 	.empty { padding: 30px 14px; text-align: center; font-size: var(--t-sm); line-height: 1.5; }
 
-	.hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; text-align: center; padding: 40px 20px; }
-	.hero .ic { font-size: var(--t-xl); color: var(--accent); }
-	.hero .t { font-family: var(--serif); font-size: var(--t-lg); color: var(--ink); }
-	.hero .d { font-size: var(--t-sm); max-width: 340px; line-height: 1.6; }
+	.hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 40px 20px; }
+	.hero .t { font-family: var(--serif); font-weight: 400; font-size: var(--t-xl); color: var(--ink); }
 
 	.skrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 88px 150px 110px 56px; gap: 12px; align-items: center; height: 46px; padding: 0 14px; border-bottom: 1px solid var(--line); box-sizing: border-box; }
 	.skrow:last-child { border-bottom: 0; }
@@ -638,7 +634,7 @@
 
 	.rc { font-family: var(--serif); font-size: var(--t-md); line-height: 1.7; color: var(--ink); margin-top: 22px; }
 	.rwrap .rc :global(h1) { font-family: var(--serif); font-weight: 500; font-size: var(--t-xl); margin: 0 0 14px; }
-	.rwrap .rc :global(h2) { font-family: var(--serif); font-weight: 500; font-size: var(--t-xl); margin: 30px 0 12px; }
+	.rwrap .rc :global(h2) { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 30px 0 12px; } /* ds-ok: spec reader h2 is 22px */
 	.rwrap .rc :global(h2:first-child) { margin-top: 0; }
 	.rwrap .rc :global(h3) { font-family: var(--serif); font-weight: 500; font-size: var(--t-lg); margin: 24px 0 10px; }
 	.rwrap .rc :global(p) { margin: 0 0 15px; }

@@ -113,18 +113,18 @@
 			></textarea>
 			<div class="help">Leave empty to bounce without a comment.</div>
 			<div class="brow">
-				<button class="btn gho" onclick={() => onBounceCancel?.(item)}>Cancel</button>
-				<button class="btn sd" disabled={busy} onclick={() => onBounceConfirm?.(item)}>
+				<button class="btn ghost" onclick={() => onBounceCancel?.(item)}>Cancel</button>
+				<button class="btn" disabled={busy} onclick={() => onBounceConfirm?.(item)}>
 					{busy ? 'Bouncing…' : 'Confirm bounce'}
 				</button>
 			</div>
 		</div>
 	{:else}
 		<div class="nr-actions">
-			<button class="btn sd" disabled={approveDisabled} title={approveNote} onclick={() => onApprove?.(item)}>
+			<button class="btn" disabled={approveDisabled} title={approveNote} onclick={() => onApprove?.(item)}>
 				{busy ? 'Approving…' : 'Approve'}
 			</button>
-			<button class="btn gho" disabled={busy} onclick={() => onToggleBounce?.(item)}>Bounce back</button>
+			<button class="btn ghost" disabled={busy} onclick={() => onToggleBounce?.(item)}>Bounce back</button>
 			{#if approveNote}<span class="nr-note">{approveNote}</span>{/if}
 			<span class="sp"></span>
 			<button class="exp-btn" onclick={() => onToggleExpand?.(item)} aria-label={expanded ? 'Collapse' : 'Expand'}>
@@ -336,35 +336,6 @@
 	.nr-note {
 		font-size: var(--t-xs);
 		color: var(--ink-3);
-	}
-	.btn {
-		height: 30px;
-		padding: 0 12px;
-		border-radius: var(--r);
-		font: 500 var(--t-sm) / 1 var(--font);
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid transparent;
-		cursor: pointer;
-		transition: background var(--dur) var(--ease), opacity var(--dur) var(--ease);
-	}
-	.btn.sd {
-		background: var(--surface);
-		border-color: var(--line-strong);
-		color: var(--ink);
-	}
-	.btn.sd:hover:not(:disabled) {
-		background: var(--hover);
-	}
-	.btn.gho {
-		background: transparent;
-		color: var(--ink-2);
-		border-color: transparent;
-	}
-	.btn.gho:hover:not(:disabled) {
-		background: var(--hover);
-		color: var(--ink);
 	}
 	.btn:disabled {
 		opacity: 0.42;
