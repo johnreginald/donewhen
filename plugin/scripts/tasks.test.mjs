@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
-import { parseArgs, render, run, truncate, findConfig, glyph, renderWorkspaceTable, openCounts } from './tasks.mjs';
+import { parseArgs, render, run, truncate, findConfig, glyph, renderWorkspaceTable, openCounts, UsageError } from './tasks.mjs';
 
 const states = [
 	{ id: 's-tri', name: 'Triage', category: 'triage', position: 0 },
@@ -50,7 +50,7 @@ const blockers = [
 	{ issueId: 'id-185', blockerId: 'id-187', done: true }
 ];
 const data = { workspaceName: 'Platform', states, initiatives, projects, issues, blockers };
-const opts = (o = {}) => ({ cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false, json: false, ...o });
+const opts = (o = {}) => ({ cmd: 'tasks', workspace: '', key: '', project: '', epic: '', state: '', all: false, json: false, ...o });
 
 test('groups open issues by epic, initiative order then epic name, No epic last', () => {
 	const out = render(data, opts());
@@ -395,4 +395,32 @@ test('run --json: a failure is JSON too, never prose', async () => {
 	const r = repo();
 	const out = await run(['outline', 'nope'], env, r.root, multiFetch(byWs), r);
 	assert.ok(JSON.parse(out).error);
+});
+
+test('parseArgs data and show', () => {
+	assert.deepEqual(parseArgs(['data', 'acme', '--all']), opts({ cmd: 'data', workspace: 'acme', all: true }));
+	assert.deepEqual(parseArgs(['show', 'acme', 'ACM-1']), opts({ cmd: 'show', workspace: 'acme', key: 'ACM-1' }));
+	assert.throws(() => parseArgs(['show', 'acme']), UsageError);
+});
+
+test('issueRows names state and epic, hides closed, orders by state', async () => {
+	const { issueRows } = await import('./tasks.mjs');
+	const states = [
+		{ id: 's1', name: 'Ready', category: 'unstarted', position: 2 },
+		{ id: 's2', name: 'Done', category: 'completed', position: 5 },
+		{ id: 's3', name: 'In Progress', category: 'started', position: 3 }
+	];
+	const projects = [{ id: 'p1', name: 'Core' }];
+	const issues = [
+		{ id: 'i1', key: 'A-2', number: 2, title: 'two', stateId: 's3', projectId: 'p1' },
+		{ id: 'i2', key: 'A-1', number: 1, title: 'one', stateId: 's1', projectId: null },
+		{ id: 'i3', key: 'A-3', number: 3, title: 'three', stateId: 's2', projectId: 'p1' }
+	];
+	const blockers = [{ issueId: 'i2', done: false }, { issueId: 'i1', done: true }];
+	const open = issueRows(states, projects, issues, blockers, false);
+	assert.deepEqual(open.map((r) => r.key), ['A-1', 'A-2']);
+	assert.equal(open[1].epic, 'Core');
+	assert.equal(open[0].blockedBy, 1);
+	assert.equal(open[1].blockedBy, 0);
+	assert.equal(issueRows(states, projects, issues, blockers, true).length, 3);
 });

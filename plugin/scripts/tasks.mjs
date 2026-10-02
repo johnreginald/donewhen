@@ -5,7 +5,7 @@
 // model tokens to fetch.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,12 +18,14 @@ const MIN_WIDTH = 100;
 // Subcommands: `workspaces` lists every reachable workspace; `use <ws>`
 // switches this repo's default; `outline <ws>` lists a workspace's projects,
 // epics and states for menus. Anything else is the grouped task view.
-// `--json` makes `workspaces` and `outline` machine-readable.
+// `data <ws>` and `show <ws> <key>` print JSON for the /dw pane (no model):
+// the open issues with their state and epic names, and one issue with its
+// done-when list. `--json` makes `workspaces` and `outline` machine-readable.
 export function parseArgs(argv) {
-	const out = { cmd: 'tasks', workspace: '', project: '', epic: '', state: '', all: false, json: false };
+	const out = { cmd: 'tasks', workspace: '', key: '', project: '', epic: '', state: '', all: false, json: false };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
-		if (i === 0 && (a === 'workspaces' || a === 'use' || a === 'outline')) out.cmd = a;
+		if (i === 0 && (a === 'workspaces' || a === 'use' || a === 'outline' || a === 'data' || a === 'show')) out.cmd = a;
 		else if (a === '--all') out.all = true;
 		else if (a === '--json') out.json = true;
 		else if (a === '--project' || a === '--epic' || a === '--state') {
@@ -32,9 +34,11 @@ export function parseArgs(argv) {
 			out[a.slice(2)] = v;
 		} else if (a.startsWith('--')) throw new UsageError(`Unknown option ${a}`);
 		else if (!out.workspace) out.workspace = a;
+		else if (out.cmd === 'show' && !out.key) out.key = a;
 		else throw new UsageError(`Unexpected argument '${a}'`);
 	}
 	if (out.cmd === 'use' && !out.workspace) throw new UsageError('use needs a workspace');
+	if (out.cmd === 'show' && !out.key) throw new UsageError('show needs a workspace and an issue key');
 	if (out.cmd === 'workspaces' && out.workspace) throw new UsageError(`Unexpected argument '${out.workspace}'`);
 	return out;
 }
@@ -349,13 +353,15 @@ export async function run(argv, env, cwd, fetchImpl = fetch, ctx = {}) {
 	const cfg = findConfig(cwd, home);
 	const get = client(url, token, fetchImpl);
 
-	const wantJson = opts.json || opts.cmd === 'outline';
+	const wantJson = opts.json || ['outline', 'data', 'show'].includes(opts.cmd);
 	const asJson = (out) => (wantJson && !out.trimStart().startsWith('{') ? JSON.stringify({ error: out }) : out);
 	try {
 		if (opts.cmd === 'workspaces') return opts.json ? JSON.stringify(await workspacesData(get, cfg.workspace)) : await workspacesView(get, cfg.workspace);
 		if (opts.cmd === 'use') return await useWorkspace(get, opts, configTarget(cwd, home, ctx.gitRoot), env);
 		const workspace = opts.workspace || cfg.workspace || '';
 		if (opts.cmd === 'outline') return JSON.stringify(await outlineData(get, workspace));
+		if (opts.cmd === 'data') return JSON.stringify(await issueData(get, workspace, opts.all));
+		if (opts.cmd === 'show') return JSON.stringify(await issueDetail(get, workspace, opts.key, url));
 		if (!opts.project && !opts.workspace && cfg.project) opts.project = cfg.project;
 		return await tasksView(get, workspace, opts, env);
 	} catch (e) {
@@ -374,6 +380,67 @@ async function outlineData(get, workspace) {
 	const wsId = issues[0]?.workspaceId;
 	const w = memberships.find((m) => m.id === wsId) || findWorkspace(memberships, workspace) || (memberships.length === 1 ? memberships[0] : null);
 	return outline(states, initiatives, projects, issues, w?.name || workspace);
+}
+
+// issueData is the list the /dw pane draws: every issue with its state and
+// epic by name, open ones only unless all is set.
+export function issueRows(states, projects, issues, blockers, all) {
+	const stateById = new Map(states.map((x) => [x.id, x]));
+	const epicById = new Map(projects.map((p) => [p.id, p.name]));
+	const rows = issues
+		.filter((i) => all || !isClosed(stateById.get(i.stateId)))
+		.map((i) => ({
+			key: i.key,
+			number: i.number,
+			title: i.title,
+			state: stateById.get(i.stateId)?.name || '',
+			glyph: stateById.get(i.stateId) ? glyph(stateById.get(i.stateId)) : '○',
+			epic: (i.projectId && epicById.get(i.projectId)) || '',
+			priority: i.priority ?? 0,
+			blockedBy: (Array.isArray(blockers) ? blockers : []).filter((b) => b.issueId === i.id && !b.done).length
+		}));
+	const order = new Map(states.map((x) => [x.name, x.position]));
+	rows.sort((a, b) => (order.get(a.state) ?? 99) - (order.get(b.state) ?? 99) || a.number - b.number);
+	return rows;
+}
+
+async function issueData(get, workspace, all) {
+	const [states, projects, issues, blockers] = await Promise.all([
+		get('/api/states', workspace),
+		get('/api/projects', workspace),
+		get('/api/issues', workspace),
+		get('/api/blockers', workspace).catch(() => [])
+	]);
+	const rows = issueRows(states, projects, issues, blockers, all);
+	const count = (f) => rows.reduce((m, r) => (r[f] ? m.set(r[f], (m.get(r[f]) || 0) + 1) : m), new Map());
+	const order = new Map(states.map((x) => [x.name, x.position]));
+	return {
+		states: [...count('state')].map(([name, open]) => ({ name, open })).sort((a, b) => (order.get(a.name) ?? 99) - (order.get(b.name) ?? 99)),
+		epics: [...count('epic')].map(([name, open]) => ({ name, open })).sort((a, b) => b.open - a.open || a.name.localeCompare(b.name)),
+		issues: rows
+	};
+}
+
+// issueDetail is one issue with its done-when list, for the /dw pane.
+async function issueDetail(get, workspace, key, url) {
+	const [issue, criteria, states, projects] = await Promise.all([
+		get(`/api/issues/${encodeURIComponent(key)}`, workspace),
+		get(`/api/issues/${encodeURIComponent(key)}/criteria`, workspace),
+		get('/api/states', workspace),
+		get('/api/projects', workspace)
+	]);
+	return {
+		key: issue.key,
+		title: issue.title,
+		state: states.find((x) => x.id === issue.stateId)?.name || '',
+		epic: projects.find((p) => p.id === issue.projectId)?.name || '',
+		priority: issue.priority ?? 0,
+		description: (issue.descriptionMd || '').split('\n').filter((l) => l.trim()).slice(0, 6),
+		criteria: (Array.isArray(criteria) ? criteria : []).map((c) => ({ text: c.body, done: !!c.done })),
+		branch: issue.gitBranch || '',
+		prUrl: issue.prUrl || '',
+		link: `${url.replace(/\/+$/, '')}/issue/${issue.key}`
+	};
 }
 
 async function tasksView(get, workspace, opts, env) {
@@ -482,7 +549,8 @@ function width(env) {
 
 // ---- main ----
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// realpath: the plugin may be reached through a symlink (a dev folder, a marketplace link).
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) {
 	run(process.argv.slice(2), process.env, process.cwd()).then(
 		(text) => process.stdout.write(text + '\n'),
 		(e) => process.stdout.write(`Unexpected error: ${e?.message || e}\n`)
