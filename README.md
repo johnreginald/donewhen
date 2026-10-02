@@ -157,9 +157,9 @@ docker compose exec donewhen /app/donewhen token acme-agent acme
 
 Use a pinned token for an agent that works in one repo.
 
-### The plugin: `/donewhen:tasks`
+### The plugin: `/dw`
 
-The plugin adds one command. If you run it with no arguments, it asks what you want to see. Pick a workspace. Narrow the list by epic, state or project. Then open any ticket with its done-when checklist. The plugin reads the REST API directly. The menus use a few model tokens. Add `--plain` for the old behaviour: it prints one list, asks no questions, and uses no model tokens.
+The plugin adds one command, `/dw`. It opens a menu inside Claude Code. You browse your tickets, pick one, and start work on it. Browsing makes no model call and uses no tokens. The plugin reads the REST API directly.
 
 1. Install the plugin. This repo is its own marketplace.
 
@@ -176,25 +176,27 @@ The plugin adds one command. If you run it with no arguments, it asks what you w
 
    Get a token from `donewhen token <name>`. Restart Claude Code after you change the block.
 
-3. Run `/donewhen:tasks` in Claude Code.
+3. Run `/dw` in Claude Code.
 
-A pinned token also selects the workspace for you. If you do not use a pinned token, set a default for a repo in `.claude/donewhen.json`:
+How the menu works:
 
-```json
-{ "workspace": "acme", "project": "Core" }
-```
+- The first time, pick a workspace. Later, `/dw` opens the last workspace you used.
+- The list shows the open tickets, 15 to a page, with a coloured state and the epic filter.
+- Pick a ticket with Enter to see its description and its done-when checklist.
+- **Start work** (`g`) closes the menu and asks Claude Code to build the ticket. **Put in prompt** (`f`) puts the same text in your prompt box, so you can edit it first.
 
-Usage:
+| Key | Action |
+|---|---|
+| `↑` `↓` and Enter | Move and open |
+| `r` | Show Ready tickets only |
+| `e` / `s` | Step through the epics / the states |
+| `d` | Show or hide Done and Canceled tickets |
+| `n` / `p` | Next and previous page |
+| `w` | Switch workspace |
+| `g` / `f` / `c` / `b` | In a ticket: start work, put in prompt, copy the link, back to the list |
+| `Esc` | Close the menu |
 
-```
-/donewhen:tasks                                   # interactive: asks what to show
-/donewhen:tasks [workspace] [--project <text>] [--all] [--epic <text>] [--state <name>]
-/donewhen:tasks <anything> --plain                # print once, no questions
-/donewhen:tasks workspaces
-/donewhen:tasks use <workspace> [--project <text>]
-```
-
-In the interactive mode, you choose an action after each list. You can narrow the list (epic, state, project, or show Done too), look at a ticket, switch workspace, or stop. The plugin hides Done and Canceled issues unless you pass `--all` or pick "Show Done and Canceled too".
+A token pinned to one workspace limits the menu to that workspace.
 
 The repo also has a skill that teaches Claude how to use the tools well. See [skills/README.md](skills/README.md). For the full loop, see [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md).
 

@@ -8,7 +8,7 @@
     {
       "name": "donewhen",
       "source": "./plugin",
-      "description": "DoneWhen tracker helpers: /tasks browses open issues interactively, grouped by epic."
+      "description": "DoneWhen tracker helpers: /dw opens a menu to browse tickets and start work on one."
     }
   ]
 }

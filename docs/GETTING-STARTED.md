@@ -48,7 +48,7 @@ Add the skill. It teaches Claude how to write tickets and done-when lists.
 ln -s "$(pwd)/skills/donewhen" ~/.claude/skills/donewhen
 ```
 
-Optional: add the plugin for `/donewhen:tasks`. It is a menu to browse tickets from Claude Code. The setup is in the [README](../README.md#the-plugin-donewhentasks).
+Optional: add the plugin for `/dw`. It is a menu to browse tickets and start work on one from Claude Code. The setup is in the [README](../README.md#the-plugin-dw).
 
 ## 3. Give Claude the rules
 

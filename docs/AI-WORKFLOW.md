@@ -107,11 +107,11 @@ Both are optional. DoneWhen works with any MCP client.
 - `TICKETS.md` is the ticket-writing standard: Goal, numbered parts, notes, acceptance tests, out of scope.
 - `MERMAID.md` has the rules for diagrams, so that they do not show as red error boxes.
 
-**Plugin** (`plugin/`). It adds one command, `/donewhen:tasks`:
+**Plugin** (`plugin/`). It adds one command, `/dw`:
 
-- With no arguments, the command is interactive. It asks for a workspace. You can narrow the list by epic, state or project. You can open any ticket with its done-when checklist. Add `--plain` to get one printed list with no questions.
-- It lists the open issues of a workspace, grouped by epic. It can also list workspaces (`workspaces`) and set a default (`use <workspace>`).
-- It reads the REST API with a Node script (`plugin/scripts/tasks.mjs`). The script has no dependencies. The script does not call the model. The question prompts of Claude Code drive the menus, so they use a few tokens. `--plain` uses none.
+- `/dw` opens a menu in Claude Code. You pick a workspace, filter the tickets by epic or state, and open a ticket with its done-when checklist.
+- **Start work** sends a prompt to Claude Code that names the ticket. Claude then reads the ticket with `get_issue` and `get_criteria` and follows the skill.
+- It reads the REST API with a Node script (`plugin/scripts/tasks.mjs`). The script has no dependencies. Browsing makes no model call and uses no tokens.
 - It needs two environment variables: `DONEWHEN_URL` (your server) and `DONEWHEN_TOKEN` (an API token).
 
 ## One full ticket

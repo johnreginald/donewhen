@@ -1,9 +1,10 @@
 {
   "name": "donewhen",
-  "version": "0.3.0",
-  "description": "DoneWhen tracker helpers for Claude Code: /tasks browses a workspace's open issues interactively, grouped by epic.",
+  "version": "0.4.0",
+  "description": "DoneWhen tracker helpers for Claude Code. /dw opens a menu to browse tickets (no model call) and start work on one.",
   "author": {
     "name": "Htet Wai Yan Soe"
   },
-  "repository": "https://github.com/johnreginald/donewhen"
+  "repository": "https://github.com/johnreginald/donewhen",
+  "types": "./types/index.d.ts"
 }
