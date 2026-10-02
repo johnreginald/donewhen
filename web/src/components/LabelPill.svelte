@@ -11,19 +11,20 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		padding: 3px 9px;
+		height: 22px;
+		padding: 0 8px;
 		border-radius: var(--r-sm);
 		font-size: var(--t-sm);
-		font-weight: 500;
-		line-height: 1.3;
-		color: var(--ink);
-		background: var(--surface);
+		font-weight: 400;
+		line-height: 1;
+		color: var(--ink-2);
+		background: var(--sunken);
 		border: 1px solid var(--line);
 		white-space: nowrap;
 	}
 	.tdot {
-		width: 7px;
-		height: 7px;
+		width: 6px;
+		height: 6px;
 		border-radius: 50%;
 		background: var(--lc);
 		flex-shrink: 0;
