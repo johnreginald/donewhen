@@ -167,7 +167,7 @@
 				bind:this={inputEl}
 				bind:value={query}
 				onkeydown={onKey}
-				class="input pal-input"
+				class="pal-input"
 				role="combobox"
 				aria-expanded="true"
 				aria-controls="palette-listbox"
@@ -232,7 +232,19 @@
 		flex: none;
 	}
 	.pal-input {
-		font-size: var(--t-md);
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: none;
+		box-shadow: none;
+		outline: none;
+		padding: 0;
+		color: var(--ink);
+		font-family: inherit;
+		font-size: 16px; /* ds-ok: palette input size from the spec, between --t-md and --t-lg */
+	}
+	.pal-input::placeholder {
+		color: var(--ink-3);
 	}
 	.presults {
 		max-height: 340px;

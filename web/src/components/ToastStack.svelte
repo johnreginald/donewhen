@@ -1,7 +1,8 @@
 <script>
 	// Bottom-left toast stack (PP-209 restyle): ink background, paper text,
 	// stacked bottom-up, each with its own 4s timer. Error toasts can carry an
-	// action link (e.g. "Retry").
+	// action link (e.g. "Retry", "Undo"). The one toast component: the inbox's
+	// Approve toast uses it too, through showToast.
 	import { toasts, dismissToast } from '$lib/ui.js';
 </script>
 
@@ -9,6 +10,11 @@
 	<div class="toaststack" role="status" aria-live="polite">
 		{#each $toasts as t (t.id)}
 			<div class="toast" class:err={t.kind === 'error'}>
+				{#if t.kind === 'error'}
+					<span class="lead">error</span>
+				{:else if t.mono}
+					<span class="lead">{t.mono}</span>
+				{/if}
 				<span class="msg">{t.message}</span>
 				{#if t.actionLabel}
 					<button
@@ -31,7 +37,7 @@
 		position: fixed;
 		left: 24px;
 		bottom: 24px;
-		z-index: 80;
+		z-index: 90;
 		display: flex;
 		flex-direction: column-reverse;
 		gap: 8px;
@@ -52,18 +58,26 @@
 	.msg {
 		min-width: 0;
 	}
-	.retry {
-		background: none;
-		border: 1px solid oklch(1 0 0 / 0.3);
-		color: var(--paper);
-		border-radius: var(--r-sm);
-		height: 22px;
-		padding: 0 9px;
+	.lead {
+		font-family: var(--mono);
 		font-size: var(--t-xs);
+		opacity: 0.72;
 		flex: none;
 	}
-	.retry:hover {
-		background: oklch(1 0 0 / 0.12);
+	.toast.err .lead {
+		color: var(--danger);
+		opacity: 1;
+	}
+	.retry {
+		background: none;
+		border: none;
+		padding: 0;
+		color: inherit;
+		font: inherit;
+		font-weight: 600;
+		text-decoration: underline;
+		cursor: pointer;
+		flex: none;
 	}
 	@media (max-width: 720px) {
 		.toaststack {

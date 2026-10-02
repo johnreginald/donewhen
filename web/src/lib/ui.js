@@ -14,7 +14,7 @@ export const issueMenu = writable(null); // { kind: 'status'|'priority'|'label'|
 export const connectionLost = writable(false); // true while the SSE stream is erroring
 // '' | 'connecting' | 'live' | 'reconnecting' | 'offline' — the sidebar dot
 export const streamStatus = writable('');
-export const toasts = writable([]); // stack of { id, message, kind, actionLabel, onAction }
+export const toasts = writable([]); // stack of { id, message, kind, mono, actionLabel, onAction }
 // liveEvent is the latest server event, for views that follow one thing (a
 // ticket's runs) rather than the issue list the layout already keeps current.
 export const liveEvent = writable(null);
@@ -58,11 +58,13 @@ export function flashIssue(id) {
 // showToast pushes a toast onto the stack; each dismisses itself on its own
 // timer, so several can be visible at once (e.g. a live-event toast landing
 // while an error toast is still up). opts.actionLabel + opts.onAction add a
-// button (e.g. "Retry") to the toast, per the design's action link.
+// link (e.g. "Retry", "Undo") to the toast, per the design's action link.
+// opts.mono adds a mono lead-in (e.g. an issue key); error toasts always lead
+// with a --danger "error" tag instead.
 let toastSeq = 0;
 export function showToast(message, kind = 'info', opts = {}) {
 	const id = ++toastSeq;
-	toasts.update((list) => [...list, { id, message, kind, actionLabel: opts.actionLabel, onAction: opts.onAction }]);
+	toasts.update((list) => [...list, { id, message, kind, mono: opts.mono, actionLabel: opts.actionLabel, onAction: opts.onAction }]);
 	setTimeout(() => dismissToast(id), 4000);
 	return id;
 }

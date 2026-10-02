@@ -157,7 +157,7 @@
 					bind:this={titleEl}
 					bind:value={title}
 					oninput={() => (error = '')}
-					class="input qc-input"
+					class="qc-input"
 					class:bad={!!error}
 					placeholder="Issue title"
 					aria-label="Title"
@@ -303,9 +303,25 @@
 		gap: 16px;
 	}
 	.qc-input {
+		width: 100%;
+		box-sizing: border-box;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid transparent;
+		border-radius: 0;
+		box-shadow: none;
+		outline: none;
+		color: var(--ink);
+		font-family: inherit;
 		font-size: var(--t-lg);
 		font-weight: 500;
-		padding: 8px 10px;
+		padding: 4px 0;
+	}
+	.qc-input::placeholder {
+		color: var(--ink-3);
+	}
+	.qc-input:focus-visible {
+		border-bottom-color: var(--accent);
 	}
 	.qc-titlebox {
 		display: flex;
@@ -313,7 +329,7 @@
 		gap: 6px;
 	}
 	.qc-input.bad {
-		border-color: var(--danger);
+		border-bottom-color: var(--danger);
 	}
 	.qc-error {
 		font-size: var(--t-sm);
