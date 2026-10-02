@@ -37,12 +37,17 @@ Read [docs/CONCEPTS.md](docs/CONCEPTS.md) for the full idea.
 ## Features
 
 - **Board and states.** Continuous-flow Kanban: Triage, Backlog, Aligning, Ready, In Progress, Blocked, In Review, Done, Canceled. There are no sprints and no estimates.
-- **Done-when gate.** Each ticket has a checklist. Open items block In Review and Done.
+- **Done-when gate.** Each ticket has a checklist. The server refuses a move to In Review or Done while an item is open.
+- **Review and approve.** The Inbox lists the tickets that wait for you. You approve from the Inbox or from the ticket page.
+- **Blocked with a reason.** A move to Blocked needs a reason. The Blocked page lists every blocked ticket with its reason.
 - **Commits and engineering docs.** Link commits, branches and PRs to a ticket. Save a document (with Mermaid diagrams) for each change.
+- **Filters and saved views.** Filter by state, priority, label and epic. Save a filter as a view in the sidebar.
+- **Quick capture and keyboard.** Press `N` to add a ticket. Press `?` to see every key.
 - **MCP for AI agents.** An MCP server at `/mcp`. Any MCP client works, including Claude Code.
+- **A menu in Claude Code.** The plugin adds `/dw`. Browse your tickets, pick one and start work, with no model call to browse.
 - **Live updates.** The board updates in real time with Server-Sent Events.
 - **Installable PWA with Web Push.** Add it to your phone. Get notifications in the background.
-- **Light and dark theme.**
+- **Light and dark theme.** The interface follows a written design system.
 - **Multi-workspace.** Each workspace has its own issues, epics, labels and members. The workspace is a hard boundary.
 
 ## Quick start
@@ -223,8 +228,8 @@ Set these in `.env` (Compose) or in the environment. The project was called Raen
 | `POSTGRES_USER` | `donewhen` | Compose only. Database user. |
 | `POSTGRES_PASSWORD` | `donewhen` | Compose only. Database password. Change it. |
 | `POSTGRES_DB` | `donewhen` | Compose only. Database name. |
-| `DONEWHEN_URL` | none | Plugin only. Your server address. Set it in your shell. |
-| `DONEWHEN_TOKEN` | none | Plugin only. An API token. Set it in your shell. |
+| `DONEWHEN_URL` | none | Plugin only. Your server address. Set it in the `env` block of `~/.claude/settings.json`. |
+| `DONEWHEN_TOKEN` | none | Plugin only. An API token. Set it in the `env` block of `~/.claude/settings.json`. |
 
 ## Upgrading and backups
 
@@ -262,7 +267,9 @@ More in [docs/SELF-HOSTING.md](docs/SELF-HOSTING.md).
 
 ## Development
 
-You need Go, Node 22 and Docker. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and the PR process.
+You need Go, Node 22 and Docker. Run `make test` to run every Go test against a throwaway Postgres. There is no CI, so run the checks before you push. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and the PR process.
+
+A tag that starts with `v` builds a multi-architecture image (`linux/amd64` and `linux/arm64`) and publishes it to `ghcr.io/johnreginald/donewhen`.
 
 ## Documentation
 
