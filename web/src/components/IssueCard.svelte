@@ -103,10 +103,10 @@
 		background: var(--surface);
 		border: 1px solid var(--line);
 		border-radius: var(--r);
-		padding: 11px 12px 10px;
+		padding: 10px 12px;
 		display: flex;
 		flex-direction: column;
-		gap: 7px;
+		gap: 6px;
 		cursor: pointer;
 		color: inherit;
 		transition: border-color 0.12s, background 0.12s, box-shadow 0.3s;
@@ -133,7 +133,6 @@
 		font-size: var(--t-sm);
 		color: var(--ink-3);
 		font-family: var(--mono);
-		letter-spacing: -0.02em;
 	}
 	.nodoc {
 		font-size: var(--t-xs);
@@ -153,16 +152,15 @@
 		flex: 1;
 	}
 	.date {
-		font-size: var(--t-sm);
+		font-size: var(--t-xs);
 		color: var(--ink-3);
 		white-space: nowrap;
 	}
 	.title {
 		font-size: var(--t-base);
-		line-height: 1.45;
+		line-height: 1.35;
 		font-weight: 500;
 		color: var(--ink);
-		letter-spacing: -0.011em;
 	}
 	.prog-row {
 		display: flex;
