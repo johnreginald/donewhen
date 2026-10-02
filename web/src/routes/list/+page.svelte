@@ -358,7 +358,7 @@
 		z-index: 32;
 		width: 200px;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
+		border: 1px solid var(--line);
 		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 6px;
@@ -673,8 +673,8 @@
 		max-height: 260px;
 		overflow-y: auto;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
+		border: 1px solid var(--line);
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 4px;
 		display: flex;

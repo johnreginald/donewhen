@@ -96,14 +96,14 @@
 		height: 30px;
 		padding: 0 11px;
 		background: var(--surface);
-		border: 1px solid var(--line);
+		border: 1px solid var(--line-strong);
 		border-radius: var(--r);
 		color: var(--ink-2);
 		font: 500 var(--t-sm)/1 var(--font);
 		white-space: nowrap;
 	}
 	.mf-btn:hover {
-		border-color: var(--line-strong);
+		background: var(--hover);
 		color: var(--ink);
 	}
 	.mf-btn.on {
@@ -125,8 +125,8 @@
 		z-index: 41;
 		width: 220px;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
+		border: 1px solid var(--line);
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 5px;
 	}

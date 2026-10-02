@@ -212,8 +212,10 @@
 		gap: 7px;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
-		padding: 5px 10px;
+		border-radius: var(--r-sm);
+		height: 30px;
+		box-sizing: border-box;
+		padding: 0 10px;
 		color: var(--ink-3);
 		width: min(220px, 100%);
 		transition:
@@ -365,9 +367,9 @@
 	}
 
 	.btn {
-		height: 26px;
-		padding: 0 10px;
-		border-radius: var(--r-sm);
+		height: 30px;
+		padding: 0 12px;
+		border-radius: var(--r);
 		font: 500 var(--t-sm)/1 var(--font);
 		display: inline-flex;
 		align-items: center;

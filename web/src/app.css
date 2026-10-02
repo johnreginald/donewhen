@@ -209,16 +209,18 @@ select {
 	align-items: center;
 	gap: 6px;
 	background: var(--surface);
-	border: 1px solid var(--line);
+	border: 1px solid var(--line-strong);
 	color: var(--ink);
-	padding: 6px 12px;
+	height: 30px;
+	padding: 0 12px;
 	border-radius: var(--r);
 	font-size: var(--t-sm);
+	font-weight: 500;
+	white-space: nowrap;
 	transition: background 0.12s, border-color 0.12s, filter 0.12s;
 }
 .btn:hover {
 	background: var(--hover);
-	border-color: var(--line-strong);
 }
 .btn.primary {
 	background: var(--accent);
@@ -226,7 +228,7 @@ select {
 	color: var(--accent-ink);
 }
 .btn.primary:hover {
-	filter: brightness(1.08);
+	filter: brightness(0.92);
 }
 .btn.ghost {
 	background: transparent;
@@ -243,7 +245,7 @@ select {
 	color: var(--danger);
 }
 .btn.danger:hover {
-	background: color-mix(in srgb, var(--danger) 16%, transparent);
+	background: var(--danger-soft);
 }
 
 /* shared custom-dropdown chrome (Priority / Status / Epic menus) */
@@ -255,16 +257,17 @@ select {
 	align-items: center;
 	gap: 8px;
 	width: 100%;
-	background: var(--paper);
-	border: 1px solid var(--line);
-	border-radius: var(--r);
+	background: var(--surface);
+	border: 1px solid var(--line-strong);
+	border-radius: var(--r-sm);
 	color: var(--ink);
-	padding: 7px 9px;
+	height: 30px;
+	padding: 0 9px;
 	font-size: var(--t-base);
 	text-align: left;
 }
 .dd-btn:hover {
-	border-color: var(--line-strong);
+	background: var(--hover);
 }
 .dd-label {
 	flex: 1;
@@ -289,8 +292,8 @@ select {
 	z-index: 31;
 	min-width: 180px;
 	background: var(--surface);
-	border: 1px solid var(--line-strong);
-	border-radius: var(--r);
+	border: 1px solid var(--line);
+	border-radius: var(--r-lg);
 	box-shadow: var(--shadow-2);
 	padding: 4px;
 	display: flex;
@@ -321,19 +324,20 @@ select {
 .pill {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
-	padding: 2px 8px;
-	border-radius: var(--r-lg);
-	font-size: var(--t-xs);
-	font-weight: 500;
+	gap: 6px;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: var(--r-sm);
+	font-size: var(--t-sm);
+	font-weight: 400;
 	color: var(--ink-2);
-	background: var(--surface);
+	background: var(--sunken);
 	border: 1px solid var(--line);
 	white-space: nowrap;
 }
 .dot {
-	width: 7px;
-	height: 7px;
+	width: 6px;
+	height: 6px;
 	border-radius: 50%;
 	flex-shrink: 0;
 }
@@ -345,8 +349,9 @@ select {
 	background: var(--surface);
 	color: var(--ink);
 	border: 1px solid var(--line-strong);
-	border-radius: var(--r);
-	padding: 8px 10px;
+	border-radius: var(--r-sm);
+	min-height: 30px;
+	padding: 0 10px;
 	font-family: inherit;
 	font-size: var(--t-base);
 	width: 100%;
@@ -358,7 +363,8 @@ select {
 }
 .textarea {
 	resize: vertical;
-	line-height: 1.5;
+	line-height: 1.45;
+	padding: 8px 10px;
 }
 .input::placeholder,
 .textarea::placeholder {
@@ -518,10 +524,6 @@ select {
 	flex-direction: column;
 	gap: 14px;
 }
-.settings-panel .pill {
-	background: var(--sunken);
-}
-.settings-panel .input,
 .settings-panel-h {
 	display: flex;
 	align-items: center;

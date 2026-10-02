@@ -3,6 +3,11 @@
 // Fails (exit 1) on: raw colours outside app.css token declarations,
 // raw px font-size, raw px border-radius (except 50% / 999px / 9999px),
 // font-family that is not a token, font-weight outside 400/500/600.
+// Also fails (rule checks, by selector) on: `.btn` in app.css without `height: 30px`;
+// `.input`/`.select`/`.dd-btn` without `border-radius: var(--r-sm)`; `.dd-btn`
+// without `height: 30px`; a `.settings-panel .input` rule (it restyled inputs as
+// headers); a menu or popover (selector with `menu`/`.pop`/`.bmenu`) with
+// `border-radius: var(--r)` or a `--line-strong` border (menus use `--r-lg` + `--line`).
 // A line containing `/* ds-ok: <reason> */` is exempt.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, dirname } from 'node:path';
@@ -41,9 +46,44 @@ const weightDecl = /font-weight\s*:\s*([^;}]*)/;
 const radiusDecl = /border(?:-[a-z]+){0,2}-radius\s*:\s*([^;}]*)/;
 
 const findings = [];
+
+// Rule checks: parse `selector { body }` blocks and test them by selector.
+// Returns [{line, sel, body}]; line is where the selector starts.
+function ruleBlocks(file) {
+	const text = cssLines(file).map((l) => l.text).join('\n');
+	const first = cssLines(file)[0]?.line ?? 1;
+	const out = [];
+	for (const m of text.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' ')).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+		const sel = m[1].trim();
+		const line = first + text.slice(0, m.index + m[0].indexOf(sel)).split('\n').length - 1;
+		out.push({ line, sel, body: m[2] });
+	}
+	return out;
+}
+const hasDecl = (body, re) => re.test(body);
+function checkRules(file, rel) {
+	const lines = readFileSync(file, 'utf8').split('\n');
+	for (const { line, sel, body } of ruleBlocks(file)) {
+		if (/\/\*\s*ds-ok:/.test(lines[line - 1] ?? '')) continue;
+		const sels = sel.split(',').map((x) => x.trim());
+		const only = (name) => sels.includes(name);
+		const bad = (msg) => findings.push(`${rel}:${line} ${sel.replace(/\s+/g, ' ')} (${msg})`);
+		if (file.endsWith('.css') && only('.btn') && !hasDecl(body, /(?<![\w-])height\s*:\s*30px/)) bad('rule: .btn needs height: 30px');
+		if (file.endsWith('.css') && only('.dd-btn') && !hasDecl(body, /(?<![\w-])height\s*:\s*30px/)) bad('rule: .dd-btn needs height: 30px');
+		for (const n of ['.input', '.select', '.dd-btn']) {
+			if (only(n) && !hasDecl(body, /border-radius\s*:\s*var\(--r-sm\)/)) bad(`rule: ${n} needs border-radius: var(--r-sm)`);
+		}
+		if (sels.some((x) => /^\.settings-panel\s+\.input\b/.test(x))) bad('rule: .settings-panel .input restyles inputs as headers');
+		if (sels.some((x) => /menu|\.pop$|\.bmenu/i.test(x)) && /box-shadow\s*:\s*var\(--shadow-2\)/.test(body)) {
+			if (/border-radius\s*:\s*var\(--r\)\s*;/.test(body)) bad('rule: menu needs border-radius: var(--r-lg)');
+			if (/(?<![\w-])border\s*:[^;]*--line-strong/.test(body)) bad('rule: menu needs a --line border');
+		}
+	}
+}
 for (const file of walk(src)) {
 	const isCss = file.endsWith('.css');
 	const rel = relative(root, file);
+	checkRules(file, rel);
 	for (const { line, text } of cssLines(file)) {
 		if (/\/\*\s*ds-ok:/.test(text)) continue;
 		const code = text.replace(/\/\*.*?\*\//g, '');
@@ -74,8 +114,9 @@ for (const file of walk(src)) {
 if (findings.length) {
 	console.error(findings.join('\n'));
 	const n = (k) => findings.filter((x) => x.includes(`(${k})`)).length;
+	const rules = findings.filter((x) => x.includes('(rule:')).length;
 	console.error(
-		`\ncheck:ds failed: ${findings.length} finding(s) (${n('raw font-size')} font-size, ${n('raw border-radius')} border-radius, ${n('raw colour')} colour, ${n('raw font-family')} font-family, ${n('font-weight')} font-weight). Use a token, or add /* ds-ok: <reason> */ on the line.`
+		`\ncheck:ds failed: ${findings.length} finding(s) (${n('raw font-size')} font-size, ${n('raw border-radius')} border-radius, ${n('raw colour')} colour, ${n('raw font-family')} font-family, ${n('font-weight')} font-weight, ${rules} rule). Use a token, or add /* ds-ok: <reason> */ on the line.`
 	);
 	process.exit(1);
 }

@@ -205,8 +205,10 @@
 		gap: 7px;
 		background: var(--surface);
 		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
-		padding: 5px 10px;
+		border-radius: var(--r-sm);
+		height: 30px;
+		box-sizing: border-box;
+		padding: 0 10px;
 		color: var(--ink-3);
 		width: min(260px, 100%);
 		transition:
@@ -244,11 +246,11 @@
 	}
 	.btn.sd {
 		background: var(--surface);
-		border: 1px solid var(--line);
+		border: 1px solid var(--line-strong);
 		color: var(--ink-2);
 	}
 	.btn.sd:hover {
-		border-color: var(--line-strong);
+		background: var(--hover);
 		color: var(--ink);
 	}
 	.btn :global(.car) {
@@ -270,8 +272,8 @@
 		z-index: 41;
 		width: 200px;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r);
+		border: 1px solid var(--line);
+		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 5px;
 		display: flex;
@@ -301,16 +303,16 @@
 	.vtoggle {
 		display: flex;
 		gap: 2px;
-		background: var(--surface);
-		border: 1px solid var(--line);
+		background: var(--sunken);
 		border-radius: var(--r);
-		padding: 2px;
+		padding: 3px;
 	}
 	.vt {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		padding: 4px 10px;
+		height: 26px;
+		padding: 0 12px;
 		border-radius: var(--r-sm);
 		font-size: var(--t-sm);
 		color: var(--ink-2);
@@ -319,7 +321,9 @@
 		color: var(--ink);
 	}
 	.vt.on {
-		background: var(--hover);
+		background: var(--surface);
+		box-shadow: var(--shadow-1);
+		font-weight: 500;
 		color: var(--ink);
 	}
 	.chiprow {

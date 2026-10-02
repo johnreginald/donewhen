@@ -442,7 +442,7 @@
 		max-width: min(380px, calc(100vw - 24px));
 		z-index: 31;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
+		border: 1px solid var(--line);
 		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 5px;
@@ -731,7 +731,7 @@
 		right: 0;
 		z-index: 31;
 		background: var(--surface);
-		border: 1px solid var(--line-strong);
+		border: 1px solid var(--line);
 		border-radius: var(--r-lg);
 		box-shadow: var(--shadow-2);
 		padding: 4px;
