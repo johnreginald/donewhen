@@ -234,19 +234,21 @@
 	{@render children()}
 {:else if bootFailed}
 	<div class="empty-shell">
+		<div class="eyebrow">DoneWhen · Offline</div>
 		<h1>Can't reach DoneWhen</h1>
 		<p>The server did not answer. Your session is still valid; check the connection and try again.</p>
-		<button class="btn" onclick={boot}>Retry</button>
+		<button class="btn primary" onclick={boot}>Retry</button>
 	</div>
 {:else if noWorkspace}
 	<div class="empty-shell">
+		<div class="eyebrow">DoneWhen · Setup</div>
 		<h1>No workspace</h1>
 		<p>
 			This account is not a member of any workspace. Ask an owner to add you, or create one
 			from the command line:
 		</p>
 		<pre>donewhen workspace create "My Workspace" MYW</pre>
-		<button class="btn" onclick={() => location.reload()}>Retry</button>
+		<button class="btn primary" onclick={() => location.reload()}>Retry</button>
 	</div>
 {:else if ready}
 	<div class="shell">
@@ -279,7 +281,13 @@
 	<Composer />
 	<ArchiveEpicDialog />
 {:else}
-	<div class="booting">Loading DoneWhen…</div>
+	<div class="empty-shell booting" role="status" aria-label="Loading DoneWhen">
+		<div class="eyebrow">DoneWhen · Starting</div>
+		<span class="skel" style:width="70%" style:height="34px"></span>
+		<span class="skel" style:width="100%" style:height="14px"></span>
+		<span class="skel" style:width="80%" style:height="14px"></span>
+		<span class="skel" style:width="84px" style:height="30px"></span>
+	</div>
 {/if}
 
 <ToastStack />
@@ -292,10 +300,27 @@
 		text-align: center;
 		color: var(--ink-2);
 	}
-	.empty-shell h1 {
-		font-size: var(--t-lg);
-		color: var(--ink);
+	.eyebrow {
+		font-family: var(--mono);
+		font-size: var(--t-xs);
+		color: var(--ink-3);
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 		margin-bottom: 10px;
+	}
+	.empty-shell h1 {
+		font-family: var(--serif);
+		font-weight: 400;
+		font-size: var(--t-2xl);
+		line-height: 1.15;
+		letter-spacing: -0.01em;
+		color: var(--ink);
+		margin: 0 0 12px;
+	}
+	.empty-shell p {
+		font-size: var(--t-base);
+		color: var(--ink-2);
+		margin: 0 0 18px;
 	}
 	.empty-shell pre {
 		background: var(--surface);
@@ -328,10 +353,32 @@
 		overflow: hidden;
 	}
 	.booting {
-		display: grid;
-		place-items: center;
-		height: 100%;
-		color: var(--ink-2);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 12px;
+	}
+	.booting .eyebrow {
+		margin-bottom: 4px;
+	}
+	.skel {
+		display: block;
+		background: var(--hover);
+		border-radius: var(--r-sm);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.skel {
+			animation: shimmer 1.6s ease-in-out infinite;
+		}
+	}
+	@keyframes shimmer {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.55;
+		}
 	}
 	.nav-backdrop {
 		display: none;

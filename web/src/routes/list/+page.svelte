@@ -11,7 +11,11 @@
 		blockLinks,
 		openBlockersByIssue,
 		loadIssues,
-		PRIORITIES
+		PRIORITIES,
+		issueQuery,
+		activeFilters,
+		activeProject,
+		activeInitiative
 	} from '$lib/store.js';
 	import PageHeader from '$components/PageHeader.svelte';
 	import IssuesToolbar from '$components/IssuesToolbar.svelte';
@@ -23,6 +27,7 @@
 	import { needsReason } from '$lib/blocked.js';
 	import { rel } from '$lib/format.js';
 	import { api } from '$lib/api.js';
+	import { emptyFilters } from '$lib/filters.js';
 
 	const stOf = (id) => $states.find((s) => s.id === id);
 	const epicOf = (id) => $projects.find((p) => p.id === id);
@@ -107,6 +112,16 @@
 			.slice()
 			.sort((a, b) => a.position - b.position)
 			.map((s) => ({ id: s.id, name: s.name, category: s.category, color: s.color, rows: sortRows(byState.get(s.id) || []) }));
+	}
+	// The "No issues match" action: drop the search, the filters and the epic scope.
+	function clearFilters() {
+		activeFilters.set(emptyFilters());
+		issueQuery.set('');
+		if ($activeProject || $activeInitiative) {
+			activeProject.set('');
+			activeInitiative.set('');
+			loadIssues();
+		}
 	}
 	const totalRows = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
 
@@ -204,9 +219,8 @@
 		</div>
 	{:else if !totalRows}
 		<div class="empty">
-			<div class="ic">—</div>
-			<p class="etitle">No issues match</p>
-			<p class="esub">Try clearing filters, or press ⌘K to create one.</p>
+			<p class="etitle">No issues match.</p>
+			<button class="btn primary" onclick={clearFilters}>Clear filters</button>
 		</div>
 	{:else}
 		<div class="colhd" aria-hidden="true">
@@ -577,33 +591,16 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 9px;
+		gap: 14px;
 		padding: 24px;
 		text-align: center;
 	}
-	.ic {
-		width: 38px;
-		height: 38px;
-		border-radius: 50%;
-		border: 1.5px dashed var(--line-strong);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--ink-3);
-		font-size: var(--t-base);
-	}
 	.etitle {
 		margin: 0;
-		font-size: var(--t-base);
-		font-weight: 600;
+		font-family: var(--serif);
+		font-weight: 400;
+		font-size: var(--t-xl);
 		color: var(--ink);
-	}
-	.esub {
-		margin: 0;
-		font-size: var(--t-sm);
-		color: var(--ink-3);
-		max-width: 260px;
-		line-height: 1.45;
 	}
 
 	/* bulk bar */

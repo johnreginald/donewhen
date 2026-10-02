@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { api, getWorkspace } from '$lib/api.js';
 	import { activeInitiative, initiatives } from '$lib/store.js';
-	import { onLive, showToast } from '$lib/ui.js';
+	import { onLive, showToast, quickCapture } from '$lib/ui.js';
 	import LogTimeline from '$components/LogTimeline.svelte';
 	import { autohide } from '$lib/autohide.js';
 
@@ -82,7 +82,7 @@
 <div class="log">
 	<div class="log-head" use:autohide>
 		<div class="lh-left">
-			<span class="lh-title">Log</span>
+			<h1 class="page-title">Log</h1>
 			<span class="lh-scope">{scope}</span>
 		</div>
 		<div class="seg">
@@ -115,7 +115,10 @@
 			{:else if filtered.length}
 				<LogTimeline items={filtered} {newSince} showIssue={true} />
 			{:else}
-				<div class="empty faint">{items.length ? 'No activity matches this filter.' : 'No activity recorded yet.'}</div>
+				<div class="empty">
+					<p class="eline">{items.length ? 'No activity matches this filter.' : 'No activity recorded yet.'}</p>
+					<button class="btn primary" onclick={() => (items.length ? (typeFilter = '') : quickCapture.set(true))}>{items.length ? 'Clear filter' : 'New issue'}</button>
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -142,11 +145,6 @@
 		display: flex;
 		align-items: baseline;
 		gap: 10px;
-	}
-	.lh-title {
-		font-family: var(--serif);
-		font-size: var(--t-lg);
-		color: var(--ink);
 	}
 	.lh-scope {
 		font-size: var(--t-sm);
@@ -233,8 +231,19 @@
 		margin: 0 auto;
 	}
 	.empty {
-		padding: 40px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 14px;
+		padding: 60px 40px;
 		text-align: center;
+	}
+	.eline {
+		margin: 0;
+		font-family: var(--serif);
+		font-weight: 400;
+		font-size: var(--t-xl);
+		color: var(--ink);
 	}
 	.err {
 		display: flex;

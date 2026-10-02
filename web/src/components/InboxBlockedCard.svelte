@@ -35,8 +35,8 @@
 		{item.reason || "No update yet — open the issue to see what's stuck."}
 	</p>
 	<div class="bl-actions">
-		<button class="btn sd" onclick={() => onOpen?.(item)}>Open</button>
-		<button class="btn gho" onclick={() => onToggleReply?.(item)}>Reply</button>
+		<button class="btn" onclick={() => onOpen?.(item)}>Open</button>
+		<button class="btn ghost" onclick={() => onToggleReply?.(item)}>Reply</button>
 	</div>
 	{#if replying}
 		<div class="bl-reply">
@@ -47,8 +47,8 @@
 				oninput={(e) => onReplyInput?.(e.target.value)}
 			></textarea>
 			<div class="brow">
-				<button class="btn gho" onclick={() => onToggleReply?.(item)}>Cancel</button>
-				<button class="btn sd" disabled={busy || !replyText.trim()} onclick={() => onReplySend?.(item)}>
+				<button class="btn ghost" onclick={() => onToggleReply?.(item)}>Cancel</button>
+				<button class="btn" disabled={busy || !replyText.trim()} onclick={() => onReplySend?.(item)}>
 					{busy ? 'Sending…' : 'Send reply'}
 				</button>
 			</div>
@@ -170,35 +170,6 @@
 		display: flex;
 		gap: 6px;
 		margin-top: 2px;
-	}
-	.btn {
-		height: 28px;
-		padding: 0 11px;
-		border-radius: var(--r);
-		font: 500 var(--t-sm) / 1 var(--font);
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid transparent;
-		cursor: pointer;
-		transition: background var(--dur) var(--ease), opacity var(--dur) var(--ease);
-	}
-	.btn.sd {
-		background: var(--surface);
-		border-color: var(--line-strong);
-		color: var(--ink);
-	}
-	.btn.sd:hover {
-		background: var(--hover);
-	}
-	.btn.gho {
-		background: transparent;
-		color: var(--ink-2);
-		border-color: transparent;
-	}
-	.btn.gho:hover {
-		background: var(--hover);
-		color: var(--ink);
 	}
 	.btn:disabled {
 		opacity: 0.45;

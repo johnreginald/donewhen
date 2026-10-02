@@ -248,6 +248,17 @@ select {
 	background: var(--danger-soft);
 }
 
+/* page titles: one size everywhere (Inbox, Artifacts, Log, Settings) */
+.page-title {
+	font-family: var(--serif);
+	font-weight: 400;
+	font-size: var(--t-2xl);
+	line-height: 1.15;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	margin: 0;
+}
+
 /* shared custom-dropdown chrome (Priority / Status / Epic menus) */
 .dd {
 	position: relative;
@@ -430,9 +441,14 @@ select {
 }
 .settings-nav {
 	flex: none;
-	width: 208px;
+	align-self: flex-start;
+	max-height: calc(100% - 32px);
+	width: 220px;
+	box-sizing: border-box;
+	margin: 16px 0 16px 16px;
 	background: var(--sunken);
-	border-right: 1px solid var(--line);
+	border: 1px solid var(--line);
+	border-radius: var(--r-lg);
 	padding: 12px 10px;
 	display: flex;
 	flex-direction: column;
@@ -488,8 +504,16 @@ select {
 	flex: 1;
 	min-width: 0;
 	overflow-y: auto;
-	padding: 32px 40px 60px;
+	padding: 40px 48px 60px;
 	box-sizing: border-box;
+}
+.settings-eyebrow {
+	font-family: var(--mono);
+	font-size: var(--t-xs);
+	color: var(--ink-3);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	margin-bottom: 8px;
 }
 .settings-wrap {
 	max-width: 640px;
@@ -507,6 +531,8 @@ select {
 	font-family: var(--serif);
 	font-weight: 400;
 	font-size: var(--t-2xl);
+	line-height: 1.15;
+	letter-spacing: -0.01em;
 	margin: 0;
 }
 .settings-lede {
