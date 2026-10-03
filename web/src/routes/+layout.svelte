@@ -260,7 +260,11 @@
 		{/if}
 		<main>
 			<div class="content">
-				{@render children()}
+				{#key $page.url.pathname === '/inbox' ? $activeWorkspace?.id : null}
+					{#if $page.url.pathname !== '/inbox' || !$switching}
+						{@render children()}
+					{/if}
+				{/key}
 			</div>
 		</main>
 	</div>

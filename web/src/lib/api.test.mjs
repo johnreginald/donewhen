@@ -108,3 +108,58 @@ test('loadMeta shows what loaded when one part fails, and names the failure', as
 	await assert.rejects(store.loadMeta(), /down/);
 	setNotifier(null);
 });
+
+test('a late inbox response cannot replace the new workspace badge', async () => {
+	store.workspaces.set([{ id: 'a', slug: 'a' }, { id: 'b', slug: 'b' }]);
+	handler = () => ({ status: 200, body: [] });
+	await store.switchWorkspace('a');
+	let release;
+	handler = (url, init) => {
+		if (url === '/api/inbox') {
+			if (init.headers['X-Workspace'] === 'a') return new Promise((resolve) => { release = resolve; });
+			return { status: 200, body: { needsReview: [{}], waiting: [] } };
+		}
+		return { status: 200, body: [] };
+	};
+	const old = store.refreshInbox();
+	await store.switchWorkspace('b');
+	await store.refreshInbox();
+	assert.equal(get(store.inboxCount), 1);
+	release({ status: 200, body: { needsReview: Array(7).fill({}), waiting: [] } });
+	await old;
+	assert.equal(get(store.inboxCount), 1);
+});
+
+test('switching workspace clears the old inbox badge before activation completes', async () => {
+	store.workspaces.set([{ id: 'a', slug: 'a' }]);
+	store.inboxCount.set(7);
+	let release;
+	handler = (url) => url.includes('/activate')
+		? new Promise((resolve) => { release = resolve; })
+		: { status: 200, body: [] };
+	const switching = store.switchWorkspace('a');
+	const count = get(store.inboxCount);
+	release({ status: 200, body: {} });
+	await switching;
+	assert.equal(count, 0);
+});
+
+test('workspace switching stays pending until the new metadata is loaded', async () => {
+	store.workspaces.set([{ id: 'a', slug: 'a' }]);
+	let release, started;
+	const metadataStarted = new Promise((resolve) => { started = resolve; });
+	handler = (url) => {
+		if (url === '/api/states') {
+			started();
+			return new Promise((resolve) => { release = resolve; });
+		}
+		return { status: 200, body: [] };
+	};
+	const pending = store.switchWorkspace('a');
+	await metadataStarted;
+	const loadingMetadata = get(store.switching);
+	release({ status: 200, body: [] });
+	await pending;
+	assert.equal(loadingMetadata, true);
+	assert.equal(get(store.switching), false);
+});

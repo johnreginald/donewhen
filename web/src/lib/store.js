@@ -72,8 +72,9 @@ export function inboxTotal(r) {
 // refreshInbox re-reads the inbox and updates the badge. Returns the inbox so
 // the inbox page can render from the same call.
 export async function refreshInbox() {
+	const gen = wsGen;
 	const r = await api.inbox();
-	inboxCount.set(inboxTotal(r));
+	if (gen === wsGen) inboxCount.set(inboxTotal(r));
 	return r;
 }
 export const issueQuery = writable(''); // the search box above every issue view
@@ -169,6 +170,7 @@ export async function switchWorkspace(slug) {
 	activeProject.set('');
 	activeFilters.set(emptyFilters());
 	savedViews.set([]);
+	inboxCount.set(0);
 	issues.set([]);
 	allIssues.set([]);
 	issueQuery.set('');
@@ -176,23 +178,22 @@ export async function switchWorkspace(slug) {
 	// then let the live stream reopen on the new workspace.
 	switching.set(true);
 	try {
-		await api.activateWorkspace(target.id);
-	} catch {
-		/* the X-Workspace header already scopes every request */
-	} finally {
-		if (gen === wsGen) switching.set(false);
-	}
-	if (gen !== wsGen) return; // the user already moved on to another workspace
-	try {
+		try {
+			await api.activateWorkspace(target.id);
+		} catch {
+			/* the X-Workspace header already scopes every request */
+		}
+		if (gen !== wsGen) return;
 		await loadMeta();
 		await loadIssues();
+		if (gen === wsGen) {
+			refreshInbox().catch(() => {});
+			loadViews();
+		}
 	} catch (e) {
-		if (e?.status !== 401) notify("Couldn't load the workspace: " + (e?.message || e));
-		return;
-	}
-	if (gen === wsGen) {
-		refreshInbox().catch(() => {});
-		loadViews();
+		if (gen === wsGen && e?.status !== 401) notify("Couldn't load the workspace: " + (e?.message || e));
+	} finally {
+		if (gen === wsGen) switching.set(false);
 	}
 }
 
