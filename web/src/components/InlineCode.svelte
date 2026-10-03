@@ -1,10 +1,12 @@
 <script>
-	// Renders `backticked` spans as code. Plain text otherwise; no HTML is parsed.
+	// Renders `backticked` spans as code and **double-star** spans as bold. Plain text
+	// otherwise; no HTML is parsed.
+	import { parseInline } from '$lib/inline.js';
 	let { text = '' } = $props();
-	const parts = $derived(String(text ?? '').split(/(`[^`]+`)/g).filter(Boolean));
+	const parts = $derived(parseInline(text));
 </script>
 
-{#each parts as p, i (i)}{#if p.length > 2 && p.startsWith('`') && p.endsWith('`')}<code class="ic">{p.slice(1, -1)}</code>{:else}{p}{/if}{/each}
+{#each parts as p, i (i)}{#if p.kind === 'code'}<code class="ic">{p.text}</code>{:else if p.kind === 'bold'}<strong class="ib">{p.text}</strong>{:else}{p.text}{/if}{/each}
 
 <style>
 	.ic {
@@ -15,5 +17,8 @@
 		border-radius: var(--r-sm);
 		padding: 0 4px;
 		overflow-wrap: anywhere;
+	}
+	.ib {
+		font-weight: 600;
 	}
 </style>
