@@ -129,6 +129,7 @@ func (s *Server) handleAddCriterion(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
+	s.svc.IssueChanged(r.Context(), ws(r), id, auth.ActorFrom(r.Context()))
 	writeJSON(w, http.StatusCreated, c)
 }
 
@@ -154,13 +155,16 @@ func (s *Server) handleUpdateCriterion(w http.ResponseWriter, r *http.Request) {
 	if handleStoreErr(w, err) {
 		return
 	}
+	s.svc.IssueChanged(r.Context(), ws(r), c.IssueID, auth.ActorFrom(r.Context()))
 	writeJSON(w, 200, c)
 }
 
 func (s *Server) handleDeleteCriterion(w http.ResponseWriter, r *http.Request) {
-	if handleStoreErr(w, s.store.DeleteCriterion(r.Context(), ws(r), r.PathValue("id"))) {
+	issueID, err := s.store.DeleteCriterion(r.Context(), ws(r), r.PathValue("id"))
+	if handleStoreErr(w, err) {
 		return
 	}
+	s.svc.IssueChanged(r.Context(), ws(r), issueID, auth.ActorFrom(r.Context()))
 	w.WriteHeader(http.StatusNoContent)
 }
 

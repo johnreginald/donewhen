@@ -110,6 +110,21 @@ func (s *Service) UpdateIssue(ctx context.Context, wsID, id string, p store.Issu
 	return is, nil
 }
 
+// IssueChanged publishes issue.updated with a fresh read, for edits made
+// outside UpdateIssue (like criteria) that change what a card shows.
+func (s *Service) IssueChanged(ctx context.Context, wsID, issueID, actor string) {
+	is, err := s.Store.GetIssue(ctx, wsID, issueID)
+	if err != nil {
+		return
+	}
+	s.Bus.Publish(events.Event{
+		Type:        events.IssueUpdated,
+		WorkspaceID: wsID,
+		Actor:       actor,
+		Issue:       &is,
+	})
+}
+
 // DeleteIssue removes an issue and publishes issue.deleted.
 func (s *Service) DeleteIssue(ctx context.Context, wsID, id string, actor string) error {
 	before, _ := s.Store.GetIssue(ctx, wsID, id) // snapshot for the record
