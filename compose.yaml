@@ -28,11 +28,11 @@ services:
     build:
       context: .
       args:
-        # scripts/deploy.sh sets these. A plain `up --build` reports "dev".
+        # Set these to show the commit in /api/health. A plain `up --build` reports "dev".
         GIT_COMMIT: ${GIT_COMMIT:-dev}
         BUILD_TIME: ${BUILD_TIME:-}
-    # scripts/deploy.sh tags the image with the commit (DONEWHEN_IMAGE_TAG) so it can
-    # roll back. Without it, `up -d --build` builds donewhen:latest as before.
+    # Set DONEWHEN_IMAGE_TAG to the commit to tag the image, so you can roll back to it.
+    # Without it, `up -d --build` builds donewhen:latest as before.
     image: ${IMAGE_NAME:-donewhen}:${DONEWHEN_IMAGE_TAG:-latest}
     depends_on:
       db:
