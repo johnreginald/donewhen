@@ -1,16 +1,22 @@
 <script>
-	// The done-when tick: an upright SVG check, never the "✓" character. IBM Plex has
-	// no glyph for it, so the browser falls back to a font that draws it slanted.
+	// The done-when tick, drawn with two borders: no "✓" character (IBM Plex has no glyph
+	// for it, so a fallback font draws it slanted) and no SVG (some browsers drop an SVG
+	// inside a button). It takes the colour of the text around it.
 	let { size = 12 } = $props();
 </script>
 
-<svg class="tick" width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
-	<path d="M2.5 6.4 L5 8.9 L9.6 3.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
-</svg>
+<span class="tick" style:--tick={size + 'px'} aria-hidden="true"></span>
 
 <style>
 	.tick {
 		display: block;
 		flex: none;
+		box-sizing: border-box;
+		width: calc(var(--tick) * 0.36);
+		height: calc(var(--tick) * 0.68);
+		margin-top: calc(var(--tick) * -0.1);
+		border-right: 2px solid currentColor;
+		border-bottom: 2px solid currentColor;
+		transform: rotate(45deg);
 	}
 </style>
