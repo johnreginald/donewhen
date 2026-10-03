@@ -166,6 +166,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
+		d.svc.IssueChanged(ctx, wsID, is.ID, auth.ActorAI)
 		return jsonResult(out)
 	})
 
@@ -218,6 +219,7 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		if err != nil {
 			return toolErr(err), nil
 		}
+		d.svc.IssueChanged(ctx, wsID, is.ID, auth.ActorAI)
 		return jsonResult(c)
 	})
 

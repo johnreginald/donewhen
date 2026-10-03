@@ -439,17 +439,15 @@ func (s *Store) ReplaceCriteria(ctx context.Context, wsID, issueID string, items
 	return out, nil
 }
 
-func (s *Store) DeleteCriterion(ctx context.Context, wsID, id string) error {
-	ct, err := s.pool.Exec(ctx, `
+func (s *Store) DeleteCriterion(ctx context.Context, wsID, id string) (issueID string, err error) {
+	err = s.pool.QueryRow(ctx, `
 		DELETE FROM issue_criteria c USING issues i
-		WHERE c.id=$1 AND i.id = c.issue_id AND i.workspace_id=$2`, id, wsID)
-	if err != nil {
-		return err
+		WHERE c.id=$1 AND i.id = c.issue_id AND i.workspace_id=$2
+		RETURNING c.issue_id`, id, wsID).Scan(&issueID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
 	}
-	if ct.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return issueID, err
 }
 
 // CommitOwner is the issue a commit belongs to, with the done-when list
