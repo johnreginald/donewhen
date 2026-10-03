@@ -50,6 +50,29 @@
 	let bootFailed = $state(false); // the server could not be reached, or errored, while starting
 
 	const isLogin = $derived($page.url.pathname === '/login');
+	// These pages own fetched data locally rather than reading only the stores.
+	// Dispose them on a switch and mount again after the new metadata is ready.
+	const workspacePage = $derived(['/inbox', '/blocked', '/artifacts', '/log'].includes($page.url.pathname));
+	let previousWorkspace;
+	let resettingDoc = $state(false);
+	let docResetSeq = 0;
+	$effect(() => {
+		const id = $activeWorkspace?.id;
+		if (!id || id === previousWorkspace) return;
+		const changed = previousWorkspace !== undefined;
+		previousWorkspace = id;
+		// A document deep link belongs to the workspace being left. Preserve
+		// deep links on first load, but return to the list when switching.
+		if (changed && $page.url.pathname === '/artifacts' && $page.url.searchParams.has('doc')) {
+			const url = new URL($page.url);
+			url.searchParams.delete('doc');
+			const seq = ++docResetSeq;
+			resettingDoc = true;
+			goto(url.pathname + url.search + url.hash, { replaceState: true, noScroll: true })
+				.catch((e) => showToast(e.message, 'error'))
+				.finally(() => { if (seq === docResetSeq) resettingDoc = false; });
+		}
+	});
 
 	onMount(() => {
 		registerServiceWorker();
@@ -260,8 +283,8 @@
 		{/if}
 		<main>
 			<div class="content">
-				{#key $page.url.pathname === '/inbox' ? $activeWorkspace?.id : null}
-					{#if $page.url.pathname !== '/inbox' || !$switching}
+				{#key workspacePage ? $activeWorkspace?.id : null}
+					{#if !workspacePage || (!$switching && !resettingDoc)}
 						{@render children()}
 					{/if}
 				{/key}

@@ -8,12 +8,14 @@
     "check:ds": "node scripts/check-ds.mjs",
     "test": "node --test src/lib/*.test.mjs",
     "build": "npm run check:ds && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:browser": "npm run build && node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "playwright": "^1.63.0",
     "svelte": "^5.1.0",
     "vite": "^5.4.0"
   },

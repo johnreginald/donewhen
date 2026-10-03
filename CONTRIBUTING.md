@@ -42,6 +42,18 @@ node --test 'plugin/scripts/*.test.mjs'
 
 `make test` needs Docker. It uses its own container on a free local port, so it never touches your dev database. It sets `DONEWHEN_TEST_STRICT=1`. A database test that cannot find Postgres then fails and does not skip.
 
+For workspace-page changes, also run the browser regression tests. They build
+the frontend, start a local preview, and mock every API request, so no running
+backend or real workspace data is needed:
+
+```sh
+cd web
+npx playwright install chromium # once
+npm run test:browser
+```
+
+To use an existing Chrome installation, set `PLAYWRIGHT_EXECUTABLE_PATH` instead.
+
 To run one package against your own database, set `DONEWHEN_TEST_DATABASE_URL` and run `go test ./internal/api`. Without `DONEWHEN_TEST_STRICT`, those tests skip when the variable is not set.
 
 Also run `gofmt -l .` (it must print nothing). `make test` already runs `go vet ./...`. There is no CI, so run these checks before you open a PR.
