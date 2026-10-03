@@ -17,6 +17,7 @@ import (
 	"github.com/johnreginald/donewhen/internal/service"
 	"github.com/johnreginald/donewhen/internal/sse"
 	"github.com/johnreginald/donewhen/internal/store"
+	"github.com/johnreginald/donewhen/internal/version"
 )
 
 type Server struct {
@@ -179,7 +180,11 @@ func (s *Server) Handler() http.Handler {
 
 	// Health + public config.
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok"})
+		writeJSON(w, 200, map[string]string{
+			"status":  "ok",
+			"commit":  version.Commit,
+			"builtAt": version.BuiltAt,
+		})
 	})
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 

@@ -12,7 +12,11 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/donewhen ./cmd/donewhen
+ARG GIT_COMMIT=dev
+ARG BUILD_TIME=
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags "-X github.com/johnreginald/donewhen/internal/version.Commit=${GIT_COMMIT} -X github.com/johnreginald/donewhen/internal/version.BuiltAt=${BUILD_TIME}" \
+    -o /out/donewhen ./cmd/donewhen
 
 # ---- stage 3: minimal runtime ----
 FROM alpine:3.20

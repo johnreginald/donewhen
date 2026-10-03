@@ -36,3 +36,4 @@ web/.env
 .claude/donewhen.json
 .claude/worktrees/
 .claude/raenil.json
+.deploy-history

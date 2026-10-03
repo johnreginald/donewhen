@@ -25,7 +25,15 @@ services:
   # DONEWHEN_* are read first; an old .env that still has RAENIL_* keeps working
   # (compose cannot warn; rename the keys within one release).
   donewhen:
-    build: .
+    build:
+      context: .
+      args:
+        # scripts/deploy.sh sets these. A plain `up --build` reports "dev".
+        GIT_COMMIT: ${GIT_COMMIT:-dev}
+        BUILD_TIME: ${BUILD_TIME:-}
+    # scripts/deploy.sh tags the image with the commit (DONEWHEN_IMAGE_TAG) so it can
+    # roll back. Without it, `up -d --build` builds donewhen:latest as before.
+    image: ${IMAGE_NAME:-donewhen}:${DONEWHEN_IMAGE_TAG:-latest}
     depends_on:
       db:
         condition: service_healthy
