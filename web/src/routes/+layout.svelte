@@ -5,6 +5,7 @@
 	import { get } from 'svelte/store';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { ownsData, needsMetadata, stripWorkspaceParams } from '$lib/workspace_pages.js';
 	import Sidebar from '$components/Sidebar.svelte';
 	import CommandPalette from '$components/CommandPalette.svelte';
 	import QuickCapture from '$components/QuickCapture.svelte';
@@ -50,6 +51,23 @@
 	let bootFailed = $state(false); // the server could not be reached, or errored, while starting
 
 	const isLogin = $derived($page.url.pathname === '/login');
+	// A page that loads its own data is mounted again for each workspace (DW-100). Inbox and Blocked
+	// need the new states, so they show a short placeholder until the switch has loaded them. Every
+	// other page mounts at once: it fetches with the new X-Workspace header.
+	const dataPage = $derived(ownsData($page.url.pathname));
+	const holdPage = $derived($switching && needsMetadata($page.url.pathname));
+	// An Artifacts document or an issue peek of the workspace that was left must not be opened in
+	// the new one. A deep link at the first load is kept: previousWorkspace is empty then.
+	let previousWorkspace;
+	$effect(() => {
+		const id = $activeWorkspace?.id;
+		if (!id || id === previousWorkspace) return;
+		const changed = previousWorkspace !== undefined;
+		previousWorkspace = id;
+		if (!changed) return;
+		const next = stripWorkspaceParams($page.url);
+		if (next) goto(next, { replaceState: true, noScroll: true, keepFocus: true }).catch(() => {});
+	});
 
 	onMount(() => {
 		registerServiceWorker();
@@ -260,8 +278,10 @@
 		{/if}
 		<main>
 			<div class="content">
-				{#key $page.url.pathname === '/inbox' ? $activeWorkspace?.id : null}
-					{#if $page.url.pathname !== '/inbox' || !$switching}
+				{#key dataPage ? $activeWorkspace?.id : null}
+					{#if holdPage}
+						<div class="switching" role="status" aria-live="polite">Switching to {$activeWorkspace?.name || 'the workspace'}…</div>
+					{:else}
 						{@render children()}
 					{/if}
 				{/key}
@@ -350,6 +370,14 @@
 		display: flex;
 		flex-direction: column;
 		min-width: 0;
+	}
+	.switching {
+		display: grid;
+		place-items: center;
+		min-height: 160px;
+		padding: 40px 20px;
+		font-size: var(--t-sm);
+		color: var(--ink-3);
 	}
 	.content {
 		flex: 1;
