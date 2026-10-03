@@ -237,9 +237,10 @@ func TestIsDestructive(t *testing.T) {
 
 func TestOnlyKnownMigrationsAreMarked(t *testing.T) {
 	// 0036 drops the agent tables; 0039 deletes unsafe push subscriptions; 0040
-	// deletes duplicate commit links.
+	// deletes duplicate commit links; 0050 deletes the runner labels.
 	marked := map[string]bool{
 		"0036_plain_tracker.sql": true, "0039_security_cleanup.sql": true, "0040_commit_links_unique.sql": true,
+		"0050_remove_runner_labels.sql": true,
 	}
 	names, _ := migrationNames()
 	for _, n := range names {
