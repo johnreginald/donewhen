@@ -6,6 +6,7 @@
 	// comment only when non-empty.
 	import { rel } from '$lib/format.js';
 	import { safeHref } from '$lib/url.js';
+	import Tick from './Tick.svelte';
 
 	let {
 		item,
@@ -90,7 +91,7 @@
 			{:else if crit?.items?.length}
 				{#each crit.items as c (c.id)}
 					<div class="ck" class:done={c.done}>
-						<i class="box" class:on={c.done}>{c.done ? '✓' : ''}</i>
+						<b class="box" class:on={c.done}>{#if c.done}<Tick size={11} />{/if}</b>
 						<span><InlineCode text={c.body} /></span>
 					</div>
 				{/each}

@@ -18,6 +18,7 @@
 	import IssueTimeline from '$components/IssueTimeline.svelte';
 	import Blockers from '$components/Blockers.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
+	import Tick from '$components/Tick.svelte';
 	import { rel } from '$lib/format.js';
 
 	let issue = $state(null);
@@ -646,7 +647,7 @@
 						{#each criteria as c (c.id)}
 							<div class="crit">
 								<button class="crit-box" class:on={c.done} onclick={() => toggleCrit(c)} aria-label="toggle">
-									{#if c.done}<b>✓</b>{/if}
+									{#if c.done}<Tick size={12} />{/if}
 								</button>
 								<span class="crit-text" class:done={c.done}><InlineCode text={c.body} /></span>
 								<span class="crit-kind" class:adv={c.kind === 'judgment'}>{c.kind}</span>
