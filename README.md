@@ -9,7 +9,7 @@
 </p>
 <p align="center"><sub>A 39-second tour, with sound. <a href="https://burmese.dev/work/donewhen/showreel.mp4">Watch the video (MP4)</a> · <a href="https://burmese.dev/work/donewhen/showreel-vertical.mp4">vertical version (9:16)</a> · <a href="https://burmese.dev/work/donewhen">case study</a></sub></p>
 
-> **Hi, I'm Htet Wai Yan Soe.** I am an engineering leader and backend engineer with 14+ years in mobile financial services, marketplaces and consumer platforms. I am based in Chiang Mai, Thailand, and I work remotely. More about me: [burmese.dev](https://burmese.dev) · [LinkedIn](https://www.linkedin.com/in/johnthelinux/)
+> **Hi, I'm Htet Wai Yan Soe.** I am a senior backend engineer with 10+ years building payment systems and high-reliability APIs in Go, TypeScript/Node.js and PHP/Laravel, across mobile financial services, marketplaces and consumer platforms. I am based in Chiang Mai, Thailand, and I work remotely. More about me: [burmese.dev](https://burmese.dev) · [LinkedIn](https://www.linkedin.com/in/johnthelinux/)
 
 ## Why I built this
 
