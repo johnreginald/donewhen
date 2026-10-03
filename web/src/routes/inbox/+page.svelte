@@ -31,6 +31,7 @@
 	let replyBusyId = $state('');
 
 	// Plain (non-reactive) bookkeeping — not UI state, so not $state.
+	let disposed = false; // ignore loads that finish after this workspace page is removed
 	let seenStamped = false; // guards a single inboxSeen() per page visit
 	let refreshTimer;
 	let toastId = 0;
@@ -52,6 +53,7 @@
 		}
 		try {
 			const r = (await refreshInbox()) || {}; // also sets the sidebar badge
+			if (disposed) return;
 			needsReview = r.needsReview || [];
 			waiting = r.waiting || [];
 			recent = r.recent || [];
@@ -71,9 +73,10 @@
 		}
 		// Stamp "seen" only once the list has been drawn, and only if it loaded:
 		// a failed load must not mark unseen activity as seen.
-		if (ok && !seenStamped) {
+		if (ok && !disposed && !seenStamped) {
 			seenStamped = true;
 			await tick();
+			if (disposed) return;
 			try {
 				await api.inboxSeen();
 			} catch {
@@ -311,6 +314,7 @@
 		});
 		window.addEventListener('keydown', onKeydown);
 		return () => {
+			disposed = true;
 			offLive();
 			window.removeEventListener('keydown', onKeydown);
 			clearTimeout(refreshTimer);
