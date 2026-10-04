@@ -119,7 +119,11 @@ func (d *deps) registerDev(s *server.MCPServer) {
 		mcp.WithDescription("Set an issue's done-when acceptance checklist. Declarative: re-send the FULL "+
 			"list every call (it replaces what's stored). Define the criteria during Aligning; then as each "+
 			"one is met, re-send the same list with that item's done:true. Don't move an issue to Done until "+
-			"every item is done:true."),
+			"every item is done:true. Choose each item's kind by its proof: a command such as make test or "+
+			"go vet is deterministic with check {\"cmd\":\"make test\",\"expect_exit\":0}; a rule about which "+
+			"files change is policy with check {\"policy\":\"paths_within\",\"args\":[\"internal/**\"]} "+
+			"(globs: * is one path segment, ** is any number); a question with its own wording is judgment "+
+			"with check {\"prompt\":\"...\"}; behaviour a reviewer reads in the code is manual (the default)."),
 		mcp.WithString("issue", mcp.Required(), mcp.Description("Issue id or key")),
 		mcp.WithArray("items", mcp.Required(),
 			mcp.Description("Ordered checklist. Each item is {text, done, kind, check}; done defaults false "+

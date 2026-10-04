@@ -104,6 +104,15 @@ Then:
 
 The checklist lives in the ticket's criteria, not its description. 3–6 items, derived from this ticket, each one observable result (see SKILL.md).
 
+Pick the kind of each item by how it is proven:
+
+| Proof | Kind | `check` |
+|---|---|---|
+| A command (`make test`, `go vet`, a build) | `deterministic` | `{"cmd": "make test", "expect_exit": 0}` |
+| A rule about which files change | `policy` | `{"policy": "paths_within", "args": ["internal/**"]}` |
+| A question with its own wording | `judgment` | `{"prompt": "..."}` |
+| Behaviour a reviewer reads in the code | `manual` (default) | none |
+
 ## Bad → good
 
 **Bad** (one sentence, five behaviours):
