@@ -47,6 +47,11 @@ Read [TICKETS.md](TICKETS.md) before writing or rewriting any ticket, and follow
 
 - Every ticket has one: 3–6 items derived from its own spec, never generic. Set it in Aligning with `set_criteria {issue, items:[{text, done:false}]}`.
 - Each item is one observable result someone can check: a named test passing, a behaviour, a file or rule in place.
+- Give each item the right `kind`. The default is `manual`; set another kind only when it fits:
+  - Proof is a command (`make test`, `go vet`, a build) → `deterministic`, with `check` `{"cmd": "make test", "expect_exit": 0}`. Run the command yourself, then tick the item with the result as evidence.
+  - A rule about which files change → `policy`, with `check` `{"policy": "paths_within", "args": ["internal/**"]}`. `args` are globs: `*` is one path segment, `**` is any number.
+  - A question a reader answers from the code or the result, with a wording of its own → `judgment`, with `check` `{"prompt": "Does the page explain the error to the user?"}`. It is advice, never the only gate.
+  - Behaviour a reviewer reads in the code → `manual`.
 - Tick each item **the moment it is met**, not at the end: `check_criterion {issue, index, done:true}`. A dropped session then leaves real progress recorded.
 - Un-tick an item that stops being true. A tick always means it holds now.
 - Before moving to **In Review** or **Done**: `get_criteria` and confirm every item is done. If one is not, the ticket does not move.
